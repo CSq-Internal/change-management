@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RiskLevel { low medium high }
+enum ChangeStatus { draft pending approved rejected implemented verified closed }
+enum Role { requester approver auditor admin }
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(requester)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // relationships
+  requests  ChangeRequest[] @relation("UserRequests")
+  approvals Approval[]
+  audits    AuditLog[]
+}
+
+model ChangeRequest {
+  id           String        @id @default(cuid())
+  title        String
+  description  String
+  category     String
+  riskLevel    RiskLevel     @default(medium)
+  status       ChangeStatus  @default(pending)
+  requesterId  String
+  requester    User          @relation("UserRequests", fields: [requesterId], references: [id])
+  assignees    UserAssignment[]
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  backoutPlan  String?
+  approvals    Approval[]
+  attachments  Attachment[]
+  auditTrail   AuditLog[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model UserAssignment {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  changeId  String
+  change    ChangeRequest @relation(fields: [changeId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+model Approval {
+  id         String        @id @default(cuid())
+  changeId   String
+  change     ChangeRequest @relation(fields: [changeId], references: [id])
+  byId       String
+  by         User          @relation(fields: [byId], references: [id])
+  decision   String // approve | reject
+  comment    String?
+  decidedAt  DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String        @id @default(cuid())
+  changeId  String
+  change    ChangeRequest @relation(fields: [changeId], references: [id])
+  byId      String
+  by        User          @relation(fields: [byId], references: [id])
+  action    String
+  note      String?
+  at        DateTime      @default(now())
+}
+
+model Attachment {
+  id        String        @id @default(cuid())
+  changeId  String
+  change    ChangeRequest @relation(fields: [changeId], references: [id])
+  filename  String
+  url       String
+  mimeType  String?
+  sizeBytes Int?
+  uploadedAt DateTime     @default(now())
+}
