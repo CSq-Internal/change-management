@@ -37,13 +37,21 @@ export default function Requests() {
   const [backoutPlan, setBackoutPlan] = useState("")
   const [approvers, setApprovers] = useState("")
 
-  const myRequests = changes.filter((c) => c.requester === currentUser.id)
+  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
 
   const submit = () => {
     if (!title || !description || !email || !country || !infrastructureType) {
       toast({
         title: "Missing required fields",
         description: "Email, country, infrastructure type, title, and description are required.",
+        variant: "error",
+      })
+      return
+    }
+    if (!currentUser) {
+      toast({
+        title: "Sign in required",
+        description: "Please log in to submit a change request.",
         variant: "error",
       })
       return

@@ -8,12 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 
-const countries: Country[] = ["Ghana", "Uganda", "Mauritius", "Liberia", "Togo", "DRC"]
+const countries: Country[] = ["Ghana", "Uganda", "Mauritius", "Liberia", "Togo"]
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
 const permissions: Permission[] = ["admin", "read", "write", "approve", "audit"]
 
 export default function UsersPage() {
-  const { users, teams, addUser } = useStore()
+  const { users, teams, addUser, currentUser } = useStore()
   const { toast } = useToast()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [step, setStep] = useState(0)
@@ -23,6 +23,7 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role>("requester")
   const [selectedPermissions, setSelectedPermissions] = useState<Permission[]>(["read"])
   const [selectedTeams, setSelectedTeams] = useState<string[]>([])
+  const [defaultPassword, setDefaultPassword] = useState("")
 
   const steps = useMemo(
     () => [
@@ -41,6 +42,7 @@ export default function UsersPage() {
     setRole("requester")
     setSelectedPermissions(["read"])
     setSelectedTeams([])
+    setDefaultPassword("")
   }
 
   const closeWizard = () => {
@@ -52,6 +54,14 @@ export default function UsersPage() {
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 0))
 
   const submit = () => {
+    if (!currentUser?.permissions.includes("admin")) {
+      toast({
+        title: "Admin access required",
+        description: "Only admins can onboard users.",
+        variant: "error",
+      })
+      return
+    }
     if (!name || !email) {
       toast({
         title: "Missing details",
@@ -67,6 +77,7 @@ export default function UsersPage() {
       permissions: selectedPermissions,
       country,
       teamIds: selectedTeams,
+      password: defaultPassword || "ChangeMe123!",
     })
     toast({
       title: "User onboarded",
@@ -78,12 +89,24 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
+      {!currentUser?.permissions.includes("admin") && (
+        <Card className="border-slate-200/80 bg-white/95">
+          <CardHeader>
+            <CardTitle className="text-base">Admin Access Required</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-slate-600">You do not have permission to manage users.</p>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">User Management</h1>
           <p className="text-sm text-slate-500">Onboard and manage users across OpCos.</p>
         </div>
-        <Button onClick={() => setWizardOpen(true)}>Onboard User</Button>
+        <Button onClick={() => setWizardOpen(true)} disabled={!currentUser?.permissions.includes("admin")}>
+          Onboard User
+        </Button>
       </div>
 
       <Card className="border-slate-200/80 bg-white/95">
@@ -193,6 +216,18 @@ export default function UsersPage() {
                         </label>
                       ))}
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Default Password</label>
+                    <Input
+                      type="password"
+                      placeholder="Set a temporary password"
+                      value={defaultPassword}
+                      onChange={(e) => setDefaultPassword(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Leave blank to use the default: ChangeMe123!
+                    </p>
                   </div>
                 </div>
               )}

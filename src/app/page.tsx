@@ -7,12 +7,14 @@ import { ArrowUpRight, BellDot, CalendarClock, ClipboardList, FileClock, ShieldC
 
 export default function Home() {
   const { changes, currentUser, role } = useStore()
-  const myRequests = changes.filter((c) => c.requester === currentUser.id)
-  const pendingApprovals = changes.filter(
-    (c) =>
-      c.status === "pending" &&
-      (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
-  )
+  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
+  const pendingApprovals = currentUser
+    ? changes.filter(
+        (c) =>
+          c.status === "pending" &&
+          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
+      )
+    : []
   const activeChanges = changes.filter((c) => ["approved", "implemented", "verified"].includes(c.status))
   const recent = [...changes].slice(0, 4)
 
@@ -21,7 +23,7 @@ export default function Home() {
       <section className="space-y-6">
         <Card className="border-slate-200/80 bg-white/90">
           <CardHeader className="gap-2">
-            <CardTitle className="text-2xl">Welcome back, {currentUser.name}.</CardTitle>
+            <CardTitle className="text-2xl">Welcome back, {currentUser?.name ?? "there"}.</CardTitle>
             <CardDescription>
               Track the full technical change lifecycle from request to audit, with live counts tied to your role.
             </CardDescription>

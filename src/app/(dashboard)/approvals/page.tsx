@@ -8,12 +8,27 @@ import { useToast } from "@/components/ui/toaster"
 export default function Approvals() {
   const { changes, update, currentUser, role } = useStore()
   const { toast } = useToast()
-  const pending = changes.filter(
-    (c) =>
-      c.status === "pending" &&
-      (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
-  )
+  const pending = currentUser
+    ? changes.filter(
+        (c) =>
+          c.status === "pending" &&
+          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
+      )
+    : []
   const canApprove = role === "approver" || role === "admin"
+
+  if (!currentUser) {
+    return (
+      <Card className="border-slate-200/80 bg-white/95">
+        <CardHeader>
+          <CardTitle className="text-base">Sign In Required</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-600">Log in to access approval queues.</p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (!canApprove) {
     return (

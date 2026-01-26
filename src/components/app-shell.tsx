@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useStore } from "@/lib/store"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,8 @@ import {
   FileClock,
   GitCompare,
   Home,
+  KeyRound,
+  LogOut,
   ShieldCheck,
   UserCircle2,
   UsersRound,
@@ -45,21 +47,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const { changes, currentUser, role, setRole } = useStore()
-  const myRequests = changes.filter((c) => c.requester === currentUser.id)
-  const pendingApprovals = changes.filter(
-    (c) =>
-      c.status === "pending" &&
-      (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const { changes, currentUser, role, setRole, logout, updatePassword } = useStore()
+  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
+  const pendingApprovals = currentUser
+    ? changes.filter(
+        (c) =>
+          c.status === "pending" &&
+          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
+      )
+    : []
+  const canManageUsers = currentUser?.permissions.includes("admin")
+  const effectiveNavGroups = useMemo(
+    () => navGroups.filter((group) => group.label !== "User Management" || canManageUsers),
+    [canManageUsers]
   )
-  const flatNavItems = navGroups.flatMap((group) => group.items)
+  const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
   const currentNav = flatNavItems.find((item) => item.href === pathname)
   const breadcrumbs = currentNav
     ? [{ href: "/", label: "Dashboard" }, ...(currentNav.href === "/" ? [] : [currentNav])]
     : [{ href: "/", label: "Dashboard" }]
 
+  if (pathname === "/login") {
+    return (
+      <div className="min-h-screen bg-[#f6f3ef] text-slate-900">
+        {children}
+        <Toaster />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#f6f3ef] text-slate-900">
+      <AuthGuard pathname={pathname} />
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.14)_0,_rgba(56,189,248,0.08)_45%,_transparent_70%)]" />
         <div className="absolute -bottom-52 right-[-10%] h-[480px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.12)_0,_rgba(234,179,8,0.08)_50%,_transparent_70%)]" />
@@ -77,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <nav className="flex-1 px-3">
-            {navGroups.map((group) => (
+            {effectiveNavGroups.map((group) => (
               <div key={group.label} className="mb-4">
                 <div className="px-4 pb-2 text-xs uppercase tracking-[0.2em] text-slate-400">{group.label}</div>
                 {group.items.map((item) => {
@@ -147,7 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <UserCircle2 className="h-8 w-8 text-slate-400" />
                     )}
                   </span>
-                  <span className="text-sm">{currentUser.name}</span>
+                  <span className="text-sm">{currentUser?.name ?? "Guest"}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -160,6 +181,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     }}
                   />
                 </label>
+                {currentUser && (
+                  <>
+                    <button
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 transition hover:bg-slate-50"
+                      onClick={() => setPasswordOpen(true)}
+                      aria-label="Change password"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </button>
+                    <button
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 transition hover:bg-slate-50"
+                      onClick={() => {
+                        logout()
+                        router.push("/login")
+                      }}
+                      aria-label="Log out"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
                 <select
                   value={role}
                   onChange={(event) => setRole(event.target.value as Role)}
@@ -218,6 +260,56 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <Toaster />
+      {passwordOpen && currentUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold">Change Password</h3>
+            <p className="mt-1 text-sm text-slate-500">Set a new password for your account.</p>
+            <input
+              type="password"
+              placeholder="New password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className="mt-4 h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                className="rounded-full px-4 py-2 text-sm text-slate-600 hover:text-slate-900"
+                onClick={() => {
+                  setPasswordOpen(false)
+                  setNewPassword("")
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white"
+                onClick={() => {
+                  if (!newPassword) return
+                  updatePassword(currentUser.id, newPassword)
+                  setPasswordOpen(false)
+                  setNewPassword("")
+                }}
+              >
+                Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function AuthGuard({ pathname }: { pathname: string }) {
+  const router = useRouter()
+  const { currentUser } = useStore()
+
+  useEffect(() => {
+    if (!currentUser && pathname !== "/login") {
+      router.push("/login")
+    }
+  }, [currentUser, pathname, router])
+
+  return null
 }

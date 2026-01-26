@@ -19,6 +19,7 @@ export interface AppUser {
   permissions: Permission[];
   country: Country;
   teamIds: string[];
+  password: string;
   createdAt: string;
 }
 
