@@ -3,10 +3,11 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
+import { useState } from "react"
 import { useStore } from "@/lib/store"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { BarChart3, ClipboardList, FileClock, GitCompare, ShieldCheck } from "lucide-react"
+import { ArrowLeft, BarChart3, ClipboardList, FileClock, GitCompare, Home, ShieldCheck, UserCircle2 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const { changes, currentUser, role, setRole } = useStore()
   const myRequests = changes.filter((c) => c.requester === currentUser.id)
   const pendingApprovals = changes.filter(
@@ -95,24 +97,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <button
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 transition hover:bg-slate-50"
                   onClick={() => router.back()}
+                  aria-label="Go back"
                 >
-                  Back
+                  <ArrowLeft className="h-4 w-4" />
                 </button>
                 <Link
                   href="/"
-                  className="inline-flex h-9 items-center rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 transition hover:bg-slate-50"
+                  aria-label="Go home"
                 >
-                  Home
+                  <Home className="h-4 w-4" />
                 </Link>
-                <div className="rounded-full border border-slate-200 bg-white px-3 py-2">
-                  {currentUser.name}
-                </div>
+                <label className="flex cursor-pointer items-center gap-2 rounded-full bg-white px-2 py-1">
+                  <span className="relative h-8 w-8 overflow-hidden rounded-full bg-slate-100">
+                    {avatarUrl ? (
+                      <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
+                    ) : (
+                      <UserCircle2 className="h-8 w-8 text-slate-400" />
+                    )}
+                  </span>
+                  <span className="text-sm">{currentUser.name}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      const url = URL.createObjectURL(file)
+                      setAvatarUrl(url)
+                    }}
+                  />
+                </label>
                 <select
                   value={role}
                   onChange={(event) => setRole(event.target.value as Role)}
-                  className="h-10 rounded-full border border-slate-200 bg-white px-4 text-sm"
+                  className="h-10 rounded-full bg-white px-4 text-sm"
                 >
                   <option value="requester">Requester</option>
                   <option value="approver">Approver</option>
