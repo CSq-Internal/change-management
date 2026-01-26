@@ -51,14 +51,14 @@ export default function Approvals() {
       {pending.map((c) => (
         <Card key={c.id} className="border-border/80 bg-card/95">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{c.title}</CardTitle>
+            <CardTitle className="text-base line-clamp-2 sm:line-clamp-1">{c.title}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">{c.description}</p>
             <div className="mt-2 text-xs text-muted-foreground">
               {t(language, "approvals.requestedBy")} {c.requester} • {new Date(c.createdAt).toLocaleString()}
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-col sm:flex-row gap-2">
               <Button
                 onClick={() => {
                   update(c.id, { status: "approved" })
@@ -69,6 +69,7 @@ export default function Approvals() {
                   })
                 }}
                 variant="default"
+                className="w-full sm:w-auto"
               >
                 {t(language, "approvals.approve")}
               </Button>
@@ -82,6 +83,7 @@ export default function Approvals() {
                   })
                 }}
                 variant="destructive"
+                className="w-full sm:w-auto"
               >
                 {t(language, "approvals.reject")}
               </Button>

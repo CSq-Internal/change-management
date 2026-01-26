@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Space_Grotesk } from "next/font/google"
 import "./globals.css"
 import { AppShell } from "@/components/app-shell"
@@ -7,12 +7,22 @@ import { cn } from "@/lib/utils"
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" })
 
 export const metadata: Metadata = { title: "CSquared • Change Management", description: "ISO 27001 Internal CMS" }
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  userScalable: false,
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={cn(spaceGrotesk.variable, "min-h-screen bg-background font-sans antialiased")}>
-        <AppShell>{children}</AppShell>
+      <body className={cn(spaceGrotesk.variable, "min-h-dvh bg-background font-sans antialiased")}> 
+        <div className="flex min-h-dvh flex-col">
+          <AppShell>
+            <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 md:px-6 lg:px-8">{children}</div>
+          </AppShell>
+        </div>
       </body>
     </html>
   )

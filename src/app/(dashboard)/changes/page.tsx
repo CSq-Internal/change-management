@@ -12,12 +12,13 @@ export default function Changes(){
     <div className="grid gap-4">
       {changes.map(c => (
         <Card key={c.id} className="border-border/80 bg-card/95">
-          <CardHeader className="pb-2"><CardTitle className="text-base">{c.title}</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base line-clamp-2 sm:line-clamp-1">{c.title}</CardTitle></CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground">{c.status} • {new Date(c.updatedAt).toLocaleString()}</div>
-            <div className="mt-3 flex flex-wrap gap-2 text-sm">
+            <div className="mt-3 flex flex-col sm:flex-row flex-wrap gap-2 text-sm">
               <Button
                 variant="outline"
+                className="w-full sm:w-auto"
                 onClick={() => {
                   update(c.id, { status: "implemented" })
                   toast({
@@ -30,6 +31,7 @@ export default function Changes(){
               </Button>
               <Button
                 variant="outline"
+                className="w-full sm:w-auto"
                 onClick={() => {
                   update(c.id, { status: "verified" })
                   toast({
@@ -42,6 +44,7 @@ export default function Changes(){
               </Button>
               <Button
                 variant="outline"
+                className="w-full sm:w-auto"
                 onClick={() => {
                   update(c.id, { status: "closed" })
                   toast({

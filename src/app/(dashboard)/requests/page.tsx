@@ -100,11 +100,11 @@ export default function Requests() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:grid-cols-1">
       <div className="space-y-5">
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-2xl">{t(language, "requests.title")}</CardTitle>
+            <CardTitle className="text-2xl sm:text-xl">{t(language, "requests.title")}</CardTitle>
             <CardDescription>
               <span className="text-rose-600">*</span> {t(language, "requests.required")}
             </CardDescription>
@@ -191,14 +191,14 @@ export default function Requests() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 sm:grid-cols-1">
           <Card className="border-border/80 bg-card/95">
             <CardHeader>
               <CardTitle className="text-base">{t(language, "requests.category")}</CardTitle>
             </CardHeader>
             <CardContent>
               <select
-                className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
+                className="h-10 sm:h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as typeof category)}
               >
@@ -214,7 +214,7 @@ export default function Requests() {
               <CardTitle className="text-base">{t(language, "requests.riskLevel")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2 text-sm text-foreground">
-              {(["low", "medium", "high"] as const).map((level) => (
+              {( ["low", "medium", "high"] as const).map((level) => (
                 <label key={level} className="flex items-center gap-3 capitalize">
                   <input type="radio" name="risk" checked={riskLevel === level} onChange={() => setRiskLevel(level)} />
                   {t(language, `requests.risk.${level}`)}
@@ -224,7 +224,7 @@ export default function Requests() {
           </Card>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 sm:grid-cols-1">
           <Card className="border-border/80 bg-card/95">
             <CardHeader>
               <CardTitle className="text-base">{t(language, "requests.plannedStart")}</CardTitle>
@@ -297,9 +297,9 @@ export default function Requests() {
           </CardContent>
         </Card>
 
-        <div className="flex items-center gap-3">
-          <Button onClick={submit}>{t(language, "requests.submit")}</Button>
-          <p className="text-xs text-muted-foreground">{t(language, "requests.submitHint")}</p>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <Button onClick={submit} className="w-full sm:w-auto">{t(language, "requests.submit")}</Button>
+          <p className="text-xs text-muted-foreground sm:text-center sm:ml-2">{t(language, "requests.submitHint")}</p>
         </div>
       </div>
 
@@ -314,8 +314,8 @@ export default function Requests() {
           <CardContent className="space-y-3">
             {myRequests.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "requests.none")}</p>}
             {myRequests.map((c) => (
-              <div key={c.id} className="rounded-xl border border-border/70 bg-muted px-4 py-3">
-                <div className="text-sm font-medium">{c.title}</div>
+              <div key={c.id} className="rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3">
+                <div className="text-sm font-medium line-clamp-2 sm:line-clamp-1">{c.title}</div>
                 <div className="text-xs text-muted-foreground">
                   {c.status} • {new Date(c.createdAt).toLocaleString()}
                 </div>

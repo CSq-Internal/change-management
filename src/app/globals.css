@@ -116,13 +116,11 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  html {
-    font-size: calc(16px * var(--app-font-scale, 1));
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  * { @apply border-border outline-ring/50; }
+  html { font-size: calc(16px * var(--app-font-scale, 1)); }
+  body { @apply bg-background text-foreground; }
+  /* Mobile polish */
+  body { -webkit-tap-highlight-color: transparent; }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 }

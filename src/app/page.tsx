@@ -20,39 +20,39 @@ export default function Home() {
   const recent = [...changes].slice(0, 4)
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:grid-cols-1">
       <section className="space-y-6">
         <Card className="border-border/80 bg-card/90">
           <CardHeader className="gap-2">
-            <CardTitle className="text-2xl">
+            <CardTitle className="text-2xl sm:text-xl">
               {t(language, "dashboard.welcome")} {currentUser?.name ?? t(language, "dashboard.fallbackName")}.
             </CardTitle>
-            <CardDescription>{t(language, "dashboard.subtitle")}</CardDescription>
+            <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.subtitle")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-3">
             <Link
               href="/requests"
-              className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="inline-flex h-11 sm:h-10 items-center justify-center rounded-md bg-blue-600 px-5 sm:px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             >
               {t(language, "dashboard.newRequest")}
             </Link>
             <Link
               href="/approvals"
-              className="inline-flex h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              className="inline-flex h-11 sm:h-10 items-center justify-center rounded-md border border-border px-5 sm:px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
               {t(language, "dashboard.reviewApprovals")}
             </Link>
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 sm:grid-cols-1">
           <Card className="border-border/80 bg-card/90">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">{t(language, "dashboard.myRequests")}</CardTitle>
               <ClipboardList className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{myRequests.length}</div>
+              <div className="text-3xl sm:text-2xl font-semibold">{myRequests.length}</div>
               <p className="mt-2 text-sm text-muted-foreground">{t(language, "dashboard.myRequestsDesc")}</p>
             </CardContent>
           </Card>
@@ -62,7 +62,7 @@ export default function Home() {
               <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{pendingApprovals.length}</div>
+              <div className="text-3xl sm:text-2xl font-semibold">{pendingApprovals.length}</div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {role === "approver" || role === "admin"
                   ? t(language, "dashboard.pendingApprovalsDesc")
@@ -76,7 +76,7 @@ export default function Home() {
               <CalendarClock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{activeChanges.length}</div>
+              <div className="text-3xl sm:text-2xl font-semibold">{activeChanges.length}</div>
               <p className="mt-2 text-sm text-muted-foreground">{t(language, "dashboard.activeChangesDesc")}</p>
             </CardContent>
           </Card>
@@ -86,7 +86,7 @@ export default function Home() {
               <FileClock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{changes.filter((c) => c.status === "closed").length}</div>
+              <div className="text-3xl sm:text-2xl font-semibold">{changes.filter((c) => c.status === "closed").length}</div>
               <p className="mt-2 text-sm text-muted-foreground">{t(language, "dashboard.auditReadyDesc")}</p>
             </CardContent>
           </Card>
@@ -96,7 +96,7 @@ export default function Home() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">{t(language, "dashboard.liveActivity")}</CardTitle>
-              <CardDescription>{t(language, "dashboard.liveActivityDesc")}</CardDescription>
+              <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.liveActivityDesc")}</CardDescription>
             </div>
             <BellDot className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -104,12 +104,12 @@ export default function Home() {
             {recent.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "dashboard.noRequests")}</p>}
             <div className="space-y-3">
               {recent.map((change) => (
-                <div key={change.id} className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-4 py-3">
+                <div key={change.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3 gap-2">
                   <div>
-                    <div className="text-sm font-medium">{change.title}</div>
+                    <div className="text-sm font-medium line-clamp-2 sm:line-clamp-1">{change.title}</div>
                     <div className="text-xs text-muted-foreground">{new Date(change.updatedAt).toLocaleString()}</div>
                   </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs capitalize text-muted-foreground">
+                  <span className="self-start sm:self-auto rounded-full bg-white px-3 py-1 text-xs capitalize text-muted-foreground">
                     {change.status}
                   </span>
                 </div>
@@ -123,7 +123,7 @@ export default function Home() {
         <Card className="border-border/80 bg-card/90">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "dashboard.queue")}</CardTitle>
-            <CardDescription>{t(language, "dashboard.queueDesc")}</CardDescription>
+            <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.queueDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted px-3 py-2">
@@ -144,14 +144,14 @@ export default function Home() {
         <Card className="border-border/80 bg-card/90">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "dashboard.quickActions")}</CardTitle>
-            <CardDescription>{t(language, "dashboard.quickActionsDesc")}</CardDescription>
+            <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.quickActionsDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <Link href="/requests" className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-4 py-3 text-sm text-foreground transition hover:border-border">
+            <Link href="/requests" className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3 text-sm text-foreground transition hover:border-border">
               {t(language, "dashboard.startRequest")}
               <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </Link>
-            <Link href="/approvals" className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-4 py-3 text-sm text-foreground transition hover:border-border">
+            <Link href="/approvals" className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3 text-sm text-foreground transition hover:border-border">
               {t(language, "dashboard.reviewApprovalsLink")}
               <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </Link>
