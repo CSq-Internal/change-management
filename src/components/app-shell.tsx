@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useStore } from "@/lib/store"
-import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import {
   ArrowLeft,
@@ -49,7 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [newPassword, setNewPassword] = useState("")
-  const { changes, currentUser, role, setRole, logout, updatePassword } = useStore()
+  const { changes, currentUser, logout, updatePassword } = useStore()
   const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
   const pendingApprovals = currentUser
     ? changes.filter(
@@ -202,16 +201,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </button>
                   </>
                 )}
-                <select
-                  value={role}
-                  onChange={(event) => setRole(event.target.value as Role)}
-                  className="h-10 rounded-full bg-white px-4 text-sm"
-                >
-                  <option value="requester">Requester</option>
-                  <option value="approver">Approver</option>
-                  <option value="auditor">Auditor</option>
-                  <option value="admin">Admin</option>
-                </select>
               </div>
             </div>
             <div className="border-t border-slate-100 lg:hidden">
