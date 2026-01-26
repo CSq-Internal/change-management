@@ -110,7 +110,17 @@ export const useStore = create<State>((set) => ({
         role: user.role,
       };
     });
-    return loggedIn as AppUser;
+    return loggedIn ?? {
+      id: 'google-fallback',
+      name: 'Google User',
+      email: 'google.user@csquared.com',
+      role: 'requester',
+      permissions: ['read', 'write'],
+      country: 'Ghana',
+      teamIds: [],
+      password: 'GoogleSSO',
+      createdAt: now,
+    };
   },
   logout: () => set({ currentUser: null, role: 'requester' }),
   updatePassword: (userId, password) =>
