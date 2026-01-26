@@ -1,19 +1,17 @@
-# Change Management System — Developer Docs (ISO 27001 track)
+# Change Management System — Developer Docs
 
-This document describes the current state of the project on the `feature/iso27001` branch: architecture, folder layout, important files, and how things fit together.
+This document describes the current state of the Change Management System project: architecture, folder layout, important files, and how things fit together.
 
 ## 1) High-Level Overview
 
-Goal: Build an ISO 27001‑compliant Change Management System for CSquared with strong authentication, RBAC, approvals workflow, and immutable audit trails.
+Goal: Build an ISO 27001-compliant Change Management System for internal use, enabling secure workflows for requesting, approving, implementing, and auditing changes.
 
-Current status (v0 back‑end foundations):
-- Next.js (App Router, TypeScript, Tailwind) scaffold with initial UI pages
-- In‑memory demo store for UX scaffolding (Zustand)
-- Prisma ORM set up with PostgreSQL datasource
-- Core domain models designed (User, ChangeRequest, Approval, AuditLog, Attachment, UserAssignment)
-- Minimal API route: `GET /api/changes` to list change requests
-- `.env.example` prepared for DB + future NextAuth/Google OAuth
-- Draft PR created to merge these foundations into `main`
+Current status (v0.1.0 — Minimal Stub):
+- Next.js (App Router, TypeScript, Tailwind) application with basic UI pages.
+- In-memory state management using Zustand for prototyping UX.
+- Core domain types defined for ChangeRequest, roles, statuses, etc.
+- No persistence, authentication, or API routes yet — focused on UI scaffolding.
+- Ready for extension with Prisma (database), NextAuth (auth), and role-based access control.
 
 ## 2) Project Structure
 
@@ -27,77 +25,78 @@ change-management-system/
 ├─ postcss.config.mjs            — PostCSS/Tailwind config
 ├─ eslint.config.mjs             — ESLint config (Next preset)
 ├─ public/                       — Static assets
-├─ src/
-│  ├─ app/                       — Next.js App Router
-│  │  ├─ layout.tsx              — Root layout (HTML shell)
-│  │  ├─ globals.css             — Global Tailwind styles
-│  │  ├─ page.tsx                — Home (dashboard shell + nav)
-│  │  └─ (dashboard)/            — Feature pages
-│  │     ├─ requests/page.tsx    — Create/list change requests (demo in-memory)
-│  │     ├─ approvals/page.tsx   — Approve/Reject pending requests (demo)
-│  │     ├─ changes/page.tsx     — Change log & status transitions (demo)
-│  │     └─ audits/page.tsx      — Audit evidence view (JSON dump for now)
-│  ├─ lib/
-│  │  ├─ types.ts                — Domain types (ChangeRequest, statuses, etc.)
-│  │  └─ store.ts                — Zustand store (in‑memory demo state)
-│  └─ server/
-│     └─ db.ts                   — Prisma client singleton
-├─ prisma/
-│  └─ schema.prisma              — Prisma schema (models/enums, Postgres)
-└─ src/app/api/
-   └─ changes/route.ts           — API route: list changes (Prisma)
+└─ src/
+   ├─ app/                       — Next.js App Router
+   │  ├─ layout.tsx              — Root layout (HTML shell, header/footer)
+   │  ├─ globals.css             — Global Tailwind styles
+   │  ├─ page.tsx                — Home dashboard with navigation tiles
+   │  └─ (dashboard)/            — Feature pages (route group)
+   │     ├─ requests/page.tsx    — Create and list change requests
+   │     ├─ approvals/page.tsx   — Approve/Reject pending requests
+   │     ├─ changes/page.tsx     — View and update change statuses
+   │     └─ audits/page.tsx      — Audit evidence (JSON dump)
+   └─ lib/
+      ├─ types.ts                — Domain types and interfaces
+      └─ store.ts                — Zustand store (in-memory state)
 ```
 
-## 3) Domain Model (Prisma)
+## 3) Domain Model
 
-Defined in `prisma/schema.prisma`:
-- Enums
-  - `RiskLevel`: low | medium | high
-  - `ChangeStatus`: draft | pending | approved | rejected | implemented | verified | closed
-  - `Role`: requester | approver | auditor | admin
-- Models
-  - `User` — basic identity/role; relations to requests, approvals, audits
-  - `ChangeRequest` — core entity with category, risk, status, plans, audit trail
-  - `UserAssignment` — many‑to‑many link for assignees on a change
-  - `Approval` — decision records (approve/reject) with comment and timestamp
-  - `AuditLog` — immutable audit events (action, note, actor, timestamp)
-  - `Attachment` — metadata for files stored in object storage (S3/GCS)
+Defined in `src/lib/types.ts`:
+- Enums/Types
+  - `Role`: 'requester' | 'approver' | 'auditor' | 'admin'
+  - `ChangeStatus`: 'draft' | 'pending' | 'approved' | 'rejected' | 'implemented' | 'verified' | 'closed'
+  - `RiskLevel`: 'low' | 'medium' | 'high'
+  - `ChangeCategory`: 'config' | 'infrastructure' | 'software' | 'process'
+- Interfaces
+  - `ChangeRequest`: Core entity with id, title, description, requester, assignees, riskLevel, status, category, dates, backoutPlan, approvals array, and auditTrail array.
 
-Datasource uses `DATABASE_URL` from environment. Client generated via `@prisma/client`.
+The audit trail and approvals are embedded arrays for simplicity in the current in-memory implementation.
 
-## 4) Server/DB
+## 4) State Management
 
-- `src/server/db.ts` creates a singleton `PrismaClient` with minimal logging, reusing the instance in dev to avoid hot‑reload leaks.
-- Pending: migrations and connection bootstrap (`npx prisma migrate dev`).
+- `src/lib/store.ts` uses Zustand to manage an in-memory array of `ChangeRequest` objects.
+- Functions: `add` (create new request), `update` (patch existing request).
+- No persistence — data resets on app restart. Intended as a prototype for UX validation.
 
-## 5) API Layer
+## 5) UI Layer (App Router)
 
-- `src/app/api/changes/route.ts` (GET): Returns change requests ordered by `updatedAt`, including approvals and attachments. This is an initial stub to validate server wiring; POST/PUT endpoints will be added for submit/approve/reject/transition.
+- `src/app/layout.tsx`: Provides the HTML structure, header ("CSquared • Change Management"), and footer. Includes global styles and a subtle background gradient.
+- `src/app/page.tsx`: Dashboard home page with animated tiles linking to /requests, /approvals, /changes, /audits. Uses Framer Motion for animations.
+- `(dashboard)/requests/page.tsx`: Form to submit new requests (title, description). Lists all requests with status and timestamps.
+- `(dashboard)/approvals/page.tsx`: Displays pending requests with Approve/Reject buttons.
+- `(dashboard)/changes/page.tsx`: Lists all changes with buttons to update status (Implemented, Verified, Closed).
+- `(dashboard)/audits/page.tsx`: Placeholder for audit evidence — currently dumps changes as JSON.
 
-## 6) UI Layer (App Router)
+All pages are client-side ("use client") and interact directly with the Zustand store.
 
-- `src/app/page.tsx`: Dashboard shell with navigation to feature pages.
-- `(dashboard)/requests/page.tsx`: Simple form to add a new request into the in‑memory store and list existing requests.
-- `(dashboard)/approvals/page.tsx`: Shows pending requests; approve/reject buttons update state.
-- `(dashboard)/changes/page.tsx`: Displays all changes; buttons to mark implemented/verified/closed (demo state).
-- `(dashboard)/audits/page.tsx`: Shows raw JSON of changes as a placeholder for exportable audit evidence.
+## 6) Configuration & Environment
 
-These pages currently use the in‑memory store (`src/lib/store.ts`) as a UX prototype. They will be migrated to server actions/API backed by Postgres/Prisma, and guarded by RBAC.
+- No environment variables required yet (in-memory only).
+- Tailwind configured via `postcss.config.mjs` and `tailwindcss` in devDeps.
+- ESLint uses Next.js preset for code quality.
 
-## 7) Configuration & Environment
-
-- `.env.example`
-  - `DATABASE_URL` — Postgres connection string
-  - `NEXTAUTH_URL`, `NEXTAUTH_SECRET` — for planned NextAuth integration
-  - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — for Google Workspace OAuth
-- Copy to `.env` and fill values locally. (Do not commit real secrets.)
-
-## 8) Development
+## 7) Development
 
 - Install: `npm install`
-- Run: `npm run dev` (http://localhost:3000)
-- Prisma tooling:
-  - `npx prisma generate` after schema changes
+- Run: `npm run dev` (starts Next.js dev server at http://localhost:3000)
+- Build: `npm run build`
+- Lint: `npm run lint`
+
+## 8) Roadmap & Future Enhancements
+
+- **Persistence**: Integrate Prisma with PostgreSQL for database storage. Migrate store to server-side with API routes.
+- **Authentication**: Add NextAuth with Google OAuth/SSO for user login.
+- **RBAC**: Implement role-based access control (e.g., only approvers can approve).
+- **Audit Trails**: Enhance audit logging with immutable records.
+- **API Routes**: Add POST/PUT endpoints for CRUD operations on changes.
+- **Attachments**: Support file uploads for change documentation.
+- **Notifications**: Email/Slack alerts for status changes.
+- **Exports**: CSV/PDF reports for audits.
+- **Testing**: Add unit/integration tests with Jest/Cypress.
+- **CI/CD**: Lint, type-check, and test on push/PR.
+
+This is a foundational stub — deployable for demos but designed for iterative extension toward full ISO 27001 compliance.
   - `npx prisma migrate dev --name init` to create initial migration
 
 ## 9) Security & ISO 27001 Considerations (Planned)

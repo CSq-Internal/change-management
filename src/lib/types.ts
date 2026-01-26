@@ -1,5 +1,14 @@
 export type Role = 'requester' | 'approver' | 'auditor' | 'admin';
 export type ChangeStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'implemented' | 'verified' | 'closed';
+export type InfrastructureType =
+  | 'Equiano Optics'
+  | 'Backbone Transport Network'
+  | 'Metro Transport Network'
+  | 'Wifi'
+  | 'Internal IT Infrastructure'
+  | 'Equiano IP'
+  | 'Backbone IP Network';
+export type Country = 'Uganda' | 'DRC' | 'Ghana' | 'Togo' | 'Liberia' | 'Mauritius';
 export interface ChangeRequest {
   id: string;
   title: string;
@@ -14,6 +23,16 @@ export interface ChangeRequest {
   plannedStart?: string;
   plannedEnd?: string;
   backoutPlan?: string;
+  details?: {
+    email?: string;
+    country?: Country;
+    infrastructureType?: InfrastructureType;
+    changeReason?: string;
+    impactScope?: string;
+    implementationPlan?: string;
+    testingPlan?: string;
+    changeWindow?: string;
+  };
   approvals: { by: string; at: string; comment?: string; decision: 'approve' | 'reject' }[];
   auditTrail: { at: string; by: string; action: string; note?: string }[];
 }

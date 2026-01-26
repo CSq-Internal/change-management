@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 export default function Audits(){
   const { changes } = useStore()
   return (
-    <Card>
+    <Card className="border-slate-200/80 bg-white/95">
       <CardHeader><CardTitle>Audit Evidence</CardTitle></CardHeader>
       <CardContent>
         <p className="text-slate-600 text-sm">Export change records for ISO audits. (Stubbed UI)</p>

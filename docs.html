@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Change Management System &mdash; Developer Docs</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="change-management-system--developer-docs">Change Management System — Developer Docs</h1>
+<p>This document describes the current state of the Change Management System project: architecture, folder layout, important files, and how things fit together.</p>
+<h2 id="1-high-level-overview">1) High-Level Overview</h2>
+<p>Goal: Build an ISO 27001-compliant Change Management System for internal use, enabling secure workflows for requesting, approving, implementing, and auditing changes.</p>
+<p>Current status (v0.1.0 — Minimal Stub):</p>
+<ul>
+<li>Next.js (App Router, TypeScript, Tailwind) application with basic UI pages.</li>
+<li>In-memory state management using Zustand for prototyping UX.</li>
+<li>Core domain types defined for ChangeRequest, roles, statuses, etc.</li>
+<li>No persistence, authentication, or API routes yet — focused on UI scaffolding.</li>
+<li>Ready for extension with Prisma (database), NextAuth (auth), and role-based access control.</li>
+</ul>
+<h2 id="2-project-structure">2) Project Structure</h2>
+<pre><code>change-management-system/
+├─ README.md                     — Project intro, run instructions, roadmap
+├─ docs.md                       — This file (developer documentation)
+├─ package.json                  — Dependencies and scripts
+├─ tsconfig.json                 — TypeScript config
+├─ next.config.ts                — Next.js configuration
+├─ postcss.config.mjs            — PostCSS/Tailwind config
+├─ eslint.config.mjs             — ESLint config (Next preset)
+├─ public/                       — Static assets
+└─ src/
+   ├─ app/                       — Next.js App Router
+   │  ├─ layout.tsx              — Root layout (HTML shell, header/footer)
+   │  ├─ globals.css             — Global Tailwind styles
+   │  ├─ page.tsx                — Home dashboard with navigation tiles
+   │  └─ (dashboard)/            — Feature pages (route group)
+   │     ├─ requests/page.tsx    — Create and list change requests
+   │     ├─ approvals/page.tsx   — Approve/Reject pending requests
+   │     ├─ changes/page.tsx     — View and update change statuses
+   │     └─ audits/page.tsx      — Audit evidence (JSON dump)
+   └─ lib/
+      ├─ types.ts                — Domain types and interfaces
+      └─ store.ts                — Zustand store (in-memory state)
+</code></pre>
+<h2 id="3-domain-model">3) Domain Model</h2>
+<p>Defined in <code>src/lib/types.ts</code>:</p>
+<ul>
+<li>Enums/Types
+<ul>
+<li><code>Role</code>: 'requester' | 'approver' | 'auditor' | 'admin'</li>
+<li><code>ChangeStatus</code>: 'draft' | 'pending' | 'approved' | 'rejected' | 'implemented' | 'verified' | 'closed'</li>
+<li><code>RiskLevel</code>: 'low' | 'medium' | 'high'</li>
+<li><code>ChangeCategory</code>: 'config' | 'infrastructure' | 'software' | 'process'</li>
+</ul>
+</li>
+<li>Interfaces
+<ul>
+<li><code>ChangeRequest</code>: Core entity with id, title, description, requester, assignees, riskLevel, status, category, dates, backoutPlan, approvals array, and auditTrail array.</li>
+</ul>
+</li>
+</ul>
+<p>The audit trail and approvals are embedded arrays for simplicity in the current in-memory implementation.</p>
+<h2 id="4-state-management">4) State Management</h2>
+<ul>
+<li><code>src/lib/store.ts</code> uses Zustand to manage an in-memory array of <code>ChangeRequest</code> objects.</li>
+<li>Functions: <code>add</code> (create new request), <code>update</code> (patch existing request).</li>
+<li>No persistence — data resets on app restart. Intended as a prototype for UX validation.</li>
+</ul>
+<h2 id="5-ui-layer-app-router">5) UI Layer (App Router)</h2>
+<ul>
+<li><code>src/app/layout.tsx</code>: Provides the HTML structure, header (&quot;CSquared • Change Management&quot;), and footer. Includes global styles and a subtle background gradient.</li>
+<li><code>src/app/page.tsx</code>: Dashboard home page with animated tiles linking to /requests, /approvals, /changes, /audits. Uses Framer Motion for animations.</li>
+<li><code>(dashboard)/requests/page.tsx</code>: Form to submit new requests (title, description). Lists all requests with status and timestamps.</li>
+<li><code>(dashboard)/approvals/page.tsx</code>: Displays pending requests with Approve/Reject buttons.</li>
+<li><code>(dashboard)/changes/page.tsx</code>: Lists all changes with buttons to update status (Implemented, Verified, Closed).</li>
+<li><code>(dashboard)/audits/page.tsx</code>: Placeholder for audit evidence — currently dumps changes as JSON.</li>
+</ul>
+<p>All pages are client-side (&quot;use client&quot;) and interact directly with the Zustand store.</p>
+<h2 id="6-configuration--environment">6) Configuration &amp; Environment</h2>
+<ul>
+<li>No environment variables required yet (in-memory only).</li>
+<li>Tailwind configured via <code>postcss.config.mjs</code> and <code>tailwindcss</code> in devDeps.</li>
+<li>ESLint uses Next.js preset for code quality.</li>
+</ul>
+<h2 id="7-development">7) Development</h2>
+<ul>
+<li>Install: <code>npm install</code></li>
+<li>Run: <code>npm run dev</code> (starts Next.js dev server at <a href="http://localhost:3000">http://localhost:3000</a>)</li>
+<li>Build: <code>npm run build</code></li>
+<li>Lint: <code>npm run lint</code></li>
+</ul>
+<h2 id="8-roadmap--future-enhancements">8) Roadmap &amp; Future Enhancements</h2>
+<ul>
+<li><strong>Persistence</strong>: Integrate Prisma with PostgreSQL for database storage. Migrate store to server-side with API routes.</li>
+<li><strong>Authentication</strong>: Add NextAuth with Google OAuth/SSO for user login.</li>
+<li><strong>RBAC</strong>: Implement role-based access control (e.g., only approvers can approve).</li>
+<li><strong>Audit Trails</strong>: Enhance audit logging with immutable records.</li>
+<li><strong>API Routes</strong>: Add POST/PUT endpoints for CRUD operations on changes.</li>
+<li><strong>Attachments</strong>: Support file uploads for change documentation.</li>
+<li><strong>Notifications</strong>: Email/Slack alerts for status changes.</li>
+<li><strong>Exports</strong>: CSV/PDF reports for audits.</li>
+<li><strong>Testing</strong>: Add unit/integration tests with Jest/Cypress.</li>
+<li><strong>CI/CD</strong>: Lint, type-check, and test on push/PR.</li>
+</ul>
+<p>This is a foundational stub — deployable for demos but designed for iterative extension toward full ISO 27001 compliance.</p>
+<ul>
+<li><code>npx prisma migrate dev --name init</code> to create initial migration</li>
+</ul>
+<h2 id="9-security--iso-27001-considerations-planned">9) Security &amp; ISO 27001 Considerations (Planned)</h2>
+<ul>
+<li>Authentication: NextAuth with Google Workspace SSO</li>
+<li>RBAC middleware: enforce requester/approver/auditor/admin across routes</li>
+<li>Audit logging: append‑only audit events for all state changes</li>
+<li>Approvals workflow: strict transitions with multi‑level approvals as policy</li>
+<li>Attachments: store in S3/GCS with signed URLs; metadata in DB</li>
+<li>Logging/monitoring: structured logs, request IDs, rate limiting</li>
+<li>CI: lint, type‑check, test; dependency audit; Prisma migrate validation</li>
+<li>Hardening: pin GitHub Actions by commit SHA; secret scanning; least‑privilege IAM for storage</li>
+</ul>
+<h2 id="10-roadmap">10) Roadmap</h2>
+<ol>
+<li>Add Postgres (Docker) + Prisma migrations; seed minimal data</li>
+<li>Implement server actions/API for create/approve/reject/transition with audit</li>
+<li>Introduce NextAuth (Google) + role mapping</li>
+<li>Add RBAC enforcement in middleware and route handlers</li>
+<li>Implement attachments via S3/GCS + presigned upload</li>
+<li>CI workflow (lint/type/test) and container build; deploy target TBD</li>
+<li>Reporting/exports for audits (CSV/PDF), change calendar, notifications</li>
+</ol>
+<h2 id="11-notes">11) Notes</h2>
+<ul>
+<li>The in‑memory store is temporary for prototyping UI/UX. Data will be persisted via Prisma.</li>
+<li>Please review the draft PR for discussion: coding standards, RBAC policy, and data retention.</li>
+</ul>
+
+            
+            
+        </body>
+        </html>
