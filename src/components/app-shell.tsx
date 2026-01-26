@@ -25,6 +25,16 @@ import {
   Lock,
   Plug,
   SlidersHorizontal,
+  CalendarDays,
+  FileText,
+  LineChart,
+  Shield,
+  Sliders,
+  FileStack,
+  Map,
+  BellRing,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -47,11 +57,25 @@ const navGroups = [
     ],
   },
   {
+    labelKey: "nav.insights",
+    items: [
+      { href: "/change-details", labelKey: "nav.changeDetails", icon: FileText },
+      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
+      { href: "/risk-register", labelKey: "nav.riskRegister", icon: Shield },
+      { href: "/audit-exports", labelKey: "nav.auditExports", icon: FileStack },
+      { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders },
+      { href: "/reports", labelKey: "nav.reports", icon: LineChart },
+      { href: "/notifications/history", labelKey: "nav.notificationHistory", icon: BellRing },
+      { href: "/automation", labelKey: "nav.automation", icon: Map },
+    ],
+  },
+  {
     labelKey: "nav.settings",
     items: [
       { href: "/settings/profile", labelKey: "nav.settingsProfile", icon: UserCircle2 },
       { href: "/settings/preferences", labelKey: "nav.settingsPreferences", icon: SlidersHorizontal },
       { href: "/settings/notifications", labelKey: "nav.settingsNotifications", icon: Bell },
+      { href: "/settings/alerts", labelKey: "nav.settingsAlerts", icon: Bell },
       { href: "/settings/security", labelKey: "nav.settingsSecurity", icon: Lock },
       { href: "/settings/integrations", labelKey: "nav.settingsIntegrations", icon: Plug },
     ],
@@ -65,7 +89,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [newPassword, setNewPassword] = useState("")
   const [preferencesOpen, setPreferencesOpen] = useState(false)
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { changes, currentUser, logout, updatePassword, theme, language, fontScale, setTheme, setLanguage, setFontScale } =
     useStore()
   const translate = (key: string) => t(language, key)
@@ -153,22 +178,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex min-h-screen">
-        <aside className="hidden lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-border lg:bg-card/80 lg:backdrop-blur">
+        <aside
+          className={cn(
+            "hidden lg:flex lg:flex-col lg:border-r lg:border-border lg:bg-card/80 lg:backdrop-blur",
+            sidebarCollapsed ? "lg:w-20" : "lg:w-72"
+          )}
+        >
           <div className="px-6 py-6">
-            <div className="flex items-center gap-3">
+            <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}>
               <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} className="rounded-full" />
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CSquared</div>
-                <div className="mt-1 text-lg font-semibold">Change Management</div>
-              </div>
+              {!sidebarCollapsed && (
+                <div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CSquared</div>
+                  <div className="mt-1 text-lg font-semibold">Change Management</div>
+                </div>
+              )}
             </div>
           </div>
           <nav className="flex-1 px-3">
             {effectiveNavGroups.map((group) => (
               <div key={group.labelKey} className="mb-4">
-                <div className="px-4 pb-2 text-xs uppercase tracking-[0.2em] text-slate-400">
-                  {translate(group.labelKey)}
-                </div>
+                {!sidebarCollapsed && (
+                  <div className="px-4 pb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    {translate(group.labelKey)}
+                  </div>
+                )}
                 {group.items.map((item) => {
                   const active = pathname === item.href
                   return (
@@ -177,20 +211,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       href={item.href}
                       className={cn(
                         "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
-                        active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-slate-100"
+                        active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-muted"
                       )}
                     >
                       <item.icon className={cn("h-4 w-4", active ? "text-white" : "text-muted-foreground")} />
-                      <span className="flex-1">{translate(item.labelKey)}</span>
-                      {item.href === "/requests" && (
-                        <span className={cn("rounded-full px-2 py-0.5 text-xs", active ? "bg-white/20" : "bg-muted")}>
-                          {myRequests.length}
-                        </span>
-                      )}
-                      {item.href === "/approvals" && (
-                        <span className={cn("rounded-full px-2 py-0.5 text-xs", active ? "bg-white/20" : "bg-muted")}>
-                          {pendingApprovals.length}
-                        </span>
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="flex-1">{translate(item.labelKey)}</span>
+                          {item.href === "/requests" && (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs",
+                                active ? "bg-white/20" : "bg-muted"
+                              )}
+                            >
+                              {myRequests.length}
+                            </span>
+                          )}
+                          {item.href === "/approvals" && (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs",
+                                active ? "bg-white/20" : "bg-muted"
+                              )}
+                            >
+                              {pendingApprovals.length}
+                            </span>
+                          )}
+                        </>
                       )}
                     </Link>
                   )
@@ -198,7 +246,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             ))}
           </nav>
-          <div className="px-6 py-6 text-xs text-muted-foreground">{translate("sidebar.live")}</div>
+          {!sidebarCollapsed && (
+            <div className="px-6 py-6 text-xs text-muted-foreground">{translate("sidebar.live")}</div>
+          )}
         </aside>
 
         <div className="flex flex-1 flex-col">
@@ -214,6 +264,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
               <div className="flex items-center gap-3 text-sm">
+                <button
+                  className="hidden h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted lg:inline-flex"
+                  onClick={() => setSidebarCollapsed((prev) => !prev)}
+                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </button>
                 <button
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
                   onClick={() => router.back()}
@@ -251,29 +308,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </label>
                 <div className="relative">
                   <button
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                    aria-label="Profile menu"
-                    onClick={() => setProfileMenuOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"
+                    onClick={() => setSettingsMenuOpen((prev) => !prev)}
+                    aria-label="Preferences"
                   >
-                    <UserCircle2 className="h-4 w-4" />
+                    <Settings className="h-4 w-4" />
+                    {translate("prefs.title")}
                   </button>
-                  {profileMenuOpen && (
+                  {settingsMenuOpen && (
                     <div className="absolute right-0 top-11 w-44 rounded-xl border border-border bg-card p-2 text-sm shadow-lg">
                       <button
                         className="w-full rounded-lg px-3 py-2 text-left text-foreground hover:bg-muted"
                         onClick={() => {
                           setPreferencesOpen(true)
-                          setProfileMenuOpen(false)
+                          setSettingsMenuOpen(false)
                         }}
                       >
                         {translate("prefs.user")}
                       </button>
-                      <button
-                        className="w-full rounded-lg px-3 py-2 text-left text-foreground hover:bg-muted"
-                        onClick={() => setProfileMenuOpen(false)}
+                      <Link
+                        href="/settings/profile"
+                        className="block w-full rounded-lg px-3 py-2 text-left text-foreground hover:bg-muted"
+                        onClick={() => setSettingsMenuOpen(false)}
                       >
                         {translate("prefs.settings")}
-                      </button>
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -298,14 +357,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </button>
                   </>
                 )}
-                <button
-                  className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"
-                  onClick={() => setPreferencesOpen(true)}
-                  aria-label="Preferences"
-                >
-                  <Settings className="h-4 w-4" />
-                  {translate("prefs.title")}
-                </button>
               </div>
             </div>
             <div className="border-t border-slate-100 lg:hidden">

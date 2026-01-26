@@ -6,12 +6,14 @@ This document describes the current state of the Change Management System projec
 
 Goal: Build an ISO 27001-compliant Change Management System for internal use, enabling secure workflows for requesting, approving, implementing, and auditing changes.
 
-Current status (v0.1.0 — Minimal Stub):
-- Next.js (App Router, TypeScript, Tailwind) application with basic UI pages.
-- In-memory state management using Zustand for prototyping UX.
-- Core domain types defined for ChangeRequest, roles, statuses, etc.
-- No persistence, authentication, or API routes yet — focused on UI scaffolding.
-- Ready for extension with Prisma (database), NextAuth (auth), and role-based access control.
+Current status (v0.1.0 — Prototype with UX + auth scaffolding):
+- Next.js (App Router, TypeScript, Tailwind) application with a full shell (top nav, sidebar, breadcrumbs).
+- In-memory state management using Zustand for UX prototyping.
+- Change request form modeled after the CSquared Technical Change Request document.
+- Mock authentication (email/password + Google SSO stub), logout, and password change UI.
+- User management (admin-only) with onboarding wizard, teams, and permissions.
+- Preferences for theme (system/light/dark), language (en/fr/sw), and font size.
+- Prisma schema/config added; API route wired; still no production database in use.
 
 ## 2) Project Structure
 
@@ -27,17 +29,30 @@ change-management-system/
 ├─ public/                       — Static assets
 └─ src/
    ├─ app/                       — Next.js App Router
-   │  ├─ layout.tsx              — Root layout (HTML shell, header/footer)
+   │  ├─ layout.tsx              — Root layout (AppShell)
    │  ├─ globals.css             — Global Tailwind styles
-   │  ├─ page.tsx                — Home dashboard with navigation tiles
+   │  ├─ page.tsx                — Live dashboard metrics + activity
+   │  ├─ login/page.tsx          — Login screen (email/password + Google SSO stub)
    │  └─ (dashboard)/            — Feature pages (route group)
    │     ├─ requests/page.tsx    — Create and list change requests
    │     ├─ approvals/page.tsx   — Approve/Reject pending requests
    │     ├─ changes/page.tsx     — View and update change statuses
    │     └─ audits/page.tsx      — Audit evidence (JSON dump)
+   │     ├─ users/page.tsx       — Admin-only user onboarding wizard
+   │     ├─ teams/page.tsx       — Admin-only teams management
+   │     └─ settings/            — Settings pages
+   │        ├─ profile/page.tsx
+   │        ├─ preferences/page.tsx
+   │        ├─ notifications/page.tsx
+   │        ├─ security/page.tsx
+   │        └─ integrations/page.tsx
+   ├─ components/
+   │  ├─ app-shell.tsx           — Global shell, navigation, preferences, auth guard
+   │  └─ ui/                     — UI primitives (button/card/input/textarea/toaster)
    └─ lib/
       ├─ types.ts                — Domain types and interfaces
-      └─ store.ts                — Zustand store (in-memory state)
+      ├─ store.ts                — Zustand store (auth, prefs, in-memory state)
+      └─ i18n.ts                 — Localization strings and helper
 ```
 
 ## 3) Domain Model
@@ -48,31 +63,42 @@ Defined in `src/lib/types.ts`:
   - `ChangeStatus`: 'draft' | 'pending' | 'approved' | 'rejected' | 'implemented' | 'verified' | 'closed'
   - `RiskLevel`: 'low' | 'medium' | 'high'
   - `ChangeCategory`: 'config' | 'infrastructure' | 'software' | 'process'
+  - `Permission`: 'admin' | 'read' | 'write' | 'approve' | 'audit'
+  - `Country`: Ghana | Uganda | Mauritius | Liberia | Togo
 - Interfaces
   - `ChangeRequest`: Core entity with id, title, description, requester, assignees, riskLevel, status, category, dates, backoutPlan, approvals array, and auditTrail array.
+  - `AppUser`: In-memory user entity with role, permissions, country, and password.
+  - `Team`: Team container for routing and assignments.
 
 The audit trail and approvals are embedded arrays for simplicity in the current in-memory implementation.
 
 ## 4) State Management
 
-- `src/lib/store.ts` uses Zustand to manage an in-memory array of `ChangeRequest` objects.
-- Functions: `add` (create new request), `update` (patch existing request).
-- No persistence — data resets on app restart. Intended as a prototype for UX validation.
+- `src/lib/store.ts` uses Zustand to manage in-memory `ChangeRequest`, `AppUser`, and `Team` state.
+- Functions: `add` (create new request), `update` (patch existing request), `addUser`, `addTeam`, auth (`login`, `loginWithGoogle`, `logout`), `updatePassword`.
+- Preferences in state: `theme`, `language`, `fontScale`.
+- No persistence — data resets on app restart. Intended for UX validation.
 
 ## 5) UI Layer (App Router)
 
-- `src/app/layout.tsx`: Provides the HTML structure, header ("CSquared • Change Management"), and footer. Includes global styles and a subtle background gradient.
-- `src/app/page.tsx`: Dashboard home page with animated tiles linking to /requests, /approvals, /changes, /audits. Uses Framer Motion for animations.
-- `(dashboard)/requests/page.tsx`: Form to submit new requests (title, description). Lists all requests with status and timestamps.
-- `(dashboard)/approvals/page.tsx`: Displays pending requests with Approve/Reject buttons.
-- `(dashboard)/changes/page.tsx`: Lists all changes with buttons to update status (Implemented, Verified, Closed).
-- `(dashboard)/audits/page.tsx`: Placeholder for audit evidence — currently dumps changes as JSON.
+- `src/app/layout.tsx`: Wraps all routes in `AppShell` and loads global styles.
+- `src/components/app-shell.tsx`: App chrome (top nav + sidebar + breadcrumbs), preferences modal, auth guard, profile menu, and logout.
+- `src/app/page.tsx`: Live dashboard with metrics, activity feed, and quick actions.
+- `(dashboard)/requests/page.tsx`: Full technical change request wizard-like form and "My Requests".
+- `(dashboard)/approvals/page.tsx`: Approver queue with approve/reject toasts.
+- `(dashboard)/changes/page.tsx`: Change lifecycle updates with toasts.
+- `(dashboard)/audits/page.tsx`: Audit evidence view (JSON).
+- `(dashboard)/users/page.tsx`: Admin-only onboarding wizard with default password + OpCo assignment.
+- `(dashboard)/teams/page.tsx`: Admin-only teams management.
+- `(dashboard)/settings/*`: Profile, preferences, notifications, security, integrations.
+- `src/app/login/page.tsx`: Login UI (email/password + Google SSO stub).
 
 All pages are client-side ("use client") and interact directly with the Zustand store.
 
 ## 6) Configuration & Environment
 
-- No environment variables required yet (in-memory only).
+- `next.config.ts` includes `allowedDevOrigins` for localtunnel usage.
+- `prisma.config.ts` and `prisma/schema.prisma` exist for Prisma 7 tooling.
 - Tailwind configured via `postcss.config.mjs` and `tailwindcss` in devDeps.
 - ESLint uses Next.js preset for code quality.
 
@@ -80,15 +106,15 @@ All pages are client-side ("use client") and interact directly with the Zustand 
 
 - Install: `npm install`
 - Run: `npm run dev` (starts Next.js dev server at http://localhost:3000)
-- Build: `npm run build`
+- Build: `npm run build` (runs `prisma generate` via `prebuild`)
 - Lint: `npm run lint`
 
 ## 8) Roadmap & Future Enhancements
 
-- **Persistence**: Integrate Prisma with PostgreSQL for database storage. Migrate store to server-side with API routes.
-- **Authentication**: Add NextAuth with Google OAuth/SSO for user login.
-- **RBAC**: Implement role-based access control (e.g., only approvers can approve).
-- **Audit Trails**: Enhance audit logging with immutable records.
+- **Persistence**: Wire Prisma + Postgres (adapter or Accelerate) for real storage.
+- **Authentication**: Replace mock auth with production SSO (Google Workspace).
+- **RBAC**: Enforce permissions in server routes and middleware.
+- **Audit Trails**: Make audit logging append-only and queryable.
 - **API Routes**: Add POST/PUT endpoints for CRUD operations on changes.
 - **Attachments**: Support file uploads for change documentation.
 - **Notifications**: Email/Slack alerts for status changes.
@@ -101,7 +127,7 @@ This is a foundational stub — deployable for demos but designed for iterative 
 
 ## 9) Security & ISO 27001 Considerations (Planned)
 
-- Authentication: NextAuth with Google Workspace SSO
+- Authentication: Replace mock auth with Google Workspace SSO
 - RBAC middleware: enforce requester/approver/auditor/admin across routes
 - Audit logging: append‑only audit events for all state changes
 - Approvals workflow: strict transitions with multi‑level approvals as policy
@@ -123,5 +149,4 @@ This is a foundational stub — deployable for demos but designed for iterative 
 ## 11) Notes
 
 - The in‑memory store is temporary for prototyping UI/UX. Data will be persisted via Prisma.
-- Please review the draft PR for discussion: coding standards, RBAC policy, and data retention.
-
+- Mock auth is used for UX only; do not treat as production security.
