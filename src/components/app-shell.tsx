@@ -7,15 +7,38 @@ import { useState } from "react"
 import { useStore } from "@/lib/store"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { ArrowLeft, BarChart3, ClipboardList, FileClock, GitCompare, Home, ShieldCheck, UserCircle2 } from "lucide-react"
+import {
+  ArrowLeft,
+  BarChart3,
+  ClipboardList,
+  FileClock,
+  GitCompare,
+  Home,
+  ShieldCheck,
+  UserCircle2,
+  UsersRound,
+  Users,
+} from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: BarChart3 },
-  { href: "/requests", label: "Requests", icon: ClipboardList },
-  { href: "/approvals", label: "Approvals", icon: ShieldCheck },
-  { href: "/changes", label: "Changes", icon: GitCompare },
-  { href: "/audits", label: "Audits", icon: FileClock },
+const navGroups = [
+  {
+    label: "Core",
+    items: [
+      { href: "/", label: "Dashboard", icon: BarChart3 },
+      { href: "/requests", label: "Requests", icon: ClipboardList },
+      { href: "/approvals", label: "Approvals", icon: ShieldCheck },
+      { href: "/changes", label: "Changes", icon: GitCompare },
+      { href: "/audits", label: "Audits", icon: FileClock },
+    ],
+  },
+  {
+    label: "User Management",
+    items: [
+      { href: "/users", label: "Users", icon: Users },
+      { href: "/teams", label: "Teams", icon: UsersRound },
+    ],
+  },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -29,7 +52,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       c.status === "pending" &&
       (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
   )
-  const currentNav = navItems.find((item) => item.href === pathname)
+  const flatNavItems = navGroups.flatMap((group) => group.items)
+  const currentNav = flatNavItems.find((item) => item.href === pathname)
   const breadcrumbs = currentNav
     ? [{ href: "/", label: "Dashboard" }, ...(currentNav.href === "/" ? [] : [currentNav])]
     : [{ href: "/", label: "Dashboard" }]
@@ -53,32 +77,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <nav className="flex-1 px-3">
-            {navItems.map((item) => {
-              const active = pathname === item.href
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
-                    active ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-slate-100"
-                  )}
-                >
-                  <item.icon className={cn("h-4 w-4", active ? "text-white" : "text-slate-500")} />
-                  <span className="flex-1">{item.label}</span>
-                  {item.href === "/requests" && (
-                    <span className={cn("rounded-full px-2 py-0.5 text-xs", active ? "bg-white/20" : "bg-slate-200")}>
-                      {myRequests.length}
-                    </span>
-                  )}
-                  {item.href === "/approvals" && (
-                    <span className={cn("rounded-full px-2 py-0.5 text-xs", active ? "bg-white/20" : "bg-slate-200")}>
-                      {pendingApprovals.length}
-                    </span>
-                  )}
-                </Link>
-              )
-            })}
+            {navGroups.map((group) => (
+              <div key={group.label} className="mb-4">
+                <div className="px-4 pb-2 text-xs uppercase tracking-[0.2em] text-slate-400">{group.label}</div>
+                {group.items.map((item) => {
+                  const active = pathname === item.href
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
+                        active ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-slate-100"
+                      )}
+                    >
+                      <item.icon className={cn("h-4 w-4", active ? "text-white" : "text-slate-500")} />
+                      <span className="flex-1">{item.label}</span>
+                      {item.href === "/requests" && (
+                        <span className={cn("rounded-full px-2 py-0.5 text-xs", active ? "bg-white/20" : "bg-slate-200")}>
+                          {myRequests.length}
+                        </span>
+                      )}
+                      {item.href === "/approvals" && (
+                        <span className={cn("rounded-full px-2 py-0.5 text-xs", active ? "bg-white/20" : "bg-slate-200")}>
+                          {pendingApprovals.length}
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
+            ))}
           </nav>
           <div className="px-6 py-6 text-xs text-slate-500">
             Live updates based on your activity.
@@ -145,7 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="border-t border-slate-100 lg:hidden">
               <nav className="flex gap-2 overflow-x-auto px-4 py-3 text-sm">
-                {navItems.map((item) => {
+                {flatNavItems.map((item) => {
                   const active = pathname === item.href
                   return (
                     <Link

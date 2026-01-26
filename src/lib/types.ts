@@ -9,6 +9,25 @@ export type InfrastructureType =
   | 'Equiano IP'
   | 'Backbone IP Network';
 export type Country = 'Uganda' | 'DRC' | 'Ghana' | 'Togo' | 'Liberia' | 'Mauritius';
+export type Permission = 'admin' | 'read' | 'write' | 'approve' | 'audit';
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  permissions: Permission[];
+  country: Country;
+  teamIds: string[];
+  createdAt: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
 export interface ChangeRequest {
   id: string;
   title: string;
