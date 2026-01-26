@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useStore } from "@/lib/store"
+import { t } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,7 +21,7 @@ const infraTypes = [
 ] as const
 
 export default function Requests() {
-  const { changes, add, currentUser } = useStore()
+  const { changes, add, currentUser, language } = useStore()
   const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [country, setCountry] = useState<(typeof countries)[number] | "">("")
@@ -42,16 +43,16 @@ export default function Requests() {
   const submit = () => {
     if (!title || !description || !email || !country || !infrastructureType) {
       toast({
-        title: "Missing required fields",
-        description: "Email, country, infrastructure type, title, and description are required.",
+        title: t(language, "requests.toast.missing"),
+        description: t(language, "requests.toast.missingDesc"),
         variant: "error",
       })
       return
     }
     if (!currentUser) {
       toast({
-        title: "Sign in required",
-        description: "Please log in to submit a change request.",
+        title: t(language, "requests.toast.signIn"),
+        description: t(language, "requests.toast.signInDesc"),
         variant: "error",
       })
       return
@@ -80,8 +81,8 @@ export default function Requests() {
       },
     })
     toast({
-      title: "Request submitted",
-      description: "Your change request is now pending approval.",
+      title: t(language, "requests.toast.submitted"),
+      description: t(language, "requests.toast.submittedDesc"),
       variant: "success",
     })
     setTitle("")
@@ -101,19 +102,19 @@ export default function Requests() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <div className="space-y-5">
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-2xl">CSquared Technical Change Request</CardTitle>
+            <CardTitle className="text-2xl">{t(language, "requests.title")}</CardTitle>
             <CardDescription>
-              <span className="text-rose-600">*</span> indicates required question
+              <span className="text-rose-600">*</span> {t(language, "requests.required")}
             </CardDescription>
           </CardHeader>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">
-              Email <span className="text-rose-600">*</span>
+              {t(language, "requests.email")} <span className="text-rose-600">*</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -121,16 +122,16 @@ export default function Requests() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">
-              Country <span className="text-rose-600">*</span>
+              {t(language, "requests.country")} <span className="text-rose-600">*</span>
             </CardTitle>
-            <CardDescription>Mark only one oval.</CardDescription>
+            <CardDescription>{t(language, "requests.oneOption")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {countries.map((c) => (
-              <label key={c} className="flex items-center gap-3 text-sm text-slate-700">
+              <label key={c} className="flex items-center gap-3 text-sm text-foreground">
                 <input type="radio" name="country" checked={country === c} onChange={() => setCountry(c)} />
                 {c}
               </label>
@@ -138,16 +139,16 @@ export default function Requests() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">
-              Infrastructure Type <span className="text-rose-600">*</span>
+              {t(language, "requests.infraType")} <span className="text-rose-600">*</span>
             </CardTitle>
-            <CardDescription>Mark only one oval.</CardDescription>
+            <CardDescription>{t(language, "requests.oneOption")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {infraTypes.map((infra) => (
-              <label key={infra} className="flex items-center gap-3 text-sm text-slate-700">
+              <label key={infra} className="flex items-center gap-3 text-sm text-foreground">
                 <input
                   type="radio"
                   name="infra"
@@ -160,26 +161,30 @@ export default function Requests() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">
-              Change Title <span className="text-rose-600">*</span>
+              {t(language, "requests.changeTitle")} <span className="text-rose-600">*</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Input placeholder="Describe the change at a glance" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input
+              placeholder={t(language, "requests.titlePlaceholder")}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">
-              Change Description <span className="text-rose-600">*</span>
+              {t(language, "requests.changeDescription")} <span className="text-rose-600">*</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
-              placeholder="Provide background, scope, and justification."
+              placeholder={t(language, "requests.descriptionPlaceholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -187,32 +192,32 @@ export default function Requests() {
         </Card>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-slate-200/80 bg-white/95">
+          <Card className="border-border/80 bg-card/95">
             <CardHeader>
-              <CardTitle className="text-base">Category</CardTitle>
+              <CardTitle className="text-base">{t(language, "requests.category")}</CardTitle>
             </CardHeader>
             <CardContent>
               <select
-                className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as typeof category)}
               >
-                <option value="config">Configuration</option>
-                <option value="infrastructure">Infrastructure</option>
-                <option value="software">Software</option>
-                <option value="process">Process</option>
+                <option value="config">{t(language, "requests.category.config")}</option>
+                <option value="infrastructure">{t(language, "requests.category.infrastructure")}</option>
+                <option value="software">{t(language, "requests.category.software")}</option>
+                <option value="process">{t(language, "requests.category.process")}</option>
               </select>
             </CardContent>
           </Card>
-          <Card className="border-slate-200/80 bg-white/95">
+          <Card className="border-border/80 bg-card/95">
             <CardHeader>
-              <CardTitle className="text-base">Risk Level</CardTitle>
+              <CardTitle className="text-base">{t(language, "requests.riskLevel")}</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-2 text-sm text-slate-700">
+            <CardContent className="grid gap-2 text-sm text-foreground">
               {(["low", "medium", "high"] as const).map((level) => (
                 <label key={level} className="flex items-center gap-3 capitalize">
                   <input type="radio" name="risk" checked={riskLevel === level} onChange={() => setRiskLevel(level)} />
-                  {level}
+                  {t(language, `requests.risk.${level}`)}
                 </label>
               ))}
             </CardContent>
@@ -220,17 +225,17 @@ export default function Requests() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-slate-200/80 bg-white/95">
+          <Card className="border-border/80 bg-card/95">
             <CardHeader>
-              <CardTitle className="text-base">Planned Start</CardTitle>
+              <CardTitle className="text-base">{t(language, "requests.plannedStart")}</CardTitle>
             </CardHeader>
             <CardContent>
               <Input type="datetime-local" value={plannedStart} onChange={(e) => setPlannedStart(e.target.value)} />
             </CardContent>
           </Card>
-          <Card className="border-slate-200/80 bg-white/95">
+          <Card className="border-border/80 bg-card/95">
             <CardHeader>
-              <CardTitle className="text-base">Planned End</CardTitle>
+              <CardTitle className="text-base">{t(language, "requests.plannedEnd")}</CardTitle>
             </CardHeader>
             <CardContent>
               <Input type="datetime-local" value={plannedEnd} onChange={(e) => setPlannedEnd(e.target.value)} />
@@ -238,74 +243,80 @@ export default function Requests() {
           </Card>
         </div>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">Impact & Scope</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.impactScope")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
-              placeholder="Systems, customers, or services impacted."
+              placeholder={t(language, "requests.impactPlaceholder")}
               value={impactScope}
               onChange={(e) => setImpactScope(e.target.value)}
             />
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">Implementation Plan</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.implementationPlan")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea value={implementationPlan} onChange={(e) => setImplementationPlan(e.target.value)} />
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">Testing & Validation Plan</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.testingPlan")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea value={testingPlan} onChange={(e) => setTestingPlan(e.target.value)} />
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">Backout Plan</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.backoutPlan")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea value={backoutPlan} onChange={(e) => setBackoutPlan(e.target.value)} />
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">Approvers</CardTitle>
-            <CardDescription>Comma separated identifiers (e.g. jane, ossie).</CardDescription>
+            <CardTitle className="text-base">{t(language, "requests.approvers")}</CardTitle>
+            <CardDescription>{t(language, "requests.approversHint")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Input value={approvers} onChange={(e) => setApprovers(e.target.value)} placeholder="approver1, approver2" />
+            <Input
+              value={approvers}
+              onChange={(e) => setApprovers(e.target.value)}
+              placeholder={t(language, "requests.approversPlaceholder")}
+            />
           </CardContent>
         </Card>
 
         <div className="flex items-center gap-3">
-          <Button onClick={submit}>Submit Request</Button>
-          <p className="text-xs text-slate-500">Requests are routed for approval immediately.</p>
+          <Button onClick={submit}>{t(language, "requests.submit")}</Button>
+          <p className="text-xs text-muted-foreground">{t(language, "requests.submitHint")}</p>
         </div>
       </div>
 
       <aside className="space-y-6">
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">My Requests</CardTitle>
-            <CardDescription>{myRequests.length} total submitted</CardDescription>
+            <CardTitle className="text-base">{t(language, "requests.myRequests")}</CardTitle>
+            <CardDescription>
+              {myRequests.length} {t(language, "requests.totalSubmitted")}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {myRequests.length === 0 && <p className="text-sm text-slate-500">No requests yet.</p>}
+            {myRequests.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "requests.none")}</p>}
             {myRequests.map((c) => (
-              <div key={c.id} className="rounded-xl border border-slate-200/70 bg-slate-50 px-4 py-3">
+              <div key={c.id} className="rounded-xl border border-border/70 bg-muted px-4 py-3">
                 <div className="text-sm font-medium">{c.title}</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-muted-foreground">
                   {c.status} • {new Date(c.createdAt).toLocaleString()}
                 </div>
               </div>

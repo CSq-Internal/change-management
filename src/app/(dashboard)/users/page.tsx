@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
+import { t } from "@/lib/i18n"
 
 const countries: Country[] = ["Ghana", "Uganda", "Mauritius", "Liberia", "Togo"]
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
 const permissions: Permission[] = ["admin", "read", "write", "approve", "audit"]
 
 export default function UsersPage() {
-  const { users, teams, addUser, currentUser } = useStore()
+  const { users, teams, addUser, currentUser, language } = useStore()
   const { toast } = useToast()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [step, setStep] = useState(0)
@@ -27,9 +28,9 @@ export default function UsersPage() {
 
   const steps = useMemo(
     () => [
-      { title: "Profile", description: "Basic information and OpCo assignment." },
-      { title: "Access", description: "Role and permissions for the user." },
-      { title: "Teams", description: "Associate the user to teams." },
+      { titleKey: "users.wizard.stepProfile", descKey: "users.wizard.profileDesc" },
+      { titleKey: "users.wizard.stepAccess", descKey: "users.wizard.accessDesc" },
+      { titleKey: "users.wizard.stepTeams", descKey: "users.wizard.teamsDesc" },
     ],
     []
   )
@@ -56,16 +57,16 @@ export default function UsersPage() {
   const submit = () => {
     if (!currentUser?.permissions.includes("admin")) {
       toast({
-        title: "Admin access required",
-        description: "Only admins can onboard users.",
+        title: t(language, "users.adminOnly"),
+        description: t(language, "users.adminOnlyDesc"),
         variant: "error",
       })
       return
     }
     if (!name || !email) {
       toast({
-        title: "Missing details",
-        description: "Name and email are required to onboard a user.",
+        title: t(language, "users.toast.missing"),
+        description: t(language, "users.toast.missingDesc"),
         variant: "error",
       })
       return
@@ -80,8 +81,8 @@ export default function UsersPage() {
       password: defaultPassword || "ChangeMe123!",
     })
     toast({
-      title: "User onboarded",
-      description: `${name} has been added to ${country}.`,
+      title: t(language, "users.toast.created"),
+      description: `${name} - ${country}`,
       variant: "success",
     })
     closeWizard()
@@ -90,44 +91,46 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       {!currentUser?.permissions.includes("admin") && (
-        <Card className="border-slate-200/80 bg-white/95">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">Admin Access Required</CardTitle>
+            <CardTitle className="text-base">{t(language, "users.adminOnly")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-600">You do not have permission to manage users.</p>
+            <p className="text-sm text-muted-foreground">{t(language, "users.adminOnlyDesc")}</p>
           </CardContent>
         </Card>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">User Management</h1>
-          <p className="text-sm text-slate-500">Onboard and manage users across OpCos.</p>
+          <h1 className="text-2xl font-semibold">{t(language, "users.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t(language, "users.desc")}</p>
         </div>
         <Button onClick={() => setWizardOpen(true)} disabled={!currentUser?.permissions.includes("admin")}>
-          Onboard User
+          {t(language, "users.onboard")}
         </Button>
       </div>
 
-      <Card className="border-slate-200/80 bg-white/95">
+      <Card className="border-border/80 bg-card/95">
         <CardHeader>
-          <CardTitle className="text-base">Active Users</CardTitle>
-          <CardDescription>{users.length} total users onboarded.</CardDescription>
+          <CardTitle className="text-base">{t(language, "users.active")}</CardTitle>
+          <CardDescription>
+            {users.length} {t(language, "users.total")}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {users.length === 0 && <p className="text-sm text-slate-500">No users yet.</p>}
+          {users.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "users.none")}</p>}
           {users.map((user) => (
-            <div key={user.id} className="rounded-xl border border-slate-200/70 bg-slate-50 px-4 py-3">
+            <div key={user.id} className="rounded-xl border border-border/70 bg-muted px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-medium">{user.name}</div>
-                  <div className="text-xs text-slate-500">{user.email}</div>
+                  <div className="text-xs text-muted-foreground">{user.email}</div>
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-muted-foreground">
                   {user.country} • {user.role}
                 </div>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                 {user.permissions.map((permission) => (
                   <span key={permission} className="rounded-full bg-white px-2 py-1">
                     {permission}
@@ -141,19 +144,19 @@ export default function UsersPage() {
 
       {wizardOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4 py-10">
-          <Card className="w-full max-w-2xl border-slate-200/80 bg-white/95">
+          <Card className="w-full max-w-2xl border-border/80 bg-card/95">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-xl">Onboard User</CardTitle>
-              <CardDescription>{steps[step].description}</CardDescription>
-              <div className="mt-2 flex gap-2 text-xs text-slate-500">
+              <CardTitle className="text-xl">{t(language, "users.wizard.title")}</CardTitle>
+              <CardDescription>{t(language, steps[step].descKey)}</CardDescription>
+              <div className="mt-2 flex gap-2 text-xs text-muted-foreground">
                 {steps.map((item, index) => (
                   <span
-                    key={item.title}
+                    key={item.titleKey}
                     className={`rounded-full px-3 py-1 ${
-                      index === step ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500"
+                      index === step ? "bg-slate-900 text-white" : "bg-slate-100 text-muted-foreground"
                     }`}
                   >
-                    {index + 1}. {item.title}
+                    {index + 1}. {t(language, item.titleKey)}
                   </span>
                 ))}
               </div>
@@ -161,12 +164,12 @@ export default function UsersPage() {
             <CardContent className="space-y-4">
               {step === 0 && (
                 <div className="grid gap-4">
-                  <Input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
-                  <Input placeholder="Work email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <Input placeholder={t(language, "users.wizard.name")} value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input placeholder={t(language, "users.wizard.email")} value={email} onChange={(e) => setEmail(e.target.value)} />
                   <div>
-                    <label className="text-sm font-medium">OpCo / Country</label>
+                    <label className="text-sm font-medium">{t(language, "users.wizard.country")}</label>
                     <select
-                      className="mt-2 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                      className="mt-2 h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
                       value={country}
                       onChange={(e) => setCountry(e.target.value as Country)}
                     >
@@ -183,9 +186,9 @@ export default function UsersPage() {
               {step === 1 && (
                 <div className="grid gap-4">
                   <div>
-                    <label className="text-sm font-medium">Role</label>
+                    <label className="text-sm font-medium">{t(language, "users.wizard.role")}</label>
                     <select
-                      className="mt-2 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                      className="mt-2 h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
                       value={role}
                       onChange={(e) => setRole(e.target.value as Role)}
                     >
@@ -197,8 +200,8 @@ export default function UsersPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Permissions</label>
-                    <div className="mt-2 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                    <label className="text-sm font-medium">{t(language, "users.wizard.permissions")}</label>
+                    <div className="mt-2 grid gap-2 text-sm text-foreground md:grid-cols-2">
                       {permissions.map((permission) => (
                         <label key={permission} className="flex items-center gap-3">
                           <input
@@ -218,15 +221,15 @@ export default function UsersPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Default Password</label>
+                    <label className="text-sm font-medium">{t(language, "users.wizard.password")}</label>
                     <Input
                       type="password"
-                      placeholder="Set a temporary password"
+                      placeholder={t(language, "users.wizard.passwordPlaceholder")}
                       value={defaultPassword}
                       onChange={(e) => setDefaultPassword(e.target.value)}
                     />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Leave blank to use the default: ChangeMe123!
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t(language, "users.wizard.passwordHint")}
                     </p>
                   </div>
                 </div>
@@ -235,11 +238,11 @@ export default function UsersPage() {
               {step === 2 && (
                 <div className="grid gap-4">
                   {teams.length === 0 ? (
-                    <p className="text-sm text-slate-500">No teams yet. Create teams first, then assign them here.</p>
+                    <p className="text-sm text-muted-foreground">{t(language, "users.wizard.noTeams")}</p>
                   ) : (
                     <div>
-                      <label className="text-sm font-medium">Teams</label>
-                      <div className="mt-2 grid gap-2 text-sm text-slate-700">
+                      <label className="text-sm font-medium">{t(language, "users.wizard.teams")}</label>
+                      <div className="mt-2 grid gap-2 text-sm text-foreground">
                         {teams.map((team) => (
                           <label key={team.id} className="flex items-center gap-3">
                             <input
@@ -264,18 +267,18 @@ export default function UsersPage() {
 
               <div className="flex items-center justify-between pt-2">
                 <Button variant="outline" onClick={closeWizard}>
-                  Cancel
+                  {t(language, "users.wizard.cancel")}
                 </Button>
                 <div className="flex gap-2">
                   {step > 0 && (
                     <Button variant="outline" onClick={prevStep}>
-                      Back
+                      {t(language, "users.wizard.back")}
                     </Button>
                   )}
                   {step < steps.length - 1 ? (
-                    <Button onClick={nextStep}>Next</Button>
+                    <Button onClick={nextStep}>{t(language, "users.wizard.next")}</Button>
                   ) : (
-                    <Button onClick={submit}>Finish</Button>
+                    <Button onClick={submit}>{t(language, "users.wizard.finish")}</Button>
                   )}
                 </div>
               </div>

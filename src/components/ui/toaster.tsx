@@ -55,18 +55,18 @@ export function Toaster() {
         <div
           key={toast.id}
           className={cn(
-            "pointer-events-auto rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur",
-            toast.variant === "success" && "border-emerald-200 bg-emerald-50/90",
-            toast.variant === "error" && "border-rose-200 bg-rose-50/90"
+            "pointer-events-auto rounded-2xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur",
+            toast.variant === "success" && "border-emerald-400/40 bg-emerald-500/10",
+            toast.variant === "error" && "border-rose-400/40 bg-rose-500/10"
           )}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900">{toast.title}</div>
-              {toast.description && <div className="text-xs text-slate-600">{toast.description}</div>}
+              <div className="text-sm font-semibold text-foreground">{toast.title}</div>
+              {toast.description && <div className="text-xs text-muted-foreground">{toast.description}</div>}
             </div>
             <button
-              className="text-xs text-slate-500 transition hover:text-slate-800"
+              className="text-xs text-muted-foreground transition hover:text-foreground"
               onClick={() => remove(toast.id)}
             >
               Close

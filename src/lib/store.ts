@@ -9,6 +9,12 @@ interface State {
   currentUser: AppUser | null;
   role: Role;
   setRole: (role: Role) => void;
+  theme: 'system' | 'light' | 'dark';
+  language: 'en' | 'fr' | 'sw';
+  fontScale: number;
+  setTheme: (theme: 'system' | 'light' | 'dark') => void;
+  setLanguage: (language: 'en' | 'fr' | 'sw') => void;
+  setFontScale: (fontScale: number) => void;
   users: AppUser[];
   teams: Team[];
   addUser: (user: Omit<AppUser, 'id' | 'createdAt'>) => AppUser;
@@ -30,6 +36,12 @@ export const useStore = create<State>((set) => ({
       role,
       currentUser: state.currentUser ? { ...state.currentUser, role } : state.currentUser,
     })),
+  theme: 'system',
+  language: 'en',
+  fontScale: 1,
+  setTheme: (theme) => set({ theme }),
+  setLanguage: (language) => set({ language }),
+  setFontScale: (fontScale) => set({ fontScale }),
   users: [
     {
       id: 'admin',
