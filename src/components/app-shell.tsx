@@ -35,6 +35,8 @@ import {
   BellRing,
   PanelLeftClose,
   PanelLeftOpen,
+  Menu,
+  X,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -91,6 +93,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const { changes, currentUser, logout, updatePassword, theme, language, fontScale, setTheme, setLanguage, setFontScale } =
     useStore()
   const translate = (key: string) => t(language, key)
@@ -180,69 +184,89 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen">
         <aside
           className={cn(
-            "hidden lg:flex lg:flex-col lg:border-r lg:border-border lg:bg-card/80 lg:backdrop-blur",
+            "hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:border-r lg:border-border lg:bg-card/80 lg:backdrop-blur",
             sidebarCollapsed ? "lg:w-20" : "lg:w-72"
           )}
         >
           <div className="px-6 py-6">
-            <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}>
-              <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} className="rounded-full" />
-              {!sidebarCollapsed && (
-                <div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CSquared</div>
-                  <div className="mt-1 text-lg font-semibold">Change Management</div>
-                </div>
-              )}
+            <div className={cn("flex items-center gap-3", sidebarCollapsed ? "justify-center" : "justify-between")}>
+              <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}>
+                <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} className="rounded-full" />
+                {!sidebarCollapsed && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CSquared</div>
+                    <div className="mt-1 text-lg font-semibold">Change Management</div>
+                  </div>
+                )}
+              </div>
+              <button
+                className="hidden h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted lg:inline-flex"
+                onClick={() => setSidebarCollapsed((prev) => !prev)}
+                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
             </div>
           </div>
           <nav className="flex-1 px-3">
             {effectiveNavGroups.map((group) => (
               <div key={group.labelKey} className="mb-4">
                 {!sidebarCollapsed && (
-                  <div className="px-4 pb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    {translate(group.labelKey)}
-                  </div>
+                  <button
+                    className="flex w-full items-center justify-between px-4 pb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground"
+                    onClick={() =>
+                      setCollapsedGroups((prev) => ({
+                        ...prev,
+                        [group.labelKey]: !prev[group.labelKey],
+                      }))
+                    }
+                    aria-label={`Toggle ${translate(group.labelKey)}`}
+                  >
+                    <span>{translate(group.labelKey)}</span>
+                    <span className="text-sm">{collapsedGroups[group.labelKey] ? "▸" : "▾"}</span>
+                  </button>
                 )}
-                {group.items.map((item) => {
-                  const active = pathname === item.href
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
-                        active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-muted"
-                      )}
-                    >
-                      <item.icon className={cn("h-4 w-4", active ? "text-white" : "text-muted-foreground")} />
-                      {!sidebarCollapsed && (
-                        <>
-                          <span className="flex-1">{translate(item.labelKey)}</span>
-                          {item.href === "/requests" && (
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-xs",
-                                active ? "bg-white/20" : "bg-muted"
-                              )}
-                            >
-                              {myRequests.length}
-                            </span>
-                          )}
-                          {item.href === "/approvals" && (
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-xs",
-                                active ? "bg-white/20" : "bg-muted"
-                              )}
-                            >
-                              {pendingApprovals.length}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </Link>
-                  )
-                })}
+                {!collapsedGroups[group.labelKey] &&
+                  group.items.map((item) => {
+                    const active = pathname === item.href
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
+                          active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-muted"
+                        )}
+                      >
+                        <item.icon className={cn("h-4 w-4", active ? "text-white" : "text-muted-foreground")} />
+                        {!sidebarCollapsed && (
+                          <>
+                            <span className="flex-1">{translate(item.labelKey)}</span>
+                            {item.href === "/requests" && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs",
+                                  active ? "bg-white/20" : "bg-muted"
+                                )}
+                              >
+                                {myRequests.length}
+                              </span>
+                            )}
+                            {item.href === "/approvals" && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs",
+                                  active ? "bg-white/20" : "bg-muted"
+                                )}
+                              >
+                                {pendingApprovals.length}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </Link>
+                    )
+                  })}
               </div>
             ))}
           </nav>
@@ -253,8 +277,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="flex flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-border bg-card/80 backdrop-blur">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
               <div className="flex items-center gap-3">
+                <button
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted lg:hidden"
+                  onClick={() => setMobileNavOpen(true)}
+                  aria-label="Open navigation"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
                 <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} className="rounded-full" />
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
@@ -263,14 +294,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <div className="text-lg font-semibold">{translate("header.title")}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <button
-                  className="hidden h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted lg:inline-flex"
-                  onClick={() => setSidebarCollapsed((prev) => !prev)}
-                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                  {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                </button>
+              <div className="flex flex-wrap items-center gap-2 text-sm sm:gap-3">
                 <button
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
                   onClick={() => router.back()}
@@ -313,7 +337,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     aria-label="Preferences"
                   >
                     <Settings className="h-4 w-4" />
-                    {translate("prefs.title")}
+                    <span className="hidden sm:inline">{translate("prefs.title")}</span>
                   </button>
                   {settingsMenuOpen && (
                     <div className="absolute right-0 top-11 w-44 rounded-xl border border-border bg-card p-2 text-sm shadow-lg">
@@ -398,6 +422,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
+
+          {mobileNavOpen && (
+            <div className="fixed inset-0 z-40 bg-black/40 lg:hidden">
+              <div className="absolute left-0 top-0 h-full w-72 bg-card px-4 py-5 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} className="rounded-full" />
+                    <div className="text-sm font-semibold">CSquared</div>
+                  </div>
+                  <button
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                    onClick={() => setMobileNavOpen(false)}
+                    aria-label="Close navigation"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <nav className="mt-6 space-y-4">
+                  {effectiveNavGroups.map((group) => (
+                    <div key={group.labelKey}>
+                      <button
+                        className="flex w-full items-center justify-between px-2 pb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground"
+                        onClick={() =>
+                          setCollapsedGroups((prev) => ({
+                            ...prev,
+                            [group.labelKey]: !prev[group.labelKey],
+                          }))
+                        }
+                      >
+                        <span>{translate(group.labelKey)}</span>
+                        <span className="text-sm">{collapsedGroups[group.labelKey] ? "▸" : "▾"}</span>
+                      </button>
+                      {!collapsedGroups[group.labelKey] &&
+                        group.items.map((item) => {
+                          const active = pathname === item.href
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              className={cn(
+                                "mb-1 flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition",
+                                active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-muted"
+                              )}
+                              onClick={() => setMobileNavOpen(false)}
+                            >
+                              <item.icon className={cn("h-4 w-4", active ? "text-white" : "text-muted-foreground")} />
+                              <span className="flex-1">{translate(item.labelKey)}</span>
+                            </Link>
+                          )
+                        })}
+                    </div>
+                  ))}
+                </nav>
+              </div>
+            </div>
+          )}
 
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
             {children}
