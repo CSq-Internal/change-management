@@ -31,7 +31,7 @@ interface State {
   update: (id: string, patch: Partial<ChangeRequest>) => void;
 }
 
-export const useStore = create<State>((set) => ({
+export const useStore = create<State>((set, get) => ({
   changes: [],
   currentUser: null,
   authHydrated: false,
@@ -52,8 +52,8 @@ export const useStore = create<State>((set) => ({
   users: [
     {
       id: 'admin',
-      name: 'Admin',
-      email: 'Admin',
+      name: 'DevOps',
+      email: 'devops@csquared.com',
       role: 'admin',
       permissions: ['admin', 'read', 'write', 'approve', 'audit'],
       country: 'Ghana',
@@ -100,44 +100,30 @@ export const useStore = create<State>((set) => ({
   },
   loginWithGoogle: () => {
     const now = dayjs().toISOString();
-    let loggedIn: AppUser | null = null;
-    set((state) => {
-      const existing = state.users.find((u) => u.email === 'google.user@csquared.com');
-      const user =
-        existing ??
-        ({
-          id: randomId(),
-          name: 'Google User',
-          email: 'google.user@csquared.com',
-          role: 'requester',
-          permissions: ['read', 'write'],
-          country: 'Ghana',
-          teamIds: [],
-          password: 'GoogleSSO',
-          createdAt: now,
-        } as AppUser);
-      loggedIn = user;
-      return {
-        ...state,
-        users: existing ? state.users : [user, ...state.users],
-        currentUser: user,
-        role: user.role,
-      };
-    });
+    const existing = get().users.find((u) => u.email === 'google.user@csquared.com');
+    const user =
+      existing ??
+      ({
+        id: randomId(),
+        name: 'Google User',
+        email: 'google.user@csquared.com',
+        role: 'requester',
+        permissions: ['read', 'write'],
+        country: 'Ghana',
+        teamIds: [],
+        password: 'GoogleSSO',
+        createdAt: now,
+      } as AppUser);
+    set((state) => ({
+      ...state,
+      users: existing ? state.users : [user, ...state.users],
+      currentUser: user,
+      role: user.role,
+    }));
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('csq-session-user', loggedIn?.id ?? 'google-fallback');
+      window.localStorage.setItem('csq-session-user', user.id);
     }
-    return loggedIn ?? {
-      id: 'google-fallback',
-      name: 'Google User',
-      email: 'google.user@csquared.com',
-      role: 'requester',
-      permissions: ['read', 'write'],
-      country: 'Ghana',
-      teamIds: [],
-      password: 'GoogleSSO',
-      createdAt: now,
-    };
+    return user;
   },
   logout: () => {
     if (typeof window !== 'undefined') {
