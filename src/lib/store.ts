@@ -7,6 +7,7 @@ function randomId(){return Math.random().toString(36).slice(2,10)}
 interface State {
   changes: ChangeRequest[];
   currentUser: AppUser | null;
+  authHydrated: boolean;
   role: Role;
   setRole: (role: Role) => void;
   theme: 'system' | 'light' | 'dark';
@@ -17,6 +18,8 @@ interface State {
   setFontScale: (fontScale: number) => void;
   defaultApproverIds: string[];
   setDefaultApprovers: (ids: string[]) => void;
+  setCurrentUser: (user: AppUser | null) => void;
+  setAuthHydrated: (value: boolean) => void;
   users: AppUser[];
   teams: Team[];
   addUser: (user: Omit<AppUser, 'id' | 'createdAt'>) => AppUser;
@@ -33,6 +36,7 @@ interface State {
 export const useStore = create<State>((set) => ({
   changes: [],
   currentUser: null,
+  authHydrated: false,
   role: 'requester',
   setRole: (role) =>
     set((state) => ({
@@ -47,6 +51,8 @@ export const useStore = create<State>((set) => ({
   setFontScale: (fontScale) => set({ fontScale }),
   defaultApproverIds: [],
   setDefaultApprovers: (ids) => set({ defaultApproverIds: ids }),
+  setCurrentUser: (user) => set({ currentUser: user, role: user?.role ?? 'requester' }),
+  setAuthHydrated: (value) => set({ authHydrated: value }),
   users: [
     {
       id: 'admin',
@@ -89,6 +95,9 @@ export const useStore = create<State>((set) => ({
         return state;
       }
       success = true;
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('csq-session-user', user.id);
+      }
       return { ...state, currentUser: user, role: user.role };
     });
     return success;
@@ -119,6 +128,9 @@ export const useStore = create<State>((set) => ({
         role: user.role,
       };
     });
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('csq-session-user', loggedIn?.id ?? 'google-fallback');
+    }
     return loggedIn ?? {
       id: 'google-fallback',
       name: 'Google User',
@@ -131,7 +143,12 @@ export const useStore = create<State>((set) => ({
       createdAt: now,
     };
   },
-  logout: () => set({ currentUser: null, role: 'requester' }),
+  logout: () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('csq-session-user');
+    }
+    set({ currentUser: null, role: 'requester' });
+  },
   updatePassword: (userId, password) =>
     set((state) => ({
       users: state.users.map((user) => (user.id === userId ? { ...user, password } : user)),

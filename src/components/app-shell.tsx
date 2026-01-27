@@ -96,8 +96,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
-  const { changes, currentUser, logout, updatePassword, theme, language, fontScale, setTheme, setLanguage, setFontScale } =
-    useStore()
+  const {
+    changes,
+    currentUser,
+    logout,
+    updatePassword,
+    theme,
+    language,
+    fontScale,
+    setTheme,
+    setLanguage,
+    setFontScale,
+    setCurrentUser,
+    authHydrated,
+    setAuthHydrated,
+    users,
+  } = useStore()
   const translate = (key: string) => t(language, key)
   const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
   const pendingApprovals = currentUser
@@ -168,6 +182,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (pathname === "/login") {
     return (
       <div className="min-h-screen bg-background text-foreground">
+        <AuthHydrate
+          users={users}
+          currentUser={currentUser}
+          setCurrentUser={setCurrentUser}
+          setAuthHydrated={setAuthHydrated}
+        />
         {children}
         <Toaster />
       </div>
@@ -176,7 +196,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <AuthGuard pathname={pathname} />
+      <AuthHydrate
+        users={users}
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+        setAuthHydrated={setAuthHydrated}
+      />
+      <AuthGuard pathname={pathname} authHydrated={authHydrated} />
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.14)_0,_rgba(56,189,248,0.08)_45%,_transparent_70%)]" />
         <div className="absolute -bottom-52 right-[-10%] h-[480px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.12)_0,_rgba(234,179,8,0.08)_50%,_transparent_70%)]" />
@@ -596,15 +622,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function AuthGuard({ pathname }: { pathname: string }) {
+function AuthGuard({ pathname, authHydrated }: { pathname: string; authHydrated: boolean }) {
   const router = useRouter()
   const { currentUser } = useStore()
 
   useEffect(() => {
-    if (!currentUser && pathname !== "/login") {
+    if (authHydrated && !currentUser && pathname !== "/login") {
       router.push("/login")
     }
-  }, [currentUser, pathname, router])
+  }, [authHydrated, currentUser, pathname, router])
+
+  return null
+}
+
+function AuthHydrate({
+  users,
+  currentUser,
+  setCurrentUser,
+  setAuthHydrated,
+}: {
+  users: { id: string }[]
+  currentUser: { id: string } | null
+  setCurrentUser: (user: any) => void
+  setAuthHydrated: (value: boolean) => void
+}) {
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (currentUser) {
+      setAuthHydrated(true)
+      return
+    }
+    const storedId = window.localStorage.getItem("csq-session-user")
+    if (storedId) {
+      const match = users.find((user) => user.id === storedId)
+      if (match) {
+        setCurrentUser(match)
+      }
+    }
+    setAuthHydrated(true)
+  }, [currentUser, setAuthHydrated, setCurrentUser, users])
 
   return null
 }
