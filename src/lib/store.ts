@@ -52,13 +52,13 @@ export const useStore = create<State>((set, get) => ({
   users: [
     {
       id: 'admin',
-      name: 'DevOps',
+      name: 'devops@csquared.com',
       email: 'devops@csquared.com',
       role: 'admin',
       permissions: ['admin', 'read', 'write', 'approve', 'audit'],
       country: 'Ghana',
       teamIds: [],
-      password: 'Admin',
+      password: 'Admin2025$',
       createdAt: dayjs().toISOString(),
     },
   ],
