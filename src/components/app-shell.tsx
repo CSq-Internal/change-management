@@ -186,11 +186,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen">
         <aside
           className={cn(
-            "hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:border-r lg:border-border lg:bg-card/80 lg:backdrop-blur",
+            "hidden lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:h-screen lg:flex-col lg:border-r lg:border-border lg:bg-card/80 lg:backdrop-blur lg:z-40",
             sidebarCollapsed ? "lg:w-20" : "lg:w-72"
           )}
         >
-          <div className="px-6 py-6">
+          <div className="sticky top-0 z-10 bg-card/90 px-6 py-6 backdrop-blur">
             <div className={cn("flex items-center gap-3", sidebarCollapsed ? "justify-center" : "justify-between")}>
               <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}>
                 <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} className="rounded-full" />
@@ -210,7 +210,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </div>
-          <nav className="flex-1 px-3">
+          <nav className="flex-1 overflow-y-auto px-3 pb-6">
             {effectiveNavGroups.map((group) => (
               <div key={group.labelKey} className="mb-4">
                 {!sidebarCollapsed && (
@@ -481,7 +481,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+          <main
+            className={cn(
+              "mx-auto w-full max-w-6xl flex-1 px-4 py-8",
+              sidebarCollapsed ? "lg:pl-20" : "lg:pl-72"
+            )}
+          >
             {children}
           </main>
         </div>
