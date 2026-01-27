@@ -278,7 +278,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border bg-card/80 backdrop-blur">
+          <header
+            className={cn(
+              "sticky top-0 z-20 border-b border-border bg-card/80 backdrop-blur",
+              sidebarCollapsed ? "lg:pl-20" : "lg:pl-72"
+            )}
+          >
             <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
               <div className="flex items-center gap-3">
                 <button
@@ -288,13 +293,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Menu className="h-4 w-4" />
                 </button>
-                <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} className="rounded-full" />
-                <div>
-                  <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-                    {translate("header.control")}
-                  </div>
-                  <div className="text-lg font-semibold">{translate("header.title")}</div>
-                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm sm:gap-3">
                 <button
