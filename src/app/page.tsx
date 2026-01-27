@@ -18,6 +18,13 @@ export default function Home() {
     : []
   const activeChanges = changes.filter((c) => ["approved", "implemented", "verified"].includes(c.status))
   const recent = [...changes].slice(0, 4)
+  const welcomeName = (() => {
+    const email = currentUser?.email ?? ""
+    if (email.toLowerCase().endsWith("@csquared.com")) {
+      return email.split("@")[0] || t(language, "dashboard.fallbackName")
+    }
+    return currentUser?.name ?? t(language, "dashboard.fallbackName")
+  })()
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:grid-cols-1">
@@ -25,7 +32,7 @@ export default function Home() {
         <Card className="border-border/80 bg-card/90">
           <CardHeader className="gap-2">
             <CardTitle className="text-2xl sm:text-xl">
-              {t(language, "dashboard.welcome")} {currentUser?.name ?? t(language, "dashboard.fallbackName")}.
+              {t(language, "dashboard.welcome")} {welcomeName}.
             </CardTitle>
             <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.subtitle")}</CardDescription>
           </CardHeader>
