@@ -15,10 +15,13 @@ interface State {
   setTheme: (theme: 'system' | 'light' | 'dark') => void;
   setLanguage: (language: 'en' | 'fr' | 'sw') => void;
   setFontScale: (fontScale: number) => void;
+  defaultApproverIds: string[];
+  setDefaultApprovers: (ids: string[]) => void;
   users: AppUser[];
   teams: Team[];
   addUser: (user: Omit<AppUser, 'id' | 'createdAt'>) => AppUser;
   addTeam: (team: Omit<Team, 'id' | 'createdAt'>) => Team;
+  updateTeam: (id: string, patch: Partial<Team>) => void;
   login: (email: string, password: string) => boolean;
   loginWithGoogle: () => AppUser;
   logout: () => void;
@@ -42,6 +45,8 @@ export const useStore = create<State>((set) => ({
   setTheme: (theme) => set({ theme }),
   setLanguage: (language) => set({ language }),
   setFontScale: (fontScale) => set({ fontScale }),
+  defaultApproverIds: [],
+  setDefaultApprovers: (ids) => set({ defaultApproverIds: ids }),
   users: [
     {
       id: 'admin',
@@ -68,6 +73,10 @@ export const useStore = create<State>((set) => ({
     set((s) => ({ teams: [item, ...s.teams] }));
     return item;
   },
+  updateTeam: (id, patch) =>
+    set((s) => ({
+      teams: s.teams.map((team) => (team.id === id ? { ...team, ...patch } : team)),
+    })),
   login: (email, password) => {
     let success = false;
     set((state) => {

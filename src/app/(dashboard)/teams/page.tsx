@@ -14,6 +14,8 @@ export default function TeamsPage() {
   const { toast } = useToast()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [planSummary, setPlanSummary] = useState("")
+  const [attachments, setAttachments] = useState<File[]>([])
 
   const submit = () => {
     if (!currentUser?.permissions.includes("admin")) {
@@ -32,9 +34,21 @@ export default function TeamsPage() {
       })
       return
     }
-    addTeam({ name, description: description || undefined })
+    addTeam({
+      name,
+      description: description || undefined,
+      planSummary: planSummary || undefined,
+      attachments: attachments.map((file) => ({
+        id: `${Date.now()}-${file.name}`,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      })),
+    })
     setName("")
     setDescription("")
+    setPlanSummary("")
+    setAttachments([])
     toast({ title: t(language, "teams.toast.created"), description: name, variant: "success" })
   }
 
@@ -61,6 +75,12 @@ export default function TeamsPage() {
             <div key={team.id} className="rounded-xl border border-border/70 bg-muted px-4 py-3">
               <div className="text-sm font-medium">{team.name}</div>
               {team.description && <p className="text-xs text-muted-foreground">{team.description}</p>}
+              {team.planSummary && <p className="mt-2 text-xs text-muted-foreground">{team.planSummary}</p>}
+              {team.attachments && team.attachments.length > 0 && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Attachments: {team.attachments.map((file) => file.name).join(", ")}
+                </div>
+              )}
             </div>
           ))}
         </CardContent>
@@ -77,6 +97,19 @@ export default function TeamsPage() {
             placeholder={t(language, "teams.descField")}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+          />
+          <Textarea
+            placeholder="Plan summary for the team"
+            value={planSummary}
+            onChange={(e) => setPlanSummary(e.target.value)}
+          />
+          <input
+            type="file"
+            multiple
+            className="block w-full text-xs text-muted-foreground"
+            onChange={(event) => {
+              setAttachments(Array.from(event.target.files ?? []))
+            }}
           />
           <Button onClick={submit} disabled={!currentUser?.permissions.includes("admin")}>
             {t(language, "teams.add")}

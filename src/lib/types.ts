@@ -27,6 +27,13 @@ export interface Team {
   id: string;
   name: string;
   description?: string;
+  planSummary?: string;
+  attachments?: {
+    id: string;
+    name: string;
+    size: number;
+    type: string;
+  }[];
   createdAt: string;
 }
 export interface ChangeRequest {

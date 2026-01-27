@@ -21,7 +21,7 @@ const infraTypes = [
 ] as const
 
 export default function Requests() {
-  const { changes, add, currentUser, language } = useStore()
+  const { changes, add, currentUser, language, users, defaultApproverIds } = useStore()
   const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [country, setCountry] = useState<(typeof countries)[number] | "">("")
@@ -37,6 +37,7 @@ export default function Requests() {
   const [testingPlan, setTestingPlan] = useState("")
   const [backoutPlan, setBackoutPlan] = useState("")
   const [approvers, setApprovers] = useState("")
+  const approverUsers = users.filter((user) => user.permissions.includes("approve"))
 
   const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
 
@@ -61,10 +62,13 @@ export default function Requests() {
       title,
       description,
       requester: currentUser.id,
-      assignees: approvers
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean),
+      assignees:
+        approvers.trim().length > 0
+          ? approvers
+              .split(",")
+              .map((name) => name.trim())
+              .filter(Boolean)
+          : defaultApproverIds,
       riskLevel,
       status: "pending",
       category,
@@ -294,6 +298,32 @@ export default function Requests() {
               onChange={(e) => setApprovers(e.target.value)}
               placeholder={t(language, "requests.approversPlaceholder")}
             />
+            {approverUsers.length > 0 && (
+              <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                <div>Quick pick:</div>
+                <div className="flex flex-wrap gap-2">
+                  {approverUsers.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground"
+                      onClick={() => {
+                        setApprovers((prev) => {
+                          const names = prev
+                            .split(",")
+                            .map((name) => name.trim())
+                            .filter(Boolean)
+                          if (names.includes(user.id)) return prev
+                          return [...names, user.id].join(", ")
+                        })
+                      }}
+                    >
+                      {user.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

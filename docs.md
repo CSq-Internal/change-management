@@ -13,6 +13,8 @@ Current status (v0.1.0 — Prototype with UX + auth scaffolding):
 - Mock authentication (email/password + Google SSO stub), logout, and password change UI.
 - User management (admin-only) with onboarding wizard, teams, and permissions.
 - Preferences for theme (system/light/dark), language (en/fr/sw), and font size.
+- Approver configuration with defaults + request quick-pick.
+- Teams can store plan summaries and attachment metadata.
 - Prisma schema/config added; API route wired; still no production database in use.
 
 ## 2) Project Structure
@@ -43,6 +45,7 @@ change-management-system/
    │     └─ settings/            — Settings pages
    │        ├─ profile/page.tsx
    │        ├─ preferences/page.tsx
+   │        ├─ approvers/page.tsx
    │        ├─ notifications/page.tsx
    │        ├─ security/page.tsx
    │        └─ integrations/page.tsx
@@ -68,7 +71,7 @@ Defined in `src/lib/types.ts`:
 - Interfaces
   - `ChangeRequest`: Core entity with id, title, description, requester, assignees, riskLevel, status, category, dates, backoutPlan, approvals array, and auditTrail array.
   - `AppUser`: In-memory user entity with role, permissions, country, and password.
-  - `Team`: Team container for routing and assignments.
+  - `Team`: Team container for routing and assignments (includes plan summary + attachment metadata).
 
 The audit trail and approvals are embedded arrays for simplicity in the current in-memory implementation.
 
@@ -77,6 +80,7 @@ The audit trail and approvals are embedded arrays for simplicity in the current 
 - `src/lib/store.ts` uses Zustand to manage in-memory `ChangeRequest`, `AppUser`, and `Team` state.
 - Functions: `add` (create new request), `update` (patch existing request), `addUser`, `addTeam`, auth (`login`, `loginWithGoogle`, `logout`), `updatePassword`.
 - Preferences in state: `theme`, `language`, `fontScale`.
+- Approver defaults in state: `defaultApproverIds`.
 - No persistence — data resets on app restart. Intended for UX validation.
 
 ## 5) UI Layer (App Router)
@@ -89,8 +93,9 @@ The audit trail and approvals are embedded arrays for simplicity in the current 
 - `(dashboard)/changes/page.tsx`: Change lifecycle updates with toasts.
 - `(dashboard)/audits/page.tsx`: Audit evidence view (JSON).
 - `(dashboard)/users/page.tsx`: Admin-only onboarding wizard with default password + OpCo assignment.
-- `(dashboard)/teams/page.tsx`: Admin-only teams management.
+- `(dashboard)/teams/page.tsx`: Admin-only teams management (plan summary + attachments).
 - `(dashboard)/settings/*`: Profile, preferences, notifications, security, integrations.
+- `(dashboard)/settings/approvers/page.tsx`: Default approver configuration for requests.
 - `src/app/login/page.tsx`: Login UI (email/password + Google SSO stub).
 
 All pages are client-side ("use client") and interact directly with the Zustand store.

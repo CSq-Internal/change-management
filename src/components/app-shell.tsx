@@ -76,6 +76,7 @@ const navGroups = [
     items: [
       { href: "/settings/profile", labelKey: "nav.settingsProfile", icon: UserCircle2 },
       { href: "/settings/preferences", labelKey: "nav.settingsPreferences", icon: SlidersHorizontal },
+      { href: "/settings/approvers", labelKey: "nav.settingsApprovers", icon: ShieldCheck },
       { href: "/settings/notifications", labelKey: "nav.settingsNotifications", icon: Bell },
       { href: "/settings/alerts", labelKey: "nav.settingsAlerts", icon: Bell },
       { href: "/settings/security", labelKey: "nav.settingsSecurity", icon: Lock },
