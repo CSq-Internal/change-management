@@ -10,11 +10,9 @@ interface State {
   authHydrated: boolean;
   role: Role;
   setRole: (role: Role) => void;
-  theme: 'system' | 'light' | 'dark';
-  language: 'en' | 'fr' | 'sw';
+  language: 'en' | 'fr';
   fontScale: number;
-  setTheme: (theme: 'system' | 'light' | 'dark') => void;
-  setLanguage: (language: 'en' | 'fr' | 'sw') => void;
+  setLanguage: (language: 'en' | 'fr') => void;
   setFontScale: (fontScale: number) => void;
   defaultApproverIds: string[];
   setDefaultApprovers: (ids: string[]) => void;
@@ -43,10 +41,8 @@ export const useStore = create<State>((set) => ({
       role,
       currentUser: state.currentUser ? { ...state.currentUser, role } : state.currentUser,
     })),
-  theme: 'system',
   language: 'en',
   fontScale: 1,
-  setTheme: (theme) => set({ theme }),
   setLanguage: (language) => set({ language }),
   setFontScale: (fontScale) => set({ fontScale }),
   defaultApproverIds: [],

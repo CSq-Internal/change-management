@@ -101,10 +101,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     currentUser,
     logout,
     updatePassword,
-    theme,
     language,
     fontScale,
-    setTheme,
     setLanguage,
     setFontScale,
     setCurrentUser,
@@ -137,34 +135,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const savedTheme = window.localStorage.getItem("csq-theme") as
-      | "system"
-      | "light"
-      | "dark"
-      | null
-    const savedLang = window.localStorage.getItem("csq-lang") as "en" | "fr" | "sw" | null
+    const savedLang = window.localStorage.getItem("csq-lang") as "en" | "fr" | null
     const savedScale = window.localStorage.getItem("csq-font-scale")
-    if (savedTheme) setTheme(savedTheme)
     if (savedLang) setLanguage(savedLang)
     if (savedScale) setFontScale(Number(savedScale))
   }, [])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem("csq-theme", theme)
-    const root = document.documentElement
-    const media = window.matchMedia("(prefers-color-scheme: dark)")
-    const applyTheme = () => {
-      const shouldDark = theme === "dark" || (theme === "system" && media.matches)
-      root.classList.toggle("dark", shouldDark)
-    }
-    applyTheme()
-    if (theme === "system") {
-      media.addEventListener("change", applyTheme)
-      return () => media.removeEventListener("change", applyTheme)
-    }
-    return undefined
-  }, [theme])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -564,32 +539,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="mt-4 space-y-4">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  {translate("prefs.theme")}
-                </div>
-                <select
-                  value={theme}
-                  onChange={(event) => setTheme(event.target.value as "system" | "light" | "dark")}
-                  className="mt-2 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  aria-label="Theme"
-                >
-                  <option value="system">{translate("prefs.system")}</option>
-                  <option value="light">{translate("prefs.light")}</option>
-                  <option value="dark">{translate("prefs.dark")}</option>
-                </select>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   {translate("prefs.language")}
                 </div>
                 <select
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value as "en" | "fr" | "sw")}
+                  onChange={(event) => setLanguage(event.target.value as "en" | "fr")}
                   className="mt-2 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
                   aria-label="Language"
                 >
                   <option value="en">{translate("prefs.language.en")}</option>
                   <option value="fr">{translate("prefs.language.fr")}</option>
-                  <option value="sw">{translate("prefs.language.sw")}</option>
                 </select>
               </div>
               <div>

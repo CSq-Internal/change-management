@@ -15,6 +15,7 @@ export default function LoginPage() {
   const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
 
   const submit = () => {
     if (!email || !password) {
@@ -60,12 +61,22 @@ export default function LoginPage() {
           </div>
           <div className="space-y-3">
             <Input placeholder={t(language, "auth.email")} value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Input
-              type="password"
-              placeholder={t(language, "auth.password")}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder={t(language, "auth.password")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pr-24"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? t(language, "auth.hidePassword") : t(language, "auth.showPassword")}
+              </button>
+            </div>
             <Button className="w-full" onClick={submit}>
               {t(language, "auth.submit")}
             </Button>
