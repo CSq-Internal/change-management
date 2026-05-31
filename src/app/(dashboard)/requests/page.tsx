@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import type { AppUser, ChangeRequest } from "@/lib/types"
+import { createChange } from "@/server/actions/changes"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,12 +26,7 @@ const infraTypes = [
 export default function Requests() {
   const { language } = useStore()
   const { data: session } = useSession()
-  const currentUser = session?.user ?? null
-  // TODO: wire to server data (Phase 4)
-  const changes: ChangeRequest[] = []
-  const users: AppUser[] = []
-  const defaultApproverIds: string[] = []
-  const add = (_cr: Omit<ChangeRequest, "id" | "createdAt" | "updatedAt" | "approvals" | "auditTrail">) => {}
+  const router = useRouter()
   const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [country, setCountry] = useState<(typeof countries)[number] | "">("")
@@ -46,11 +42,10 @@ export default function Requests() {
   const [testingPlan, setTestingPlan] = useState("")
   const [backoutPlan, setBackoutPlan] = useState("")
   const [approvers, setApprovers] = useState("")
-  const approverUsers = users.filter((user) => user.permissions.includes("approve"))
 
-  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
+  const opcoAlias = session?.user.organizations?.[0]?.alias ?? "ghana"
 
-  const submit = () => {
+  const submit = async () => {
     if (!title || !description || !email || !country || !infrastructureType) {
       toast({
         title: t(language, "requests.toast.missing"),
@@ -59,7 +54,7 @@ export default function Requests() {
       })
       return
     }
-    if (!currentUser) {
+    if (!session?.user) {
       toast({
         title: t(language, "requests.toast.signIn"),
         description: t(language, "requests.toast.signInDesc"),
@@ -67,49 +62,36 @@ export default function Requests() {
       })
       return
     }
-    add({
-      title,
-      description,
-      requester: currentUser.id,
-      assignees:
-        approvers.trim().length > 0
-          ? approvers
-              .split(",")
-              .map((name) => name.trim())
-              .filter(Boolean)
-          : defaultApproverIds,
-      riskLevel,
-      status: "pending",
-      category,
-      plannedStart: plannedStart || undefined,
-      plannedEnd: plannedEnd || undefined,
-      backoutPlan: backoutPlan || undefined,
-      details: {
-        email,
-        country,
+    try {
+      await createChange(opcoAlias, {
+        title,
+        description,
+        category,
+        riskLevel,
+        contactEmail: email || (session.user.email ?? ""),
         infrastructureType,
-        impactScope,
-        implementationPlan,
-        testingPlan,
-      },
-    })
-    toast({
-      title: t(language, "requests.toast.submitted"),
-      description: t(language, "requests.toast.submittedDesc"),
-      variant: "success",
-    })
-    setTitle("")
-    setDescription("")
-    setEmail("")
-    setCountry("")
-    setInfrastructureType("")
-    setPlannedStart("")
-    setPlannedEnd("")
-    setImpactScope("")
-    setImplementationPlan("")
-    setTestingPlan("")
-    setBackoutPlan("")
-    setApprovers("")
+        impactScope: impactScope || undefined,
+        implementationPlan: implementationPlan || undefined,
+        testingPlan: testingPlan || undefined,
+        backoutPlan: backoutPlan || undefined,
+        plannedStart: plannedStart ? new Date(plannedStart) : undefined,
+        plannedEnd: plannedEnd ? new Date(plannedEnd) : undefined,
+        isEmergency: false,
+      })
+      toast({
+        title: t(language, "requests.toast.submitted"),
+        description: t(language, "requests.toast.submittedDesc"),
+        variant: "success",
+      })
+      router.push("/changes")
+      router.refresh()
+    } catch (err) {
+      toast({
+        title: "Submission failed",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "error",
+      })
+    }
   }
 
   return (
@@ -307,32 +289,6 @@ export default function Requests() {
               onChange={(e) => setApprovers(e.target.value)}
               placeholder={t(language, "requests.approversPlaceholder")}
             />
-            {approverUsers.length > 0 && (
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                <div>Quick pick:</div>
-                <div className="flex flex-wrap gap-2">
-                  {approverUsers.map((user) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground"
-                      onClick={() => {
-                        setApprovers((prev) => {
-                          const names = prev
-                            .split(",")
-                            .map((name) => name.trim())
-                            .filter(Boolean)
-                          if (names.includes(user.id)) return prev
-                          return [...names, user.id].join(", ")
-                        })
-                      }}
-                    >
-                      {user.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -346,20 +302,9 @@ export default function Requests() {
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "requests.myRequests")}</CardTitle>
-            <CardDescription>
-              {myRequests.length} {t(language, "requests.totalSubmitted")}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {myRequests.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "requests.none")}</p>}
-            {myRequests.map((c) => (
-              <div key={c.id} className="rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3">
-                <div className="text-sm font-medium line-clamp-2 sm:line-clamp-1">{c.title}</div>
-                <div className="text-xs text-muted-foreground">
-                  {c.status} • {new Date(c.createdAt).toLocaleString()}
-                </div>
-              </div>
-            ))}
+            <p className="text-sm text-muted-foreground">{t(language, "requests.none")}</p>
           </CardContent>
         </Card>
       </aside>
