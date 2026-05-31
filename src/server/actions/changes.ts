@@ -3,6 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
+import { sendApprovalRequestEmail } from "@/server/email"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
@@ -70,6 +71,18 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   await db.auditLog.create({
     data: { changeId: change.id, actorId: user.id, action: "created", toStatus: "draft" },
   })
+
+  const approvers = await db.userOpCoAssignment.findMany({
+    where: { opcoId: opco.id, role: "approver", isActive: true },
+    include: { user: true },
+  })
+  await Promise.allSettled(approvers.map((a) =>
+    sendApprovalRequestEmail({
+      to: a.user.email, approverName: a.user.name ?? a.user.email,
+      changeTitle: change.title, requesterName: user.name ?? user.email,
+      riskLevel: change.riskLevel, changeId: change.id,
+    })
+  ))
 
   return change
 }

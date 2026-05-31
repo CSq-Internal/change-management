@@ -4,6 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { checkCabQuorum } from "@/lib/cab-quorum"
+import { sendStatusChangeEmail } from "@/server/email"
 
 export async function submitApproval(
   changeId: string,
@@ -46,6 +47,13 @@ export async function submitApproval(
     await db.auditLog.create({
       data: { changeId, actorId: user.id, action: "approved", fromStatus: "pending", toStatus: "approved" },
     })
+    const requester = await db.user.findUnique({ where: { id: change.requesterId } })
+    if (requester) {
+      sendStatusChangeEmail({
+        to: requester.email, name: requester.name ?? requester.email,
+        changeTitle: change.title, newStatus: "approved",
+      }).catch(() => {})  // best-effort; never break the approval
+    }
   }
 
   if (decision === "reject") {
@@ -53,6 +61,13 @@ export async function submitApproval(
     await db.auditLog.create({
       data: { changeId, actorId: user.id, action: "rejected", fromStatus: "pending", toStatus: "rejected", note: comment },
     })
+    const requester = await db.user.findUnique({ where: { id: change.requesterId } })
+    if (requester) {
+      sendStatusChangeEmail({
+        to: requester.email, name: requester.name ?? requester.email,
+        changeTitle: change.title, newStatus: "rejected",
+      }).catch(() => {})  // best-effort; never break the approval
+    }
   }
 
   return approval
