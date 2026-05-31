@@ -1,12 +1,25 @@
 "use client"
 
+import { useState } from "react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 export default function AuditExportsPage() {
   const { language } = useStore()
+  const [opco, setOpco] = useState("")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+
+  function handleDownload() {
+    const p = new URLSearchParams()
+    if (opco) p.set("opco", opco)
+    if (from) p.set("from", from)
+    if (to) p.set("to", to)
+    window.location.href = `/api/audit-export?${p}`
+  }
 
   return (
     <div className="space-y-6">
@@ -17,20 +30,40 @@ export default function AuditExportsPage() {
 
       <Card className="border-border/80 bg-card/95">
         <CardHeader>
-          <CardTitle className="text-base">Export Packs</CardTitle>
-          <CardDescription>Select a template and generate evidence bundles.</CardDescription>
+          <CardTitle className="text-base">CSV Export</CardTitle>
+          <CardDescription>Filter by OpCo and date range, then download the audit log.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          {["ISO 27001", "SOC 2", "Internal Audit", "Quarterly Review", "Executive Summary", "Change Logs"].map(
-            (pack) => (
-              <div key={pack} className="rounded-xl border border-border/70 bg-muted/60 px-4 py-3">
-                <div className="text-sm font-medium text-foreground">{pack}</div>
-                <Button variant="outline" className="mt-3 h-8 px-3 text-xs">
-                  Generate
-                </Button>
-              </div>
-            )
-          )}
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label htmlFor="opco" className="text-sm font-medium">OpCo (leave blank for all)</label>
+              <Input
+                id="opco"
+                placeholder="e.g. ghana"
+                value={opco}
+                onChange={(e) => setOpco(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="from" className="text-sm font-medium">From</label>
+              <Input
+                id="from"
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="to" className="text-sm font-medium">To</label>
+              <Input
+                id="to"
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button onClick={handleDownload}>Download CSV</Button>
         </CardContent>
       </Card>
     </div>
