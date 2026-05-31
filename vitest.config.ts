@@ -10,6 +10,11 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     exclude: ['**/node_modules/**', '**/e2e/**'],
     passWithNoTests: true,
+    server: {
+      deps: {
+        inline: ['next-auth', '@auth/core'],
+      },
+    },
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
