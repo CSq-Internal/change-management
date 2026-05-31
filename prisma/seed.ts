@@ -36,6 +36,13 @@ async function main() {
   const ghana = await prisma.opCo.findUnique({ where: { slug: 'ghana' } })
   const admin = await prisma.user.findUnique({ where: { email: 'devops@csquared.com' } })
   if (ghana && admin) {
+    await prisma.userOpCoAssignment.upsert({
+      where: { userId_opcoId: { userId: admin.id, opcoId: ghana.id } },
+      update: { role: 'admin', isActive: true },
+      create: { userId: admin.id, opcoId: ghana.id, role: 'admin', isActive: true },
+    })
+    console.log('Seeded devops -> ghana (admin) OpCo assignment')
+
     await prisma.changeRequest.upsert({
       where: { id: 'seed-cr-001' },
       update: {},

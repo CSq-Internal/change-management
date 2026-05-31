@@ -24,7 +24,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     keycloakId?: string
-    organizations?: unknown[]
+    organizations?: SessionOrganization[]
     realmRoles?: string[]
     accessToken?: string
   }

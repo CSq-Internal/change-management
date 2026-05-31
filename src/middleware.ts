@@ -1,7 +1,10 @@
-import { auth } from "@/auth"
+import NextAuth from "next-auth"
+import authConfig from "@/auth.config"
 import { NextResponse } from "next/server"
 
-export default auth((req) => {
+// Build a middleware-only NextAuth instance from the edge-safe config so the
+// edge runtime never bundles `pg` (which lives behind `@/auth` / `@/server/db`).
+export default NextAuth(authConfig).auth((req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
 
