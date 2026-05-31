@@ -1,6 +1,4 @@
 // src/server/actions/blackout.ts
-"use server"
-
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 
@@ -11,6 +9,7 @@ export function isInBlackout(blackouts: BlackoutRecord[], date: Date): boolean {
 }
 
 export async function getActiveBlackouts(opcoSlug: string) {
+  "use server"
   const db = getPrisma()
   const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
   if (!opco) return []
@@ -29,6 +28,7 @@ export async function createBlackoutPeriod(input: {
   startsAt: Date
   endsAt: Date
 }) {
+  "use server"
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })

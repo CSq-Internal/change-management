@@ -1,6 +1,4 @@
 // src/server/actions/approvals.ts
-"use server"
-
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 
@@ -21,6 +19,7 @@ export async function submitApproval(
   comment: string | undefined,
   isCab: boolean
 ) {
+  "use server"
   const session = await getAppSession()
 
   if (decision === "reject" && !comment?.trim()) {
