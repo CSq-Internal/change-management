@@ -1,6 +1,6 @@
 // src/test/actions/blackout.test.ts
 import { describe, it, expect } from 'vitest'
-import { isInBlackout } from '@/server/actions/blackout'
+import { isInBlackout } from '@/lib/blackout-utils'
 
 const blackouts = [{
   id: 'b1', opcoId: 'opco-1',
