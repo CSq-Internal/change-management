@@ -130,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const savedLang = window.localStorage.getItem("csq-lang") as "en" | "fr" | null
+    const savedLang = window.localStorage.getItem("csq-language") as "en" | "fr" | null
     const savedScale = window.localStorage.getItem("csq-font-scale")
     if (savedLang) setLanguage(savedLang)
     if (savedScale) setFontScale(Number(savedScale))
@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    window.localStorage.setItem("csq-lang", language)
+    window.localStorage.setItem("csq-language", language)
     document.documentElement.lang = language
   }, [language])
 
