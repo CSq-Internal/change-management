@@ -6,10 +6,13 @@ datasource db {
   provider = "postgresql"
 }
 
-enum RiskLevel {
-  low
-  medium
-  high
+enum Role {
+  requester
+  approver
+  auditor
+  admin
+  group_admin
+  group_auditor
 }
 
 enum ChangeStatus {
@@ -22,85 +25,204 @@ enum ChangeStatus {
   closed
 }
 
-enum Role {
-  requester
-  approver
-  auditor
-  admin
+enum RiskLevel {
+  low
+  medium
+  high
+  emergency
+}
+
+enum ChangeCategory {
+  config
+  infrastructure
+  software
+  process
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      Role     @default(requester)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  // relationships
-  requests  ChangeRequest[] @relation("UserRequests")
-  approvals Approval[]
-  audits    AuditLog[]
-  assignments UserAssignment[]
+  id           String   @id @default(cuid())
+  keycloakId   String   @unique
+  email        String   @unique
+  name         String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  opcoAssignments UserOpCoAssignment[]
+  requests        ChangeRequest[]      @relation("Requester")
+  approvals       Approval[]
+  auditEntries    AuditLog[]
+  delegationsFrom ApproverDelegation[] @relation("DelegatedBy")
+  delegationsTo   ApproverDelegation[] @relation("DelegatedTo")
+}
+
+model OpCo {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  locale        String   @default("en")
+  keycloakOrgId String   @unique
+  createdAt     DateTime @default(now())
+
+  users     UserOpCoAssignment[]
+  changes   ChangeRequest[]
+  teams     Team[]
+  blackouts BlackoutPeriod[]
+}
+
+model UserOpCoAssignment {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  opcoId    String
+  opco      OpCo      @relation(fields: [opcoId], references: [id])
+  role      Role
+  isActive  Boolean   @default(true)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  @@unique([userId, opcoId])
+  @@index([opcoId])
+  @@index([userId])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  opcoId      String
+  opco        OpCo     @relation(fields: [opcoId], references: [id])
+  name        String
+  description String?
+  planSummary String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members TeamMember[]
+
+  @@index([opcoId])
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id])
+  userId String
+
+  @@unique([teamId, userId])
 }
 
 model ChangeRequest {
-  id           String        @id @default(cuid())
-  title        String
-  description  String
-  category     String
-  riskLevel    RiskLevel     @default(medium)
-  status       ChangeStatus  @default(pending)
-  requesterId  String
-  requester    User          @relation("UserRequests", fields: [requesterId], references: [id])
-  assignees    UserAssignment[]
-  plannedStart DateTime?
-  plannedEnd   DateTime?
-  backoutPlan  String?
-  approvals    Approval[]
-  attachments  Attachment[]
-  auditTrail   AuditLog[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String         @id @default(cuid())
+  opcoId             String
+  opco               OpCo           @relation(fields: [opcoId], references: [id])
+  title              String
+  description        String
+  category           ChangeCategory
+  riskLevel          RiskLevel
+  status             ChangeStatus   @default(draft)
+  isEmergency        Boolean        @default(false)
+  requesterId        String
+  requester          User           @relation("Requester", fields: [requesterId], references: [id])
+
+  contactEmail       String
+  infrastructureType String
+  changeReason       String?
+  impactScope        String?
+  implementationPlan String?
+  testingPlan        String?
+  backoutPlan        String?
+  changeWindow       String?
+  plannedStart       DateTime?
+  plannedEnd         DateTime?
+  slaDeadline        DateTime?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  assignees   ChangeAssignee[]
+  approvals   Approval[]
+  auditTrail  AuditLog[]
+  attachments Attachment[]
+
+  @@index([opcoId])
+  @@index([requesterId])
+  @@index([status])
 }
 
-model UserAssignment {
-  id        String        @id @default(cuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id])
-  changeId  String
-  change    ChangeRequest @relation(fields: [changeId], references: [id])
-  createdAt DateTime      @default(now())
+model ChangeAssignee {
+  id       String        @id @default(cuid())
+  changeId String
+  change   ChangeRequest @relation(fields: [changeId], references: [id])
+  userId   String
+
+  @@unique([changeId, userId])
 }
 
 model Approval {
   id         String        @id @default(cuid())
   changeId   String
   change     ChangeRequest @relation(fields: [changeId], references: [id])
-  byId       String
-  by         User          @relation(fields: [byId], references: [id])
-  decision   String // approve | reject
+  approverId String
+  approver   User          @relation(fields: [approverId], references: [id])
+  decision   String
   comment    String?
+  isCab      Boolean       @default(false)
   decidedAt  DateTime      @default(now())
+
+  @@index([changeId])
+}
+
+model ApproverDelegation {
+  id         String   @id @default(cuid())
+  opcoId     String
+  fromUserId String
+  fromUser   User     @relation("DelegatedBy", fields: [fromUserId], references: [id])
+  toUserId   String
+  toUser     User     @relation("DelegatedTo", fields: [toUserId], references: [id])
+  validFrom  DateTime @default(now())
+  validUntil DateTime
+  isActive   Boolean  @default(true)
+
+  @@index([opcoId])
+  @@index([toUserId])
 }
 
 model AuditLog {
-  id        String        @id @default(cuid())
-  changeId  String
-  change    ChangeRequest @relation(fields: [changeId], references: [id])
-  byId      String
-  by        User          @relation(fields: [byId], references: [id])
-  action    String
-  note      String?
-  at        DateTime      @default(now())
+  id         String        @id @default(cuid())
+  changeId   String
+  change     ChangeRequest @relation(fields: [changeId], references: [id])
+  actorId    String
+  actor      User          @relation(fields: [actorId], references: [id])
+  action     String
+  fromStatus ChangeStatus?
+  toStatus   ChangeStatus?
+  note       String?
+  metadata   Json?
+  at         DateTime      @default(now())
+
+  @@index([changeId])
+  @@index([actorId])
 }
 
 model Attachment {
-  id        String        @id @default(cuid())
-  changeId  String
-  change    ChangeRequest @relation(fields: [changeId], references: [id])
-  filename  String
-  url       String
-  mimeType  String?
-  sizeBytes Int?
-  uploadedAt DateTime     @default(now())
+  id         String        @id @default(cuid())
+  changeId   String
+  change     ChangeRequest @relation(fields: [changeId], references: [id])
+  filename   String
+  storageKey String
+  mimeType   String?
+  sizeBytes  Int?
+  uploadedAt DateTime      @default(now())
+}
+
+model BlackoutPeriod {
+  id          String    @id @default(cuid())
+  opcoId      String?
+  opco        OpCo?     @relation(fields: [opcoId], references: [id])
+  label       String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  @@index([opcoId])
 }
