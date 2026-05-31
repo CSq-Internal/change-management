@@ -3,6 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
+import { isGroupAdmin, canApprove } from "@/lib/permissions"
 import { checkCabQuorum } from "@/lib/cab-quorum"
 import { sendStatusChangeEmail } from "@/server/email"
 
@@ -24,10 +25,14 @@ export async function submitApproval(
 
   const change = await db.changeRequest.findUnique({
     where: { id: changeId },
-    include: { approvals: true },
+    include: { approvals: true, opco: true },
   })
   if (!change) throw new Error("Change not found")
   if (change.status !== "pending") throw new Error("Change is not pending")
+
+  if (!isGroupAdmin(session.realmRoles) && !canApprove(session.organizations, change.opco.slug)) {
+    throw new Error("Forbidden: not authorized to approve in this OpCo")
+  }
 
   // ISO 27001 A.5.3 — Segregation of Duties: requesters cannot approve their own changes
   if (change.requesterId === user.id) {

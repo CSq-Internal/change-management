@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupAdmin } from "@/lib/permissions"
+import { isGroupLevel } from "@/lib/permissions"
 import TeamsClient from "./teams-client"
 
 export default async function TeamsPage() {
@@ -9,7 +9,7 @@ export default async function TeamsPage() {
   if (!session) redirect("/login")
 
   const db = getPrisma()
-  const groupLevel = isGroupAdmin(session.user.realmRoles)
+  const groupLevel = isGroupLevel(session.user.realmRoles)
   const opcoSlugs = session.user.organizations.map((o) => o.alias)
   const opcoFilter = groupLevel ? {} : { slug: { in: opcoSlugs } }
 

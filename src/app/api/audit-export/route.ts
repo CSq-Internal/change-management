@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { NextRequest, NextResponse } from "next/server"
-import { isGroupAdmin } from "@/lib/permissions"
+import { isGroupLevel } from "@/lib/permissions"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to")
 
   const db = getPrisma()
-  const groupLevel = isGroupAdmin(session.user.realmRoles)
+  const groupLevel = isGroupLevel(session.user.realmRoles)
   const opcoSlugs = groupLevel
     ? (opcoSlug ? [opcoSlug] : undefined)
     : session.user.organizations.map((o) => o.alias)

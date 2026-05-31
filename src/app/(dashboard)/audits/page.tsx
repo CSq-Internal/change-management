@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupAdmin } from "@/lib/permissions"
+import { isGroupLevel } from "@/lib/permissions"
 import AuditsClient from "./audits-client"
 
 export default async function Audits() {
@@ -9,7 +9,7 @@ export default async function Audits() {
   if (!session) redirect("/login")
 
   const db = getPrisma()
-  const groupLevel = isGroupAdmin(session.user.realmRoles)
+  const groupLevel = isGroupLevel(session.user.realmRoles)
   const opcoSlugs = session.user.organizations.map((o) => o.alias)
   const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
 

@@ -3,6 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
+import { isGroupAdmin, canManageUsers } from "@/lib/permissions"
 import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser } from "@/server/keycloak"
 import type { Role } from "@prisma/client"
 
@@ -12,7 +13,16 @@ export async function createUser(input: {
   tempPassword: string
   assignments: Array<{ opcoSlug: string; role: Role }>
 }) {
-  await getAppSession()
+  const session = await getAppSession()
+
+  for (const a of input.assignments) {
+    if (
+      !isGroupAdmin(session.realmRoles) &&
+      !canManageUsers(session.organizations, session.realmRoles, a.opcoSlug)
+    ) {
+      throw new Error(`Forbidden: cannot manage users in ${a.opcoSlug}`)
+    }
+  }
 
   const keycloakId = await createKeycloakUser(input.email, input.name, input.tempPassword)
 
@@ -46,11 +56,23 @@ export async function createUser(input: {
 }
 
 export async function deactivateUser(userId: string) {
-  await getAppSession()
+  const session = await getAppSession()
 
   const db = getPrisma()
-  const user = await db.user.findUnique({ where: { id: userId } })
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    include: { opcoAssignments: { where: { isActive: true }, include: { opco: true } } },
+  })
   if (!user) throw new Error("User not found")
+
+  const authorized =
+    isGroupAdmin(session.realmRoles) ||
+    user.opcoAssignments.some((a) =>
+      canManageUsers(session.organizations, session.realmRoles, a.opco.slug)
+    )
+  if (!authorized) {
+    throw new Error("Forbidden: cannot manage this user")
+  }
 
   await deactivateKeycloakUser(user.keycloakId)
 

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupAdmin } from "@/lib/permissions"
+import { isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import ApprovalsClient from "./approvals-client"
 
@@ -11,11 +11,12 @@ export default async function Approvals() {
 
   const db = getPrisma()
   const groupLevel = isGroupAdmin(session.user.realmRoles)
+  const seeAll = isGroupLevel(session.user.realmRoles)
   const opcoSlugs = session.user.organizations.map((o) => o.alias)
 
   const where = {
     status: "pending" as const,
-    ...(groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }),
+    ...(seeAll ? {} : { opco: { slug: { in: opcoSlugs } } }),
   }
 
   const changes = await db.changeRequest.findMany({

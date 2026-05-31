@@ -43,6 +43,14 @@ export function isGroupAdmin(realmRoles: string[]): boolean {
   return realmRoles.includes("group_admin")
 }
 
+export function isGroupLevel(realmRoles: string[]): boolean {
+  return realmRoles.includes("group_admin") || realmRoles.includes("group_auditor")
+}
+
+export function isMemberOfOpCo(organizations: SessionOrganization[], slug: string): boolean {
+  return organizations.some((o) => o.alias === slug)
+}
+
 export function getUserOpCos(organizations: SessionOrganization[]): string[] {
   return organizations.map((o) => o.alias)
 }

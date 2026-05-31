@@ -7,7 +7,8 @@ vi.mock('@/lib/session', () => ({
     keycloakId: 'kc-requester',
     email: 'requester@csquared.com',
     name: 'Requester',
-    organizations: [],
+    // ghana/approver so the authz gate passes and the SoD check is reached
+    organizations: [{ id: 'org-gh', name: 'Ghana', alias: 'ghana', roles: ['approver'] }],
     realmRoles: [],
   }),
 }))
@@ -22,6 +23,7 @@ const mockDb = {
       status: 'pending',
       riskLevel: 'low',
       requesterId: 'user-requester', // same as user.id → triggers SoD
+      opco: { slug: 'ghana' },
       approvals: [],
     }),
     update: vi.fn().mockResolvedValue({}),
@@ -40,6 +42,7 @@ vi.mock('@/server/db', () => ({
 
 import { checkCabQuorum } from '@/lib/cab-quorum'
 import { submitApproval } from '@/server/actions/approvals'
+import { getAppSession } from '@/lib/session'
 
 // ── checkCabQuorum (pure function, no mocks needed) ──────────────────────────
 
@@ -89,5 +92,24 @@ describe('TC-CONTRACT-SOD-001: submitApproval — self-approval rejected (SoD)',
     await expect(
       submitApproval('cr-1', 'approve', undefined, false)
     ).rejects.toThrow(/SoD violation/)
+  })
+})
+
+// ── Authorization: cross-OpCo approval blocked ───────────────────────────────
+
+describe('submitApproval — OpCo authorization', () => {
+  it('rejects an approver from another OpCo (uganda) approving a ghana change', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce({
+      keycloakId: 'kc-ug',
+      email: 'ug@csquared.com',
+      name: 'UG Approver',
+      organizations: [{ id: 'org-ug', name: 'Uganda', alias: 'uganda', roles: ['approver'] }],
+      realmRoles: [],
+    })
+    // a non-self user so authz (not SoD) is what blocks
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
+    await expect(
+      submitApproval('cr-1', 'approve', undefined, false)
+    ).rejects.toThrow(/Forbidden/)
   })
 })

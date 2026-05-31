@@ -3,6 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
+import { isGroupAdmin, isGroupLevel, isMemberOfOpCo } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
@@ -27,7 +28,10 @@ type CreateChangeInput = {
 }
 
 export async function listChanges(opcoSlug: string) {
-  await getAppSession()
+  const session = await getAppSession()
+  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
+    throw new Error("Forbidden: not a member of this OpCo")
+  }
   const db = getPrisma()
   return db.changeRequest.findMany({
     where: { opco: { slug: opcoSlug } },
@@ -38,6 +42,9 @@ export async function listChanges(opcoSlug: string) {
 
 export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   const session = await getAppSession()
+  if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
+    throw new Error("Forbidden: not a member of this OpCo")
+  }
   const db = getPrisma()
 
   const [opco, user] = await Promise.all([
@@ -102,8 +109,12 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
   if (!user) throw new Error("User not found")
 
-  const change = await db.changeRequest.findUnique({ where: { id: changeId } })
+  const change = await db.changeRequest.findUnique({ where: { id: changeId }, include: { opco: true } })
   if (!change) throw new Error("Change not found")
+
+  if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
+    throw new Error("Forbidden: change belongs to another OpCo")
+  }
 
   if (!VALID_TRANSITIONS[change.status]?.includes(toStatus)) {
     throw new Error(`Invalid transition: ${change.status} → ${toStatus}`)
