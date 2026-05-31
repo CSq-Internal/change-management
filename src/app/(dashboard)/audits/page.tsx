@@ -1,22 +1,41 @@
-"use client"
-import { useStore } from "@/lib/store"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { t } from "@/lib/i18n"
-import type { ChangeRequest } from "@/lib/types"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { getPrisma } from "@/server/db"
+import { isGroupAdmin } from "@/lib/permissions"
+import AuditsClient from "./audits-client"
 
-export default function Audits(){
-  const { language } = useStore()
-  // TODO: wire to server data (Phase 4)
-  const changes: ChangeRequest[] = []
-  return (
-    <Card className="border-border/80 bg-card/95">
-      <CardHeader><CardTitle className="text-xl sm:text-lg">{t(language, "audits.title")}</CardTitle></CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground text-sm">{t(language, "audits.desc")}</p>
-        <pre className="mt-4 rounded bg-muted p-3 text-xs text-foreground/80 overflow-auto max-h-[60vh] sm:max-h-[50vh]">
-          {JSON.stringify(changes, null, 2)}
-        </pre>
-      </CardContent>
-    </Card>
-  )
+export default async function Audits() {
+  const session = await auth()
+  if (!session) redirect("/login")
+
+  const db = getPrisma()
+  const groupLevel = isGroupAdmin(session.user.realmRoles)
+  const opcoSlugs = session.user.organizations.map((o) => o.alias)
+  const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
+
+  const entries = await db.auditLog.findMany({
+    where: { change: { ...opcoFilter } },
+    include: {
+      actor: true,
+      change: { include: { opco: true } },
+    },
+    orderBy: { at: "desc" },
+    take: 100,
+  })
+
+  const serializable = entries.map((e) => ({
+    id: e.id,
+    at: e.at,
+    action: e.action,
+    fromStatus: e.fromStatus ?? null,
+    toStatus: e.toStatus ?? null,
+    note: e.note ?? null,
+    actor: { name: e.actor.name, email: e.actor.email },
+    change: {
+      title: e.change.title,
+      opco: { slug: e.change.opco.slug },
+    },
+  }))
+
+  return <AuditsClient entries={serializable} />
 }
