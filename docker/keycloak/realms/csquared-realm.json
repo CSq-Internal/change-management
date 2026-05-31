@@ -1,0 +1,142 @@
+{
+  "id": "csquared",
+  "realm": "csquared",
+  "displayName": "CSquared CMS",
+  "enabled": true,
+  "organizationsEnabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "group_admin",
+        "description": "CSquared realm administrator",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "csquared"
+      },
+      {
+        "name": "group_auditor",
+        "description": "CSquared realm auditor",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "csquared"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "csquared-cms",
+      "name": "CSquared CMS",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "secret": "csquared-dev-secret",
+      "redirectUris": [
+        "http://localhost:3000/api/auth/callback/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3000"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "devops@csquared.com",
+      "email": "devops@csquared.com",
+      "firstName": "DevOps",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin2025$",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "group_admin"
+      ]
+    }
+  ],
+  "organizations": [
+    {
+      "name": "CSquared Ghana",
+      "alias": "ghana",
+      "enabled": true,
+      "domains": [
+        {
+          "name": "csquared.gh",
+          "verified": false
+        }
+      ]
+    },
+    {
+      "name": "CSquared Uganda",
+      "alias": "uganda",
+      "enabled": true,
+      "domains": [
+        {
+          "name": "csquared.ug",
+          "verified": false
+        }
+      ]
+    },
+    {
+      "name": "CSquared DRC",
+      "alias": "drc",
+      "enabled": true,
+      "domains": [
+        {
+          "name": "csquared.cd",
+          "verified": false
+        }
+      ]
+    },
+    {
+      "name": "CSquared Togo",
+      "alias": "togo",
+      "enabled": true,
+      "domains": [
+        {
+          "name": "csquared.tg",
+          "verified": false
+        }
+      ]
+    },
+    {
+      "name": "CSquared Liberia",
+      "alias": "liberia",
+      "enabled": true,
+      "domains": [
+        {
+          "name": "csquared.lr",
+          "verified": false
+        }
+      ]
+    },
+    {
+      "name": "CSquared Mauritius",
+      "alias": "mauritius",
+      "enabled": true,
+      "domains": [
+        {
+          "name": "csquared.mu",
+          "verified": false
+        }
+      ]
+    }
+  ]
+}
