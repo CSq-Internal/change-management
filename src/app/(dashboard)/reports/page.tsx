@@ -23,8 +23,9 @@ const reportCards = [
 ]
 
 export default function ReportsPage() {
-  const { language, changes } = useStore()
-  const typedChanges = changes as Change[]
+  const { language } = useStore()
+  // TODO: wire to server data (Phase 4)
+  const typedChanges: Change[] = []
 
   const closed = typedChanges.filter((c) => c.status === "closed")
   const approved = typedChanges.filter((c) => ["approved", "implemented", "verified", "closed"].includes(c.status))

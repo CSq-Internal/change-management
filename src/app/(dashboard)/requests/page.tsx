@@ -1,8 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import type { AppUser, ChangeRequest } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -21,7 +23,14 @@ const infraTypes = [
 ] as const
 
 export default function Requests() {
-  const { changes, add, currentUser, language, users, defaultApproverIds } = useStore()
+  const { language } = useStore()
+  const { data: session } = useSession()
+  const currentUser = session?.user ?? null
+  // TODO: wire to server data (Phase 4)
+  const changes: ChangeRequest[] = []
+  const users: AppUser[] = []
+  const defaultApproverIds: string[] = []
+  const add = (_cr: Omit<ChangeRequest, "id" | "createdAt" | "updatedAt" | "approvals" | "auditTrail">) => {}
   const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [country, setCountry] = useState<(typeof countries)[number] | "">("")

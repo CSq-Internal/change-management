@@ -2,10 +2,13 @@
 
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import type { ChangeRequest } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function ChangeDetailsPage() {
-  const { changes, language } = useStore()
+  const { language } = useStore()
+  // TODO: wire to server data (Phase 4)
+  const changes: ChangeRequest[] = []
   const latest = changes[0]
 
   return (

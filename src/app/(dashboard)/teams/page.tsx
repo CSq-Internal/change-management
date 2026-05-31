@@ -1,7 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
+import { canManageUsers } from "@/lib/permissions"
+import type { Team } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,7 +13,18 @@ import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
 
 export default function TeamsPage() {
-  const { teams, addTeam, currentUser, language } = useStore()
+  const { language } = useStore()
+  const { data: session } = useSession()
+  // TODO: wire to server data (Phase 4)
+  const teams: Team[] = []
+  const addTeam = (_team: Omit<Team, "id" | "createdAt">) => {}
+  const isAdmin = session
+    ? canManageUsers(
+        session.user.organizations,
+        session.user.realmRoles,
+        session.user.organizations[0]?.alias ?? ""
+      )
+    : false
   const { toast } = useToast()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -18,7 +32,7 @@ export default function TeamsPage() {
   const [attachments, setAttachments] = useState<File[]>([])
 
   const submit = () => {
-    if (!currentUser?.permissions.includes("admin")) {
+    if (!isAdmin) {
       toast({
         title: t(language, "teams.adminOnly"),
         description: t(language, "teams.adminOnlyDesc"),
@@ -54,7 +68,7 @@ export default function TeamsPage() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-      {!currentUser?.permissions.includes("admin") && (
+      {!isAdmin && (
         <Card className="border-border/80 bg-card/95 lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "teams.adminOnly")}</CardTitle>
@@ -111,7 +125,7 @@ export default function TeamsPage() {
               setAttachments(Array.from(event.target.files ?? []))
             }}
           />
-          <Button onClick={submit} disabled={!currentUser?.permissions.includes("admin")}>
+          <Button onClick={submit} disabled={!isAdmin}>
             {t(language, "teams.add")}
           </Button>
         </CardContent>

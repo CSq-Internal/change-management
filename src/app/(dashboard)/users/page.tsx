@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import type { Country, Permission, Role } from "@/lib/types"
+import { canManageUsers } from "@/lib/permissions"
+import type { AppUser, Country, Permission, Role, Team } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,7 +16,19 @@ const roles: Role[] = ["requester", "approver", "auditor", "admin"]
 const permissions: Permission[] = ["admin", "read", "write", "approve", "audit"]
 
 export default function UsersPage() {
-  const { users, teams, addUser, currentUser, language } = useStore()
+  const { language } = useStore()
+  const { data: session } = useSession()
+  // TODO: wire to server data (Phase 4)
+  const users: AppUser[] = []
+  const teams: Team[] = []
+  const addUser = (_user: Omit<AppUser, "id" | "createdAt">) => {}
+  const isAdmin = session
+    ? canManageUsers(
+        session.user.organizations,
+        session.user.realmRoles,
+        session.user.organizations[0]?.alias ?? ""
+      )
+    : false
   const { toast } = useToast()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [step, setStep] = useState(0)
@@ -55,7 +69,7 @@ export default function UsersPage() {
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 0))
 
   const submit = () => {
-    if (!currentUser?.permissions.includes("admin")) {
+    if (!isAdmin) {
       toast({
         title: t(language, "users.adminOnly"),
         description: t(language, "users.adminOnlyDesc"),
@@ -90,7 +104,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {!currentUser?.permissions.includes("admin") && (
+      {!isAdmin && (
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "users.adminOnly")}</CardTitle>
@@ -105,7 +119,7 @@ export default function UsersPage() {
           <h1 className="text-2xl font-semibold">{t(language, "users.title")}</h1>
           <p className="text-sm text-muted-foreground">{t(language, "users.desc")}</p>
         </div>
-        <Button onClick={() => setWizardOpen(true)} disabled={!currentUser?.permissions.includes("admin")}>
+        <Button onClick={() => setWizardOpen(true)} disabled={!isAdmin}>
           {t(language, "users.onboard")}
         </Button>
       </div>

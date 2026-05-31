@@ -3,11 +3,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 
 export default function ProfileSettingsPage() {
-  const { currentUser, language } = useStore()
+  const { language } = useStore()
+  const { data: session } = useSession()
+  const currentUser = session?.user ?? null
 
   return (
     <div className="space-y-6">
@@ -25,7 +28,7 @@ export default function ProfileSettingsPage() {
           <Input placeholder={t(language, "users.wizard.name")} defaultValue={currentUser?.name ?? ""} />
           <Input placeholder={t(language, "auth.email")} defaultValue={currentUser?.email ?? ""} />
           <Input placeholder={t(language, "settings.profile.job")} />
-          <Input placeholder={t(language, "settings.profile.location")} defaultValue={currentUser?.country ?? ""} />
+          <Input placeholder={t(language, "settings.profile.location")} />
         </CardContent>
       </Card>
 

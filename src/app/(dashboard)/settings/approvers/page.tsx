@@ -1,12 +1,17 @@
 "use client"
 
+import { useState } from "react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import type { AppUser } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 export default function ApproverSettingsPage() {
-  const { users, defaultApproverIds, setDefaultApprovers, language } = useStore()
+  const { language } = useStore()
+  // TODO: wire to server data (Phase 4)
+  const users: AppUser[] = []
+  const [defaultApproverIds, setDefaultApprovers] = useState<string[]>([])
   const approvers = users.filter((user) => user.permissions.includes("approve"))
 
   return (

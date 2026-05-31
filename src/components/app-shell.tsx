@@ -4,7 +4,9 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
+import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
+import { canManageUsers } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import {
@@ -14,7 +16,6 @@ import {
   FileClock,
   GitCompare,
   Home,
-  KeyRound,
   LogOut,
   Settings,
   ShieldCheck,
@@ -89,40 +90,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [passwordOpen, setPasswordOpen] = useState(false)
-  const [newPassword, setNewPassword] = useState("")
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const { data: session } = useSession()
+  const currentUser = session?.user ?? null
   const {
-    changes,
-    currentUser,
-    logout,
-    updatePassword,
     language,
     fontScale,
     setLanguage,
     setFontScale,
-    setCurrentUser,
-    authHydrated,
-    setAuthHydrated,
-    users,
   } = useStore()
   const translate = (key: string) => t(language, key)
-  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
-  const pendingApprovals = currentUser
-    ? changes.filter(
-        (c) =>
-          c.status === "pending" &&
-          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
+  // TODO: wire to server data (Phase 4)
+  const myRequests: unknown[] = []
+  // TODO: wire to server data (Phase 4)
+  const pendingApprovals: unknown[] = []
+  const showAdminNav = session
+    ? canManageUsers(
+        session.user.organizations,
+        session.user.realmRoles,
+        session.user.organizations[0]?.alias ?? ""
       )
-    : []
-  const canManageUsers = currentUser?.permissions.includes("admin")
+    : false
   const effectiveNavGroups = useMemo(
-    () => navGroups.filter((group) => group.labelKey !== "nav.userManagement" || canManageUsers),
-    [canManageUsers]
+    () => navGroups.filter((group) => group.labelKey !== "nav.userManagement" || showAdminNav),
+    [showAdminNav]
   )
   const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
   const currentNav = flatNavItems.find((item) => item.href === pathname)
@@ -157,12 +152,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (pathname === "/login") {
     return (
       <div className="min-h-screen bg-background text-foreground">
-        <AuthHydrate
-          users={users}
-          currentUser={currentUser}
-          setCurrentUser={setCurrentUser}
-          setAuthHydrated={setAuthHydrated}
-        />
         {children}
         <Toaster />
       </div>
@@ -171,13 +160,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <AuthHydrate
-        users={users}
-        currentUser={currentUser}
-        setCurrentUser={setCurrentUser}
-        setAuthHydrated={setAuthHydrated}
-      />
-      <AuthGuard pathname={pathname} authHydrated={authHydrated} />
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.14)_0,_rgba(56,189,248,0.08)_45%,_transparent_70%)]" />
         <div className="absolute -bottom-52 right-[-10%] h-[480px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.12)_0,_rgba(234,179,8,0.08)_50%,_transparent_70%)]" />
@@ -361,25 +343,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
                 {currentUser && (
-                  <>
-                    <button
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                      onClick={() => setPasswordOpen(true)}
-                      aria-label="Change password"
-                    >
-                      <KeyRound className="h-4 w-4" />
-                    </button>
-                    <button
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                      onClick={() => {
-                        logout()
-                        router.push("/login")
-                      }}
-                      aria-label="Log out"
-                    >
-                      <LogOut className="h-4 w-4" />
-                    </button>
-                  </>
+                  <button
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                    onClick={() => nextAuthSignOut({ callbackUrl: "/login" })}
+                    aria-label="Log out"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             </div>
@@ -490,43 +460,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <Toaster />
-      {passwordOpen && currentUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
-            <h3 className="text-lg font-semibold">Change Password</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Set a new password for your account.</p>
-            <input
-              type="password"
-              placeholder="New password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className="mt-4 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                className="rounded-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setPasswordOpen(false)
-                  setNewPassword("")
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white"
-                onClick={() => {
-                  if (!newPassword) return
-                  updatePassword(currentUser.id, newPassword)
-                  setPasswordOpen(false)
-                  setNewPassword("")
-                }}
-              >
-                Update
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {preferencesOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
@@ -582,47 +515,4 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
     </div>
   )
-}
-
-function AuthGuard({ pathname, authHydrated }: { pathname: string; authHydrated: boolean }) {
-  const router = useRouter()
-  const { currentUser } = useStore()
-
-  useEffect(() => {
-    if (authHydrated && !currentUser && pathname !== "/login") {
-      router.push("/login")
-    }
-  }, [authHydrated, currentUser, pathname, router])
-
-  return null
-}
-
-function AuthHydrate({
-  users,
-  currentUser,
-  setCurrentUser,
-  setAuthHydrated,
-}: {
-  users: { id: string }[]
-  currentUser: { id: string } | null
-  setCurrentUser: (user: any) => void
-  setAuthHydrated: (value: boolean) => void
-}) {
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (currentUser) {
-      setAuthHydrated(true)
-      return
-    }
-    const storedId = window.localStorage.getItem("csq-session-user")
-    if (storedId) {
-      const match = users.find((user) => user.id === storedId)
-      if (match) {
-        setCurrentUser(match)
-      }
-    }
-    setAuthHydrated(true)
-  }, [currentUser, setAuthHydrated, setCurrentUser, users])
-
-  return null
 }

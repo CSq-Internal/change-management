@@ -2,9 +2,12 @@
 import { useStore } from "@/lib/store"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { t } from "@/lib/i18n"
+import type { ChangeRequest } from "@/lib/types"
 
 export default function Audits(){
-  const { changes, language } = useStore()
+  const { language } = useStore()
+  // TODO: wire to server data (Phase 4)
+  const changes: ChangeRequest[] = []
   return (
     <Card className="border-border/80 bg-card/95">
       <CardHeader><CardTitle className="text-xl sm:text-lg">{t(language, "audits.title")}</CardTitle></CardHeader>

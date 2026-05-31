@@ -1,13 +1,20 @@
 "use client"
 
+import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
+import type { ChangeRequest } from "@/lib/types"
 
 export default function Approvals() {
-  const { changes, update, currentUser, role, language } = useStore()
+  const { language } = useStore()
+  const { data: session } = useSession()
+  const currentUser = session?.user ?? null
+  // TODO: wire to server data (Phase 4)
+  const changes: ChangeRequest[] = []
+  const update = (_id: string, _patch: Partial<ChangeRequest>) => {}
   const { toast } = useToast()
   const pending = currentUser
     ? changes.filter(
@@ -16,7 +23,8 @@ export default function Approvals() {
           (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
       )
     : []
-  const canApprove = role === "approver" || role === "admin"
+  // TODO: wire to server roles (Phase 4)
+  const canApprove = true
 
   if (!currentUser) {
     return (

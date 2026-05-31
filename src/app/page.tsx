@@ -1,23 +1,24 @@
 "use client"
 
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import type { ChangeRequest } from "@/lib/types"
 import { ArrowUpRight, BellDot, CalendarClock, ClipboardList, FileClock, ShieldCheck } from "lucide-react"
 
 export default function Home() {
-  const { changes, currentUser, role, language } = useStore()
-  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
-  const pendingApprovals = currentUser
-    ? changes.filter(
-        (c) =>
-          c.status === "pending" &&
-          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
-      )
-    : []
-  const activeChanges = changes.filter((c) => ["approved", "implemented", "verified"].includes(c.status))
-  const recent = [...changes].slice(0, 4)
+  const { language } = useStore()
+  const { data: session } = useSession()
+  const currentUser = session?.user ?? null
+  // TODO: wire to server data (Phase 4)
+  const changes: ChangeRequest[] = []
+  const myRequests: ChangeRequest[] = []
+  const pendingApprovals: ChangeRequest[] = []
+  const activeChanges: ChangeRequest[] = []
+  const recent: ChangeRequest[] = []
+  const role: string = "requester"
   const welcomeName = (() => {
     const email = currentUser?.email ?? ""
     if (email.toLowerCase().endsWith("@csquared.com")) {
