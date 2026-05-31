@@ -1,19 +1,20 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { canManageUsers } from "@/lib/permissions"
-import type { Country, Permission, Role } from "@/lib/types"
+import type { Role } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
+import { OPCO_SLUGS, OPCO_NAMES, type OpCoSlug } from "@/lib/opco"
+import { createUser } from "@/server/actions/users"
 
-const countries: Country[] = ["Ghana", "Uganda", "Mauritius", "Liberia", "Togo"]
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
-const permissions: Permission[] = ["admin", "read", "write", "approve", "audit"]
 
 export type DbUser = {
   id: string
@@ -33,6 +34,7 @@ interface UsersClientProps {
 export default function UsersClient({ users }: UsersClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
+  const router = useRouter()
   const isAdmin = session
     ? canManageUsers(
         session.user.organizations,
@@ -45,10 +47,10 @@ export default function UsersClient({ users }: UsersClientProps) {
   const [step, setStep] = useState(0)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
-  const [country, setCountry] = useState<Country>("Ghana")
+  const [opcoSlug, setOpcoSlug] = useState<OpCoSlug>("ghana")
   const [role, setRole] = useState<Role>("requester")
-  const [selectedPermissions, setSelectedPermissions] = useState<Permission[]>(["read"])
   const [defaultPassword, setDefaultPassword] = useState("")
+  const [isPending, startTransition] = useTransition()
 
   const steps = useMemo(
     () => [
@@ -63,9 +65,8 @@ export default function UsersClient({ users }: UsersClientProps) {
     setStep(0)
     setName("")
     setEmail("")
-    setCountry("Ghana")
+    setOpcoSlug("ghana")
     setRole("requester")
-    setSelectedPermissions(["read"])
     setDefaultPassword("")
   }
 
@@ -94,13 +95,29 @@ export default function UsersClient({ users }: UsersClientProps) {
       })
       return
     }
-    // TODO: wire to createUser server action (Phase 5.2)
-    toast({
-      title: t(language, "users.toast.created"),
-      description: `${name} - ${country}`,
-      variant: "success",
+    startTransition(async () => {
+      try {
+        await createUser({
+          name,
+          email,
+          tempPassword: defaultPassword || "ChangeMe123!",
+          assignments: [{ opcoSlug, role }],
+        })
+        toast({
+          title: t(language, "users.toast.created"),
+          description: `${name} — ${OPCO_NAMES[opcoSlug]}`,
+          variant: "success",
+        })
+        closeWizard()
+        router.refresh()
+      } catch (err) {
+        toast({
+          title: "Failed to create user",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "error",
+        })
+      }
     })
-    closeWizard()
   }
 
   return (
@@ -186,25 +203,25 @@ export default function UsersClient({ users }: UsersClientProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
-                  <div>
-                    <label className="text-sm font-medium">{t(language, "users.wizard.country")}</label>
-                    <select
-                      className="mt-2 h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value as Country)}
-                    >
-                      {countries.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               )}
 
               {step === 1 && (
                 <div className="grid gap-4">
+                  <div>
+                    <label className="text-sm font-medium">OpCo</label>
+                    <select
+                      className="mt-2 h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
+                      value={opcoSlug}
+                      onChange={(e) => setOpcoSlug(e.target.value as OpCoSlug)}
+                    >
+                      {OPCO_SLUGS.map((slug) => (
+                        <option key={slug} value={slug}>
+                          {OPCO_NAMES[slug]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="text-sm font-medium">{t(language, "users.wizard.role")}</label>
                     <select
@@ -218,29 +235,6 @@ export default function UsersClient({ users }: UsersClientProps) {
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">
-                      {t(language, "users.wizard.permissions")}
-                    </label>
-                    <div className="mt-2 grid gap-2 text-sm text-foreground md:grid-cols-2">
-                      {permissions.map((permission) => (
-                        <label key={permission} className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedPermissions.includes(permission)}
-                            onChange={(e) => {
-                              setSelectedPermissions((prev) =>
-                                e.target.checked
-                                  ? [...prev, permission]
-                                  : prev.filter((item) => item !== permission)
-                              )
-                            }}
-                          />
-                          {permission}
-                        </label>
-                      ))}
-                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium">{t(language, "users.wizard.password")}</label>
@@ -259,8 +253,11 @@ export default function UsersClient({ users }: UsersClientProps) {
 
               {step === 2 && (
                 <div className="grid gap-4">
-                  {/* Teams assignment — stub until team server actions exist (Phase 5.2) */}
-                  <p className="text-sm text-muted-foreground">{t(language, "users.wizard.noTeams")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Review and confirm: <strong>{name}</strong> ({email}) will be added to{" "}
+                    <strong>{OPCO_NAMES[opcoSlug]}</strong> as <strong>{role}</strong>. A temporary
+                    password will be set and the user will be prompted to change it on first login.
+                  </p>
                 </div>
               )}
 
@@ -277,7 +274,9 @@ export default function UsersClient({ users }: UsersClientProps) {
                   {step < steps.length - 1 ? (
                     <Button onClick={nextStep}>{t(language, "users.wizard.next")}</Button>
                   ) : (
-                    <Button onClick={submit}>{t(language, "users.wizard.finish")}</Button>
+                    <Button onClick={submit} disabled={isPending}>
+                      {isPending ? "Creating…" : t(language, "users.wizard.finish")}
+                    </Button>
                   )}
                 </div>
               </div>
