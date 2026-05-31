@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { canManageUsers } from "@/lib/permissions"
+import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import {
@@ -291,6 +292,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Home className="h-4 w-4" />
                 </Link>
+                <OpCoSwitcher />
                 <label className="flex cursor-pointer items-center gap-2 rounded-full bg-card px-2 py-1">
                   <span className="relative h-8 w-8 overflow-hidden rounded-full bg-slate-100">
                     {avatarUrl ? (
