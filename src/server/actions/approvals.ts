@@ -1,17 +1,9 @@
 // src/server/actions/approvals.ts
+"use server"
+
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-
-type QuorumApproval = { isCab: boolean; decision: string; approverId: string }
-
-export function checkCabQuorum(approvals: QuorumApproval[]): boolean {
-  const uniqueCabApprovers = new Set(
-    approvals
-      .filter((a) => a.isCab && a.decision === "approve")
-      .map((a) => a.approverId)
-  )
-  return uniqueCabApprovers.size >= 2
-}
+import { checkCabQuorum } from "@/lib/cab-quorum"
 
 export async function submitApproval(
   changeId: string,
@@ -19,7 +11,6 @@ export async function submitApproval(
   comment: string | undefined,
   isCab: boolean
 ) {
-  "use server"
   const session = await getAppSession()
 
   if (decision === "reject" && !comment?.trim()) {

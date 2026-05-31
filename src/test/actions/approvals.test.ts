@@ -38,7 +38,8 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-import { checkCabQuorum, submitApproval } from '@/server/actions/approvals'
+import { checkCabQuorum } from '@/lib/cab-quorum'
+import { submitApproval } from '@/server/actions/approvals'
 
 // ── checkCabQuorum (pure function, no mocks needed) ──────────────────────────
 
