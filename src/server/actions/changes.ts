@@ -27,6 +27,25 @@ type CreateChangeInput = {
   isEmergency?: boolean
 }
 
+export async function getChange(id: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const change = await db.changeRequest.findUnique({
+    where: { id },
+    include: {
+      opco: true,
+      requester: true,
+      approvals: { include: { approver: true }, orderBy: { decidedAt: "asc" } },
+      auditTrail: { include: { actor: true }, orderBy: { at: "asc" } },
+    },
+  })
+  if (!change) return null
+  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
+    return null
+  }
+  return change
+}
+
 export async function listChanges(opcoSlug: string) {
   const session = await getAppSession()
   if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {

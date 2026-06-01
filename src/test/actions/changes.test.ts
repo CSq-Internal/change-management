@@ -37,7 +37,7 @@ vi.mock('@/server/email', () => ({
   sendApprovalRequestEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { listChanges, createChange, updateChangeStatus, submitChange } from '@/server/actions/changes'
+import { listChanges, createChange, updateChangeStatus, submitChange, getChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
 import { sendApprovalRequestEmail } from '@/server/email'
 
@@ -117,6 +117,49 @@ describe('updateChangeStatus — OpCo authorization', () => {
     // module-level session is ghana/requester; change.opco.slug = ghana
     const result = await updateChangeStatus('cr-1', 'pending')
     expect(result).toHaveProperty('status', 'pending')
+  })
+})
+
+const groupAdminSession = {
+  keycloakId: 'kc-ga', email: 'ga@csquared.com', name: 'GA',
+  organizations: [], realmRoles: ['group_admin'] as string[],
+}
+
+const changeWithRelations = {
+  id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+  opco: { id: 'opco-1', slug: 'ghana' },
+  requester: { id: 'user-1', name: 'Test', email: 'test@csquared.com' },
+  approvals: [],
+  auditTrail: [],
+  title: 'Router update', riskLevel: 'low',
+}
+
+describe('getChange', () => {
+  it('returns the change for a member of its OpCo', async () => {
+    // default session is ghana/requester — change.opco.slug === 'ghana'
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(changeWithRelations)
+    const result = await getChange('cr-1')
+    expect(result).toHaveProperty('id', 'cr-1')
+  })
+
+  it('returns null when change does not exist', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(null)
+    const result = await getChange('nonexistent')
+    expect(result).toBeNull()
+  })
+
+  it('returns null for a non-member caller on another OpCo change (cross-OpCo isolation)', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(changeWithRelations)
+    const result = await getChange('cr-1')
+    expect(result).toBeNull()
+  })
+
+  it('allows a group-level user to read any OpCo change', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdminSession)
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(changeWithRelations)
+    const result = await getChange('cr-1')
+    expect(result).toHaveProperty('id', 'cr-1')
   })
 })
 
