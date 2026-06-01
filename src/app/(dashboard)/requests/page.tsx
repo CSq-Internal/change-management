@@ -25,6 +25,7 @@ export default async function RequestsPage() {
     <RequestForm
       opcoOptions={opcoOptions}
       myRequests={mine.map((m) => ({ ...m, updatedAt: m.updatedAt.toISOString() }))}
+      defaultEmail={session.user.email ?? ""}
     />
   )
 }

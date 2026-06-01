@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
@@ -49,6 +48,7 @@ interface Props {
   myRequests?: MyRequest[]
   mode?: "create" | "edit"
   initial?: Initial
+  defaultEmail?: string
 }
 
 function formatRelativeDate(iso: string): string {
@@ -72,13 +72,12 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-gray-100 text-gray-500",
 }
 
-export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial }: Props) {
+export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail }: Props) {
   const { language } = useStore()
-  const { data: session } = useSession()
   const router = useRouter()
   const { toast } = useToast()
 
-  const [email, setEmail] = useState(initial?.contactEmail ?? (session?.user.email ?? ""))
+  const [email, setEmail] = useState(initial?.contactEmail ?? defaultEmail ?? "")
   const [opcoSlug, setOpcoSlug] = useState(initial?.opcoSlug ?? opcoOptions[0] ?? "")
   const [infrastructureType, setInfrastructureType] = useState<(typeof infraTypes)[number] | "">(
     (initial?.infrastructureType as (typeof infraTypes)[number]) ?? ""
