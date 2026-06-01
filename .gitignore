@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# keycloak local-dev volume backups (contain password hashes, client secrets, realm signing keys)
+docker/keycloak/_volume_backup_*/
+
 # vercel
 .vercel
 
@@ -43,3 +46,10 @@ next-env.d.ts
 CSquared Technical Change Request - Google Forms.pdf
 
 .history/*
+
+# superpowers brainstorm visual companion
+.superpowers/
+
+# playwright / local verification artifacts
+.playwright-mcp/
+login-success-dashboard.png
