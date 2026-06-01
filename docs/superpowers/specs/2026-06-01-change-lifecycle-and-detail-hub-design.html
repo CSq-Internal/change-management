@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change Lifecycle Repair + Change Detail Hub — Design</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --accent:#2563eb; --accent-soft:#eff6ff; --green:#16a34a; --amber:#b45309; --rose:#e11d48;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:48px 24px 96px}
+  header.spec{border-bottom:3px solid var(--accent);padding-bottom:20px;margin-bottom:8px}
+  h1{font-size:30px;line-height:1.2;margin:0 0 14px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .pill{font-size:12px;font-weight:600;border-radius:999px;padding:4px 12px;border:1px solid var(--line);background:#fff;color:var(--muted)}
+  .pill.ok{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+  .pill.accent{background:var(--accent-soft);border-color:#bfdbfe;color:var(--accent)}
+  h2{font-size:21px;margin:38px 0 12px;padding-top:18px;border-top:1px solid var(--line)}
+  h2:first-of-type{border-top:none;padding-top:0}
+  h3{font-size:16px;margin:22px 0 8px;color:#1e293b}
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+  code{background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f172a}
+  strong{color:#0f172a}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:16px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .flow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;font-weight:600;margin:6px 0 2px}
+  .state{padding:5px 12px;border-radius:999px;background:#e2e8f0}
+  .arrow{color:var(--muted)}
+  .callout{background:var(--accent-soft);border:1px solid #bfdbfe;border-left:4px solid var(--accent);border-radius:8px;padding:12px 16px;margin:14px 0;font-size:14px}
+  .label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="spec">
+    <div class="label">Design Spec</div>
+    <h1>Change Lifecycle Repair + Change Detail Hub</h1>
+    <div class="meta">
+      <span class="pill">2026-06-01</span>
+      <span class="pill ok">Approved (design)</span>
+      <span class="pill accent">Core operational pages &amp; flows</span>
+    </div>
+  </header>
+
+  <h2>Problem</h2>
+  <p>The change-management lifecycle is the following, with the server enforcing every transition:</p>
+  <div class="flow">
+    <span class="state">draft</span><span class="arrow">→</span>
+    <span class="state">pending</span><span class="arrow">→</span>
+    <span class="state">approved</span><span class="arrow">→</span>
+    <span class="state">implemented</span><span class="arrow">→</span>
+    <span class="state">verified</span><span class="arrow">→</span>
+    <span class="state">closed</span>
+  </div>
+  <p style="font-size:13px;color:var(--muted)">(plus <code>pending → rejected</code> and <code>rejected → draft</code>)</p>
+  <p>But the UI severs the lifecycle at the first joint:</p>
+  <ul>
+    <li><code>createChange</code> always saves a change as <strong>draft</strong>, and <strong>no UI control moves it <code>draft → pending</code></strong>. The Approvals queue only has data because the seed inserted a <code>pending</code> change directly. A self-created change cannot be driven through approval in the live app.</li>
+    <li>The Requests form has dead/disconnected fields: the <code>country</code> radio is ignored (the change uses the session's first OpCo), the <code>approvers</code> field is collected and discarded, there is no <code>emergency</code> option (though the schema and blackout-override logic support it), and the "My Requests" sidebar is hardcoded to "none".</li>
+    <li>There is no per-change detail view; list cards show only title + status, so full details, approvals, and a change's own audit history are not viewable.</li>
+  </ul>
+
+  <h2>Goal</h2>
+  <p>Restore the end-to-end lifecycle in the UI and introduce a <strong>change detail page</strong> that serves as the hub where full information, approvals, the audit timeline, and the contextual lifecycle actions live.</p>
+  <div class="callout">No database schema changes. Transitions remain enforced server-side.</div>
+
+  <h2>Decisions</h2>
+  <ul>
+    <li><strong>Submit model — Hybrid.</strong> The Requests form has <strong>Save draft</strong> and <strong>Submit for approval</strong>. Drafts can also be submitted later from the detail page.</li>
+    <li><strong>OpCo selection — in-form selector.</strong> A real dropdown constrained to the user's OpCo memberships; group-level users (<code>group_admin</code> / <code>group_auditor</code>) see all 6. Default = the active OpCo from the header switcher.</li>
+    <li><strong>Detail page layout — two-column with a sticky right action rail.</strong></li>
+    <li><strong>Remove the <code>approvers</code> field.</strong> Approval routing is automatic and role-based (<code>createChange</code> already emails OpCo approvers). <em>(Considered: keep it as an optional "suggested approvers" note — rejected as YAGNI.)</em></li>
+    <li><strong>Edit draft — included.</strong> A draft-only <code>updateChange</code> plus an edit mode on the form. <em>(Flagged as optional/stretch; retained.)</em></li>
+  </ul>
+
+  <h2>Components</h2>
+
+  <div class="card">
+    <h3>1. Requests form — <code>src/app/(dashboard)/requests/page.tsx</code></h3>
+    <ul>
+      <li>Replace the ignored <code>country</code> radio with an <strong>OpCo selector</strong>: options = user's memberships; group-level sees all 6 (<code>OPCO_SLUGS</code>). Default = active OpCo from the switcher/session.</li>
+      <li><strong>Remove</strong> the <code>approvers</code> field and its state.</li>
+      <li>Add <strong>Emergency</strong> as a fourth option in the risk-level group (alongside low/medium/high). Selecting it sets <code>riskLevel = "emergency"</code> and <code>isEmergency = true</code>. Effects: bypasses blackout windows, 1h SLA, requires CAB quorum at approval. Show an inline warning.</li>
+      <li>Two actions: <strong>Save draft</strong> → <code>createChange</code> (status <code>draft</code>); <strong>Submit for approval</strong> → <code>createChange</code> then <code>updateChangeStatus(id,"pending")</code> (writes <code>created</code> + <code>submitted</code> audit entries), then routes to the detail page.</li>
+      <li>Wire the <strong>"My Requests"</strong> sidebar to the requester's recent changes, each linking to <code>/changes/[id]</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>2. Change detail page — new route <code>src/app/(dashboard)/changes/[id]/page.tsx</code></h3>
+    <ul>
+      <li><strong>Server:</strong> new <code>getChange(id)</code> — OpCo authorization (group-level OR member of the change's OpCo, else not-found). Returns full change + requester + opco + approvals (names) + audit timeline (actors), serialized.</li>
+      <li><strong>Left column:</strong> all change fields (description, category, risk, infra type, impact, plans, windows, planned start/end, SLA deadline, requester, contact). Below: the <strong>Timeline</strong> from the change's <code>AuditLog</code> (action, from→to, actor, time, note).</li>
+      <li><strong>Sticky right rail:</strong> status badge · CAB quorum progress (high/emergency) · approvals summary (decisions + comments) · the valid actions for the current status &amp; viewer role.</li>
+    </ul>
+    <p class="label" style="margin-top:14px">Contextual actions (render only when valid; server re-checks)</p>
+    <ul>
+      <li><code>draft</code> + requester/admin → <strong>Submit for approval</strong>, <strong>Edit draft</strong></li>
+      <li><code>pending</code> + approver (not the requester — SoD) → <strong>Approve</strong> / <strong>Reject</strong> (comment required to reject)</li>
+      <li><code>approved</code> → <strong>Mark implemented</strong> · <code>implemented</code> → <strong>Mark verified</strong> · <code>verified</code> → <strong>Close</strong></li>
+      <li><code>rejected</code> + requester/admin → <strong>Return to draft</strong></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>3. Edit draft</h3>
+    <ul>
+      <li>Reuse the Requests form in an <strong>edit mode</strong>, prefilled, available only for <code>draft</code> changes.</li>
+      <li>New <code>updateChange(id, input)</code>: authorization = requester or admin; <strong>guard that status is <code>draft</code></strong> (reject otherwise).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>4. List page integration</h3>
+    <ul>
+      <li><strong>Changes</strong> list: cards link to <code>/changes/[id]</code>; the implement/verify/close buttons <strong>move to</strong> the detail rail (single home for those actions).</li>
+      <li><strong>Approvals</strong> queue: <strong>keep inline Approve/Reject</strong> for fast triage; link the title to <code>/changes/[id]</code>. The one deliberate exception to "actions live on detail" — triaging a queue shouldn't require opening each item.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>5. Server actions — <code>src/server/actions/changes.ts</code></h3>
+    <ul>
+      <li><strong>Reused as-is:</strong> <code>updateChangeStatus</code> (already supports <code>draft → pending</code> etc.), <code>submitApproval</code>.</li>
+      <li><strong>New:</strong> <code>getChange(id)</code> (single read + OpCo authz, includes requester/opco/approvals/auditTrail); <code>updateChange(id, input)</code> (edit, draft-only guard, requester/admin authz).</li>
+      <li><code>createChange</code>: already accepts <code>isEmergency</code> and <code>riskLevel</code> — the form passes <code>emergency</code> through. SLA map already covers <code>emergency</code>.</li>
+    </ul>
+  </div>
+
+  <h2>Data flow</h2>
+  <ol>
+    <li>Requester fills the form → picks OpCo → <strong>Save draft</strong> or <strong>Submit</strong>.</li>
+    <li>Save draft → <code>createChange</code> (draft). Submit → <code>createChange</code> + <code>updateChangeStatus(pending)</code>; OpCo approvers emailed.</li>
+    <li>Approver uses the Approvals queue (inline) or detail page → Approve/Reject. CAB quorum (2 distinct CAB approvers) required for high/emergency; SoD blocks self-approval.</li>
+    <li>On approval → <code>approved</code>; requester emailed. Implementer drives <code>implemented → verified → closed</code> from the detail rail.</li>
+    <li>Every transition writes an immutable <code>AuditLog</code> entry, shown in the detail Timeline and the Audits page.</li>
+  </ol>
+
+  <h2>Error handling</h2>
+  <ul>
+    <li>Authorization failures (wrong OpCo, not an approver, SoD, non-draft edit) throw on the server and surface as toast errors; the detail page returns not-found for unauthorized/missing changes.</li>
+    <li>Invalid transitions rejected by the existing <code>VALID_TRANSITIONS</code> guard.</li>
+    <li>Emergency override is explicit — the only way past an active blackout.</li>
+  </ul>
+
+  <h2>Testing</h2>
+  <ul>
+    <li>Submit flow: a created draft, once submitted, appears in the Approvals queue (<code>draft → pending</code>).</li>
+    <li><code>getChange</code> enforces OpCo isolation (a Ghana viewer cannot load a Uganda change).</li>
+    <li><code>updateChange</code> rejects edits when status ≠ <code>draft</code>.</li>
+    <li>Emergency submission sets <code>isEmergency</code> and overrides an active blackout; non-emergency is blocked.</li>
+    <li>Action gating: each action renders only for the correct status + role, and the server re-rejects spoofed calls.</li>
+  </ul>
+
+  <h2>Out of scope (backlog)</h2>
+  <p>The 7 still-static pages (audit-exports, calendar, risk-register, approval-matrix, notifications/history, settings/profile, settings/approvers), users/teams admin (deactivate/edit, team create/edit, multi-OpCo assignment), reports visualization polish, attachment uploads, approver delegation.</p>
+
+  <footer>CSquared CMS · design spec · 2026-06-01</footer>
+</div>
+</body>
+</html>
