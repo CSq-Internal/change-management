@@ -125,6 +125,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
   const { toast } = useToast()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isActing, setIsActing] = useState(false)
   const [comment, setComment] = useState("")
 
   // ── Action gating ─────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
     successTitle: string,
     successDesc: string
   ) {
+    setIsActing(true)
     try {
       await fn()
       toast({ title: successTitle, description: successDesc, variant: "success" })
@@ -157,6 +159,8 @@ export default function ChangeDetailClient({ change, caps }: Props) {
         description: err instanceof Error ? err.message : "An error occurred",
         variant: "error",
       })
+    } finally {
+      setIsActing(false)
     }
   }
 
@@ -261,6 +265,8 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <DetailRow label={t(language, "detail.field.plannedStart")} value={fmt(change.plannedStart)} />
               <DetailRow label={t(language, "detail.field.plannedEnd")} value={fmt(change.plannedEnd)} />
               <DetailRow label={t(language, "detail.field.slaDeadline")} value={fmt(change.slaDeadline)} />
+              <DetailRow label={t(language, "detail.field.createdAt")} value={fmt(change.createdAt)} />
+              <DetailRow label={t(language, "detail.field.updatedAt")} value={fmt(change.updatedAt)} />
               <DetailRow label={t(language, "detail.field.implementationPlan")} value={change.implementationPlan} />
               <DetailRow label={t(language, "detail.field.testingPlan")} value={change.testingPlan} />
               <DetailRow label={t(language, "detail.field.backoutPlan")} value={change.backoutPlan} />
@@ -392,7 +398,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="default"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={handleSubmit}
               >
                 {t(language, "detail.submit")}
@@ -412,7 +418,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="default"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={handleApprove}
               >
                 {t(language, "detail.approve")}
@@ -423,7 +429,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="destructive"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={handleReject}
               >
                 {t(language, "detail.reject")}
@@ -434,7 +440,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="outline"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={() => handleStatusChange("implemented")}
               >
                 {t(language, "detail.implement")}
@@ -445,7 +451,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="outline"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={() => handleStatusChange("verified")}
               >
                 {t(language, "detail.verify")}
@@ -456,7 +462,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="outline"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={() => handleStatusChange("closed")}
               >
                 {t(language, "detail.close")}
@@ -467,7 +473,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <Button
                 className="w-full"
                 variant="outline"
-                disabled={isPending}
+                disabled={isPending || isActing}
                 onClick={() => handleStatusChange("draft")}
               >
                 {t(language, "detail.reopen")}

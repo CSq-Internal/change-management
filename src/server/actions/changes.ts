@@ -3,7 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo } from "@/lib/permissions"
+import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
@@ -118,7 +118,14 @@ export async function updateChange(id: string, data: UpdateChangeInput) {
     throw new Error("Forbidden: only the requester or an admin can edit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be edited")
 
-  return db.changeRequest.update({ where: { id }, data })
+  const updateData: UpdateChangeInput & { slaDeadline?: Date } = { ...data }
+  if (data.riskLevel) {
+    const slaDeadline = new Date()
+    slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
+    updateData.slaDeadline = slaDeadline
+  }
+
+  return db.changeRequest.update({ where: { id }, data: updateData })
 }
 
 export async function submitChange(id: string) {
@@ -135,6 +142,19 @@ export async function submitChange(id: string) {
   if (change.requesterId !== user.id && !isAdmin)
     throw new Error("Forbidden: only the requester or an admin can submit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be submitted")
+
+  if (!change.isEmergency) {
+    const now = new Date()
+    const activeBlackouts = await db.blackoutPeriod.findMany({
+      where: {
+        OR: [{ opcoId: change.opcoId }, { opcoId: null }],
+        startsAt: { lte: now }, endsAt: { gte: now },
+      },
+    })
+    if (activeBlackouts.length > 0) {
+      throw new Error(`Blocked by blackout: "${activeBlackouts[0].label}". Submit as emergency to override.`)
+    }
+  }
 
   const updated = await db.changeRequest.update({ where: { id }, data: { status: "pending" } })
   await db.auditLog.create({
@@ -180,6 +200,22 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
 
   if (!VALID_TRANSITIONS[change.status]?.includes(toStatus)) {
     throw new Error(`Invalid transition: ${change.status} → ${toStatus}`)
+  }
+
+  const isAdmin =
+    isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
+
+  if (toStatus === "draft") {
+    // reopen: only the original requester or an admin
+    if (change.requesterId !== user.id && !isAdmin) {
+      throw new Error("Forbidden: only the requester or an admin can reopen this change")
+    }
+  } else {
+    // implemented / verified / closed: requires approver or admin rights
+    if (!canApprove(session.organizations, change.opco.slug) && !isAdmin) {
+      throw new Error("Forbidden: not authorized to advance this change")
+    }
   }
 
   const updated = await db.changeRequest.update({ where: { id: changeId }, data: { status: toStatus } })

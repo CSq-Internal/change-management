@@ -106,17 +106,70 @@ describe('createChange', () => {
   })
 })
 
+const approverSession = {
+  keycloakId: 'kc-ap', email: 'approver@csquared.com', name: 'Approver',
+  organizations: [{ id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }],
+  realmRoles: [] as string[],
+}
+
+const approvedChange = {
+  id: 'cr-1', status: 'approved', opcoId: 'opco-1', requesterId: 'user-1',
+  opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
+  isEmergency: false,
+}
+
+const rejectedChange = {
+  id: 'cr-1', status: 'rejected', opcoId: 'opco-1', requesterId: 'user-1',
+  opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
+  isEmergency: false,
+}
+
 describe('updateChangeStatus — OpCo authorization', () => {
   it('rejects a non-member acting on another OpCo\'s change', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
     mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
-    await expect(updateChangeStatus('cr-1', 'pending')).rejects.toThrow(/Forbidden/)
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+    await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
   })
 
-  it('allows a ghana member through the authz gate to the transition logic', async () => {
-    // module-level session is ghana/requester; change.opco.slug = ghana
-    const result = await updateChangeStatus('cr-1', 'pending')
-    expect(result).toHaveProperty('status', 'pending')
+  it('forbids a plain OpCo member (requester role only, not the requester) from advancing to implemented', async () => {
+    // strangerSession: ghana member with requester role only, but NOT user-1 (the requesterId)
+    const strangerSession = {
+      keycloakId: 'kc-stranger', email: 'stranger@csquared.com', name: 'Stranger',
+      organizations: [{ id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['requester'] }],
+      realmRoles: [] as string[],
+    }
+    vi.mocked(getAppSession).mockResolvedValueOnce(strangerSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-stranger', keycloakId: 'kc-stranger' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+    await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
+  })
+
+  it('allows an approver to advance an approved change to implemented', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+    const result = await updateChangeStatus('cr-1', 'implemented')
+    expect(result).toHaveProperty('status', 'pending') // mock always returns { status: 'pending' }
+  })
+
+  it('allows the original requester to reopen a rejected change', async () => {
+    // default session: kc-1 → user-1 which matches requesterId
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(rejectedChange)
+    const result = await updateChangeStatus('cr-1', 'draft')
+    expect(result).toBeDefined()
+  })
+
+  it('forbids a stranger from reopening a rejected change they did not create', async () => {
+    const strangerSession = {
+      keycloakId: 'kc-stranger2', email: 'stranger2@csquared.com', name: 'Stranger2',
+      organizations: [{ id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['requester'] }],
+      realmRoles: [] as string[],
+    }
+    vi.mocked(getAppSession).mockResolvedValueOnce(strangerSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-stranger2', keycloakId: 'kc-stranger2' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(rejectedChange)
+    await expect(updateChangeStatus('cr-1', 'draft')).rejects.toThrow(/Forbidden/)
   })
 })
 
@@ -206,6 +259,24 @@ describe('submitChange', () => {
     mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
     // change.requesterId is 'user-1', not 'user-ug', and ugandaSession has no admin role
     await expect(submitChange('cr-1')).rejects.toThrow(/Forbidden/)
+  })
+
+  it('throws "Blocked by blackout" when submitting a non-emergency draft during an active blackout', async () => {
+    mockDb.blackoutPeriod.findMany.mockResolvedValueOnce([
+      { id: 'bp-1', label: 'Year-end freeze', opcoId: null },
+    ])
+    await expect(submitChange('cr-1')).rejects.toThrow(/Blocked by blackout/)
+  })
+
+  it('does NOT throw when submitting an emergency draft during an active blackout', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Emergency fix', riskLevel: 'emergency',
+      isEmergency: true,
+    })
+    // blackoutPeriod.findMany should NOT be called, but even if it were it returns empty by default
+    const result = await submitChange('cr-1')
+    expect(result).toHaveProperty('status', 'pending')
   })
 })
 
