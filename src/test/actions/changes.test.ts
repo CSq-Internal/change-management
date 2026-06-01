@@ -37,7 +37,7 @@ vi.mock('@/server/email', () => ({
   sendApprovalRequestEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { listChanges, createChange, updateChangeStatus, submitChange, getChange } from '@/server/actions/changes'
+import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
 import { sendApprovalRequestEmail } from '@/server/email'
 
@@ -206,5 +206,45 @@ describe('submitChange', () => {
     mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
     // change.requesterId is 'user-1', not 'user-ug', and ugandaSession has no admin role
     await expect(submitChange('cr-1')).rejects.toThrow(/Forbidden/)
+  })
+})
+
+describe('updateChange', () => {
+  it('updates a draft change when the caller is the requester', async () => {
+    // default session has keycloakId 'kc-1' and mockDb.user returns { id: 'user-1' }
+    // change.requesterId === 'user-1' — access granted
+    mockDb.changeRequest.update.mockResolvedValueOnce({
+      id: 'cr-1', status: 'draft', title: 'Updated title',
+    })
+    const result = await updateChange('cr-1', { title: 'Updated title' })
+    expect(result).toHaveProperty('title', 'Updated title')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-1' },
+      data: { title: 'Updated title' },
+    })
+  })
+
+  it('throws "Only draft changes can be edited" when status is not draft', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
+    })
+    await expect(updateChange('cr-1', { title: 'X' })).rejects.toThrow('Only draft changes can be edited')
+  })
+
+  it('throws Forbidden when caller is neither requester nor admin', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
+    // change.requesterId is 'user-1', not 'user-ug', and ugandaSession has no admin role
+    await expect(updateChange('cr-1', { title: 'Hack' })).rejects.toThrow(/Forbidden/)
+  })
+
+  it('allows a group admin who is not the requester to edit a draft', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdminSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ga', keycloakId: 'kc-ga' })
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'draft', title: 'Admin edit' })
+    // change.requesterId is 'user-1', not 'user-ga', but groupAdminSession has group_admin role
+    const result = await updateChange('cr-1', { title: 'Admin edit' })
+    expect(result).toHaveProperty('title', 'Admin edit')
   })
 })

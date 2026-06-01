@@ -101,6 +101,26 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   return change
 }
 
+type UpdateChangeInput = Partial<CreateChangeInput>
+
+export async function updateChange(id: string, data: UpdateChangeInput) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
+  if (!user) throw new Error("User not found")
+
+  const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
+  if (!change) throw new Error("Change not found")
+
+  const isAdmin = isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
+  if (change.requesterId !== user.id && !isAdmin)
+    throw new Error("Forbidden: only the requester or an admin can edit this change")
+  if (change.status !== "draft") throw new Error("Only draft changes can be edited")
+
+  return db.changeRequest.update({ where: { id }, data })
+}
+
 export async function submitChange(id: string) {
   const session = await getAppSession()
   const db = getPrisma()
