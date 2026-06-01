@@ -3,7 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { isGroupAdmin, isGroupLevel, isMemberOfOpCo } from "@/lib/permissions"
+import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
@@ -79,8 +79,32 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
     data: { changeId: change.id, actorId: user.id, action: "created", toStatus: "draft" },
   })
 
+  return change
+}
+
+export async function submitChange(id: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
+  if (!user) throw new Error("User not found")
+
+  const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
+  if (!change) throw new Error("Change not found")
+
+  const isAdmin = isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
+  if (change.requesterId !== user.id && !isAdmin)
+    throw new Error("Forbidden: only the requester or an admin can submit this change")
+  if (change.status !== "draft") throw new Error("Only draft changes can be submitted")
+
+  const updated = await db.changeRequest.update({ where: { id }, data: { status: "pending" } })
+  await db.auditLog.create({
+    data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
+  })
+
+  // notify OpCo approvers (moved here from createChange)
   const approvers = await db.userOpCoAssignment.findMany({
-    where: { opcoId: opco.id, role: "approver", isActive: true },
+    where: { opcoId: change.opcoId, role: "approver", isActive: true },
     include: { user: true },
   })
   await Promise.allSettled(approvers.map((a) =>
@@ -90,8 +114,7 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
       riskLevel: change.riskLevel, changeId: change.id,
     })
   ))
-
-  return change
+  return updated
 }
 
 const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {

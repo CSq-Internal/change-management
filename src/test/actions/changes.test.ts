@@ -1,5 +1,5 @@
 // src/test/actions/changes.test.ts
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/session', () => ({
   getAppSession: vi.fn().mockResolvedValue({
@@ -19,7 +19,8 @@ const mockDb = {
       Promise.resolve({ id: 'cr-new', status: 'draft', ...(data as object) })
     ),
     findUnique: vi.fn().mockResolvedValue({
-      id: 'cr-1', status: 'draft', opco: { slug: 'ghana' },
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
     }),
     update: vi.fn().mockResolvedValue({ id: 'cr-1', status: 'pending' }),
   },
@@ -32,8 +33,17 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-import { listChanges, createChange, updateChangeStatus } from '@/server/actions/changes'
+vi.mock('@/server/email', () => ({
+  sendApprovalRequestEmail: vi.fn().mockResolvedValue(undefined),
+}))
+
+import { listChanges, createChange, updateChangeStatus, submitChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
+import { sendApprovalRequestEmail } from '@/server/email'
+
+beforeEach(() => {
+  vi.mocked(sendApprovalRequestEmail).mockClear()
+})
 
 const ugandaSession = {
   keycloakId: 'kc-ug', email: 'ug@csquared.com', name: 'UG',
@@ -85,6 +95,15 @@ describe('createChange', () => {
       contactEmail: 'x@csquared.com', infrastructureType: 'Wifi',
     })).rejects.toThrow(/Forbidden/)
   })
+
+  it('does NOT call sendApprovalRequestEmail on draft creation', async () => {
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config',
+      category: 'config', riskLevel: 'low',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+    })
+    expect(vi.mocked(sendApprovalRequestEmail)).not.toHaveBeenCalled()
+  })
 })
 
 describe('updateChangeStatus — OpCo authorization', () => {
@@ -98,5 +117,51 @@ describe('updateChangeStatus — OpCo authorization', () => {
     // module-level session is ghana/requester; change.opco.slug = ghana
     const result = await updateChangeStatus('cr-1', 'pending')
     expect(result).toHaveProperty('status', 'pending')
+  })
+})
+
+describe('submitChange', () => {
+  it('transitions a draft to pending and writes a submitted audit row', async () => {
+    const result = await submitChange('cr-1')
+    expect(result).toHaveProperty('status', 'pending')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-1' },
+      data: { status: 'pending' },
+    })
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'submitted', fromStatus: 'draft', toStatus: 'pending' }),
+      })
+    )
+  })
+
+  it('calls sendApprovalRequestEmail for each approver', async () => {
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { user: { email: 'approver1@csquared.com', name: 'Approver One' } },
+      { user: { email: 'approver2@csquared.com', name: 'Approver Two' } },
+    ])
+    await submitChange('cr-1')
+    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'approver1@csquared.com' })
+    )
+    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'approver2@csquared.com' })
+    )
+  })
+
+  it('throws when the change is not a draft', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow('Only draft changes can be submitted')
+  })
+
+  it('throws Forbidden when caller is neither requester nor admin', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
+    // change.requesterId is 'user-1', not 'user-ug', and ugandaSession has no admin role
+    await expect(submitChange('cr-1')).rejects.toThrow(/Forbidden/)
   })
 })
