@@ -3,18 +3,21 @@
 Next.js app for internal change control: submit requests, approve, implement, and audit. This is a minimal stub you can deploy and extend.
 
 ## Tech
+
 - Next.js (App Router, TS)
 - TailwindCSS
 - Zustand state store (in-memory for now)
 - Zod ready for schema validation
 
 ## Run
+
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ## Roadmap
+
 - Auth (NextAuth, SSO)
 - Persistence (Postgres + Prisma) with full audit trails
 - Role-based access control
