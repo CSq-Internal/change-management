@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -90,7 +91,11 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
         return (
           <Card key={c.id} className="border-border/80 bg-card/95">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base line-clamp-2 sm:line-clamp-1">{c.title}</CardTitle>
+              <CardTitle className="text-base line-clamp-2 sm:line-clamp-1">
+                <Link href={`/changes/${c.id}`} className="hover:underline">
+                  {c.title}
+                </Link>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">{c.description}</p>
