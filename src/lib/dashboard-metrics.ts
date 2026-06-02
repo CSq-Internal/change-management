@@ -43,3 +43,17 @@ export function durLabel(ms: number): string {
   const m = Math.round((abs - h * 3600_000) / 60_000)
   return h >= 1 ? `${h}h` : `${m}m`
 }
+
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+const pad = (n: number) => String(n).padStart(2, "0")
+
+/** "Tonight 21:00" / "Tomorrow 08:00" / "Wed 14:00", relative to nowMs. */
+export function whenLabel(whenMs: number, nowMs: number): string {
+  const d = new Date(whenMs)
+  const startOfDay = (ms: number) => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime() }
+  const dayDelta = Math.round((startOfDay(whenMs) - startOfDay(nowMs)) / 86_400_000)
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (dayDelta <= 0) return `${d.getHours() >= 18 ? "Tonight" : "Today"} ${hm}`
+  if (dayDelta === 1) return `Tomorrow ${hm}`
+  return `${DOW[d.getDay()]} ${hm}`
+}
