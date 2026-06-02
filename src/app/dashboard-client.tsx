@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { LayoutGrid, ListChecks, ChartBar } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
@@ -21,11 +21,16 @@ export interface DashboardProps {
 
 export default function DashboardClient({ data, blackouts, feed, blackoutCount }: DashboardProps) {
   const { language } = useStore()
-  const [tab, setTab] = useState<TabKey>(() => {
-    if (typeof window === "undefined") return "triage"
-    const saved = localStorage.getItem("csq-dashboard-tab") as TabKey | null
-    return saved === "monitor" || saved === "triage" || saved === "report" ? saved : "triage"
-  })
+  const [tab, setTab] = useState<TabKey>("triage")
+  // Restore the last-used tab from localStorage AFTER mount, so SSR and the first
+  // client render both show "triage" (no hydration mismatch), then sync.
+  useEffect(() => {
+    const saved = localStorage.getItem("csq-dashboard-tab")
+    if (saved === "monitor" || saved === "triage" || saved === "report") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTab(saved)
+    }
+  }, [])
   const select = (k: TabKey) => { setTab(k); localStorage.setItem("csq-dashboard-tab", k) }
 
   const triageCount = data.triage.overdue.length + data.triage.awaiting.length + data.triage.advance.length
