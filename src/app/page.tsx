@@ -1,50 +1,76 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupAdmin, isGroupLevel } from "@/lib/permissions"
-import { t } from "@/lib/i18n"
+import { isGroupLevel } from "@/lib/permissions"
+import { buildDashboardData, durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
+import type { FeedEvent } from "@/components/dashboard/monitor-view"
+
+const initials = (name: string | null, email: string) => {
+  const src = (name ?? email.split("@")[0] ?? "").trim()
+  const parts = src.split(/[ .]+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?"
+}
+const FEED_TONE: Record<string, string> = {
+  submit: "bg-amber-500", approve: "bg-emerald-500", reject: "bg-rose-500",
+  implement: "bg-blue-500", verify: "bg-violet-500", breach: "bg-rose-500",
+}
 
 export default async function Home() {
   const session = await auth()
   if (!session) redirect("/login")
 
   const db = getPrisma()
+  // eslint-disable-next-line react-hooks/purity -- async server component, not a hook; Date.now() is safe here
+  const now = Date.now()
   const groupLevel = isGroupLevel(session.user.realmRoles)
   const opcoSlugs = session.user.organizations.map((o) => o.alias)
   const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
 
-  const [myRequests, pendingApprovals, activeChanges, auditReady, recent] = await Promise.all([
-    db.changeRequest.count({ where: { requester: { keycloakId: session.user.keycloakId }, ...opcoFilter } }),
-    db.changeRequest.count({ where: { status: "pending", ...opcoFilter } }),
-    db.changeRequest.count({ where: { status: { in: ["approved", "implemented"] }, ...opcoFilter } }),
-    db.changeRequest.count({ where: { status: "closed", ...opcoFilter } }),
+  const [rows, blackoutRows, auditRows] = await Promise.all([
     db.changeRequest.findMany({
       where: opcoFilter,
-      orderBy: { updatedAt: "desc" },
-      take: 10,
-      select: { id: true, title: true, status: true, updatedAt: true },
+      select: {
+        id: true, title: true, status: true, riskLevel: true, isEmergency: true,
+        slaDeadline: true, plannedStart: true,
+        opco: { select: { name: true, slug: true } },
+        requester: { select: { name: true, email: true } },
+      },
+    }),
+    db.blackoutPeriod.findMany({
+      where: { startsAt: { lte: new Date(now) }, endsAt: { gte: new Date(now) }, ...(groupLevel ? {} : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }) },
+      select: { id: true, label: true, endsAt: true, opco: { select: { name: true } } },
+    }),
+    db.auditLog.findMany({
+      where: { change: opcoFilter },
+      orderBy: { at: "desc" },
+      take: 8,
+      select: { id: true, action: true, at: true, change: { select: { id: true } }, actor: { select: { name: true, email: true } } },
     }),
   ])
 
-  const email = session.user.email ?? ""
-  const welcomeName = email.toLowerCase().endsWith("@csquared.com")
-    ? email.split("@")[0] || t("en", "dashboard.fallbackName")
-    : session.user.name ?? t("en", "dashboard.fallbackName")
+  const changes: DashboardChange[] = rows.map((r) => ({
+    id: r.id, title: r.title, status: r.status, riskLevel: r.riskLevel, isEmergency: r.isEmergency,
+    slaDeadline: r.slaDeadline?.toISOString() ?? null,
+    plannedStart: r.plannedStart?.toISOString() ?? null,
+    opcoName: r.opco.name, opcoSlug: r.opco.slug,
+    ownerInitials: initials(r.requester.name, r.requester.email),
+  }))
 
-  const isApprover = session.user.organizations.some(
-    (o) => o.roles.includes("approver") || o.roles.includes("admin")
-  ) || isGroupAdmin(session.user.realmRoles)
+  const data = buildDashboardData(changes, now)
 
-  return (
-    <DashboardClient
-      myRequests={myRequests}
-      pendingApprovals={pendingApprovals}
-      activeChanges={activeChanges}
-      auditReady={auditReady}
-      recent={recent}
-      welcomeName={welcomeName}
-      isApprover={isApprover}
-    />
-  )
+  const blackouts = blackoutRows.map((b) => ({
+    id: b.id, label: b.label, scope: b.opco?.name ?? "Group",
+    endsIn: durLabel(b.endsAt.getTime() - now), amber: b.endsAt.getTime() - now < 12 * 3600_000,
+  }))
+
+  const feed: FeedEvent[] = auditRows.map((a) => ({
+    id: a.id, changeId: a.change.id,
+    label: a.action,
+    actor: a.actor.name ?? a.actor.email.split("@")[0],
+    ago: `${durLabel(now - a.at.getTime())} ago`,
+    tone: FEED_TONE[a.action] ?? "bg-slate-400",
+  }))
+
+  return <DashboardClient data={data} blackouts={blackouts} feed={feed} blackoutCount={blackouts.length} />
 }
