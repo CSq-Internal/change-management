@@ -15,6 +15,8 @@ const FEED_TONE: Record<string, string> = {
   submit: "bg-amber-500", approve: "bg-emerald-500", reject: "bg-rose-500",
   implement: "bg-blue-500", verify: "bg-violet-500", breach: "bg-rose-500",
 }
+// A blackout ending within this window is flagged amber (vs. red) in the UI.
+const BLACKOUT_ENDING_SOON_MS = 12 * 3600_000
 
 export default async function Home() {
   const session = await auth()
@@ -61,7 +63,7 @@ export default async function Home() {
 
   const blackouts = blackoutRows.map((b) => ({
     id: b.id, label: b.label, scope: b.opco?.name ?? "Group",
-    endsIn: durLabel(b.endsAt.getTime() - now), amber: b.endsAt.getTime() - now < 12 * 3600_000,
+    endsIn: durLabel(b.endsAt.getTime() - now), amber: b.endsAt.getTime() - now < BLACKOUT_ENDING_SOON_MS,
   }))
 
   const feed: FeedEvent[] = auditRows.map((a) => ({

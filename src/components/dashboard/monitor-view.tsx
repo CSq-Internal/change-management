@@ -1,10 +1,9 @@
 import { Activity, Lock, Globe, TriangleAlert } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { t, type Language } from "@/lib/i18n"
-import { RISK_ORDER, type DashboardData, type RiskLevelName } from "@/lib/dashboard-metrics"
+import { RISK_ORDER, type DashboardData } from "@/lib/dashboard-metrics"
 import { OpcoBars } from "./charts"
-
-const RISK_HEX: Record<RiskLevelName, string> = { low: "#10b981", medium: "#f59e0b", high: "#f97316", emergency: "#f43f5e" }
+import { RISK_HEX } from "./chart-colors"
 const STATUS_DOT: Record<string, string> = {
   draft: "bg-zinc-400", pending: "bg-amber-500", approved: "bg-emerald-500",
   implemented: "bg-blue-500", verified: "bg-violet-500", closed: "bg-slate-500",

@@ -1,14 +1,6 @@
 import type { ChangeStatusName, NamedCount, RiskLevelName } from "@/lib/dashboard-metrics"
 import { RISK_ORDER } from "@/lib/dashboard-metrics"
-
-// SVG fills must be concrete colors; keep all chart hex isolated here.
-const RISK_HEX: Record<RiskLevelName, string> = {
-  low: "#10b981", medium: "#f59e0b", high: "#f97316", emergency: "#f43f5e",
-}
-const STATUS_HEX: Record<ChangeStatusName, string> = {
-  draft: "#a1a1aa", pending: "#f59e0b", approved: "#10b981", rejected: "#f43f5e",
-  implemented: "#3b82f6", verified: "#8b5cf6", closed: "#64748b",
-}
+import { RISK_HEX, STATUS_HEX } from "./chart-colors"
 
 export function RiskDonut({ riskOpen }: { riskOpen: Record<RiskLevelName, number> }) {
   const segs = RISK_ORDER.map((r) => ({ r, v: riskOpen[r] })).filter((s) => s.v > 0)
