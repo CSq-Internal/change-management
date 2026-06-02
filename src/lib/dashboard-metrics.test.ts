@@ -74,7 +74,7 @@ test("buildDashboardData matches the approved mock", () => {
   expect(d.counts.readyToAdvance).toBe(5)  // 3 approved + 2 implemented
 
   // triage worklist grouping
-  expect(d.triage.overdue.map((w) => w.id)).toEqual(["CHG-1055", "CHG-1047"]) // soonest-breached first
+  expect(d.triage.overdue.map((w) => w.id)).toEqual(["CHG-1047", "CHG-1055"]) // most-overdue first
   expect(d.triage.awaiting.map((w) => w.id)).toEqual(["CHG-1043", "CHG-1042", "CHG-1052"])
   expect(d.triage.advance).toHaveLength(5)
   expect(d.triage.overdue[0].severity).toBe("over")

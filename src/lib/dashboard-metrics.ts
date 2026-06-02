@@ -97,9 +97,8 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
     (a.slaDeadline ? Date.parse(a.slaDeadline) : Infinity) -
     (b.slaDeadline ? Date.parse(b.slaDeadline) : Infinity)
 
-  // "soonest-breached first" = most recently breached = highest (least-negative) deadline first
-  const overdueChanges = open.filter((c) => c.status === "pending" && breachedOf(c))
-    .sort((a, b) => (b.slaDeadline ? Date.parse(b.slaDeadline) : -Infinity) - (a.slaDeadline ? Date.parse(a.slaDeadline) : -Infinity))
+  // most-overdue first = earliest deadline first (matches the mock's worklist order)
+  const overdueChanges = open.filter((c) => c.status === "pending" && breachedOf(c)).sort(bySla)
   const awaitingChanges = open
     .filter((c) => c.status === "pending" && !breachedOf(c)).sort(bySla)
   const advanceChanges = open
