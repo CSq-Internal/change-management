@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard — three jobs · CSquared Change Management (v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* =============================================================
+ *  v2 — vary by JOB + LAYOUT, hold skin + audience constant.
+ *  One light, on-brand visual system shared by all three.
+ * ============================================================= */
+:root{
+  --navy:#0a3d91; --navy2:#0c4cb0; --ink:#0c1220; --ink2:#1a2231; --muted:#667085; --faint:#98a2b3;
+  --line:#e6eaf0; --line2:#eef1f6; --bg:#eef2f7; --card:#ffffff;
+  --cyan:#00a3ff; --teal:#14b8a6; --rose:#e11d48; --amber:#f59e0b; --orange:#f97316; --emerald:#10b981; --violet:#8b5cf6; --blue:#3b82f6; --slate:#64748b;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08);
+  --shadow-lg:0 1px 2px rgba(16,24,40,.06),0 14px 36px -12px rgba(16,24,40,.22);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Space Grotesk",system-ui,sans-serif;background:var(--bg);
+  background-image:radial-gradient(1100px 560px at 18% -8%, #f5f8fc 0, transparent 60%);
+  color:var(--ink);-webkit-font-smoothing:antialiased;padding:34px 30px 70px}
+
+/* ---- page header ---- */
+.page-head{max-width:1860px;margin:0 auto 26px}
+.page-head .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--navy);font-weight:600;margin:0 0 10px}
+.page-head h1{font-family:"Fraunces",serif;font-weight:400;font-size:33px;line-height:1.12;margin:0;letter-spacing:-.01em;color:var(--ink)}
+.page-head h1 em{font-style:italic;color:var(--navy)}
+.page-head p{margin:10px 0 0;color:#4b5563;font-size:14.5px;max-width:820px;line-height:1.55}
+.page-head .note{margin-top:8px;font-size:13px;color:#7a8699}
+.page-head .note b{color:var(--ink2);font-weight:600}
+
+/* ---- board ---- */
+.board{max-width:1860px;margin:0 auto;display:grid;grid-template-columns:repeat(3,minmax(540px,1fr));gap:26px;align-items:start}
+@media (max-width:1180px){.board{grid-template-columns:1fr}body{padding:24px 16px 60px}}
+.panel{min-width:0}
+
+/* concept header strip (identical framing for all three) */
+.phead{padding:0 2px 14px;position:relative}
+.phead .row1{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.phead .ix{font-family:"Fraunces",serif;font-size:13px;font-weight:500;color:var(--muted)}
+.phead .name{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.phead .rec{margin-left:auto;font-size:10.5px;font-weight:600;color:#0a7d52;background:#e7f8ef;border:1px solid #c7eedd;border-radius:999px;padding:2px 9px;letter-spacing:.02em}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 11px}
+.tag{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:#475467;font-weight:500}
+.tag.job{background:var(--navy);border-color:var(--navy);color:#fff}
+.tag.layout{background:#eef4ff;border-color:#d6e4ff;color:#1e40af}
+.density{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:11px}
+.meter{display:flex;gap:3px}.meter i{width:22px;height:5px;border-radius:3px;background:#d6dae1}.meter i.on{background:var(--navy)}
+.tradeoff{font-size:12.5px;line-height:1.5;color:#3f4754;border-left:3px solid var(--cyan);padding:6px 0 6px 12px}
+.tradeoff b{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px;color:#7a8699}
+
+/* ---- shared mock window chrome (same skin everywhere) ---- */
+.mock{border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(16,24,40,.08)}
+.mbar{display:flex;align-items:center;gap:9px;padding:10px 14px;background:#fff;border-bottom:1px solid var(--line);font-size:12.5px;color:#475467}
+.mbar .logo{width:22px;height:22px;border-radius:6px;background:var(--navy);color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;font-family:"Fraunces",serif}
+.mbar .brand{font-weight:600;color:var(--ink2)}
+.mbar .crumb{color:var(--faint)}
+.mbar .avatar{margin-left:auto;width:24px;height:24px;border-radius:50%;background:#0c4cb0;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.screen{background:var(--bg);padding:16px}
+
+/* shared atoms */
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);padding:15px}
+.pcard+.pcard{margin-top:12px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.ph h3{margin:0;font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px}
+.ph h3 svg{stroke:var(--navy)}
+.ph .more{font-size:12px;color:var(--cyan);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;font-size:10.5px;font-weight:600;padding:2px 8px;text-transform:capitalize;white-space:nowrap}
+.s-draft{background:#e4e4e7;color:#3f3f46}.s-pending{background:#fef3c7;color:#92400e}.s-approved{background:#d1fae5;color:#065f46}
+.s-rejected{background:#ffe4e6;color:#9f1239}.s-implemented{background:#dbeafe;color:#1e40af}.s-verified{background:#ede9fe;color:#5b21b6}.s-closed{background:#e2e8f0;color:#334155}
+.r-low{background:#d1fae5;color:#065f46}.r-medium{background:#fef3c7;color:#92400e}.r-high{background:#ffedd5;color:#9a3412}.r-emergency{background:#ffe4e6;color:#9f1239}
+svg.ic{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.av{width:24px;height:24px;border-radius:50%;font-size:9.5px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;flex:none}
+
+/* =================  ① MONITOR · STATUS WALL  ================= */
+.wall .alert{display:flex;gap:10px;align-items:center;background:linear-gradient(90deg,#fff1f3,#fff);border:1px solid #fbd0d8;border-radius:12px;padding:11px 14px;margin-bottom:12px}
+.wall .alert .big{font-family:"JetBrains Mono",monospace;font-size:20px;font-weight:600;color:var(--rose)}
+.wall .alert .lbl{font-size:12.5px;color:#9f1239;font-weight:500}
+.wall .alert .sep{width:1px;height:26px;background:#f3c4cd;margin:0 4px}
+.wall .alert .amb .big{color:var(--amber)}.wall .alert .amb .lbl{color:#92560a}
+.wall .alert .ar{display:flex;align-items:center;gap:8px}
+.wall .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px;box-shadow:var(--shadow)}
+.tile .tt{display:flex;align-items:center;justify-content:space-between}
+.tile .tn{font-size:11px;text-transform:capitalize;color:var(--muted);font-weight:600}
+.tile .dotk{width:8px;height:8px;border-radius:50%}
+.tile .tc{font-size:30px;font-weight:600;color:var(--ink);line-height:1;margin:7px 0 9px;font-feature-settings:"tnum"}
+.tile .mini{display:flex;height:5px;border-radius:3px;overflow:hidden;background:#f1f3f7}
+.tile .mini i{height:100%}
+.tile .sub{font-size:10.5px;color:var(--faint);margin-top:7px}
+.wall .lower{display:grid;grid-template-columns:1.45fr 1fr;gap:11px}
+@media (max-width:560px){.wall .lower{grid-template-columns:1fr}}
+.feed{max-height:236px;overflow:auto}
+.fe{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line2)}
+.fe:first-child{border-top:none}
+.fe .fdot{margin-top:5px;width:8px;height:8px;border-radius:50%;flex:none}
+.fe .ft{font-size:12.5px;color:var(--ink2)}
+.fe .ft b{font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:600;color:var(--navy)}
+.fe .fm{font-size:11px;color:var(--faint);margin-top:1px}
+.miniblk .mb{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--line2);font-size:12px}
+.miniblk .mb:first-of-type{border-top:none}
+.miniblk .mb .lk{color:var(--rose);margin-top:1px}.miniblk .mb .lk.amb{color:var(--amber)}
+.miniblk .mb .mt{color:var(--ink2)}.miniblk .mb .mm{color:var(--faint);font-size:11px;margin-top:1px}
+.opbar{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12px;color:var(--muted)}
+.opbar .on{width:60px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink2);font-weight:500}
+.opbar .ob{flex:1;height:7px;border-radius:4px;background:#eef1f6;overflow:hidden}
+.opbar .ob i{display:block;height:100%;background:linear-gradient(90deg,var(--navy),var(--cyan));border-radius:4px}
+.opbar .oc{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);width:14px;text-align:right}
+
+/* =================  ② TRIAGE · ACTION WORKLIST  ============= */
+.work .summary{display:flex;gap:8px;margin-bottom:12px}
+.work .sc{flex:1;background:#fff;border:1px solid var(--line);border-radius:11px;padding:9px 12px;box-shadow:var(--shadow)}
+.work .sc .n{font-size:21px;font-weight:600;line-height:1;font-feature-settings:"tnum"}
+.work .sc .l{font-size:10.5px;color:var(--muted);margin-top:4px;font-weight:500}
+.work .sc.red .n{color:var(--rose)}.work .sc.amb .n{color:var(--amber)}.work .sc.nv .n{color:var(--navy)}
+.wgroup{margin-bottom:7px}
+.wgh{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:14px 4px 8px}
+.wgh .gc{margin-left:auto;font-family:"JetBrains Mono",monospace;color:var(--faint);letter-spacing:0}
+.wgh .gd{width:8px;height:8px;border-radius:50%}
+.wi{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--line);border-left-width:3px;border-radius:11px;padding:11px 13px;box-shadow:var(--shadow)}
+.wi+.wi{margin-top:7px}
+.wi.over{border-left-color:var(--rose)}.wi.soon{border-left-color:var(--amber)}.wi.go{border-left-color:var(--navy)}
+.wi .mid{flex:1;min-width:0}
+.wi .t{font-size:13px;font-weight:500;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wi .m{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.wi .m .id{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--faint)}
+.wi .why{font-weight:500}
+.wi .why.bad{color:var(--rose)}.wi .why.warn{color:#b45309}
+.wi .acts{display:flex;gap:6px;flex:none}
+.wi .acts button{font:inherit;font-size:11.5px;font-weight:500;border-radius:8px;padding:5px 11px;cursor:pointer;border:1px solid}
+.wi .acts .ok{background:var(--navy);color:#fff;border-color:var(--navy)}
+.wi .acts .no{background:#fff;color:var(--muted);border-color:#dfe4ea}
+
+/* =================  ③ REPORT · HEALTH REVIEW  ============== */
+.report .head{margin-bottom:13px}
+.report .head .t{font-family:"Fraunces",serif;font-size:21px;color:var(--ink);font-weight:500;letter-spacing:-.01em}
+.report .head .s{font-size:12.5px;color:var(--muted);margin-top:3px}
+.report .narr{font-size:12.5px;line-height:1.55;color:#3f4754;background:#f6f9fe;border:1px solid #e3edfb;border-radius:11px;padding:11px 13px;margin-bottom:12px}
+.report .narr b{color:var(--ink2);font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:12px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;box-shadow:var(--shadow)}
+.kpi .l{font-size:11px;color:var(--muted);font-weight:500}
+.kpi .n{font-size:25px;font-weight:600;margin-top:5px;line-height:1;font-feature-settings:"tnum"}
+.kpi .d{font-size:11px;margin-top:5px;display:flex;align-items:center;gap:5px;color:var(--faint)}
+.kpi .d .up{color:#0a7d52}.kpi .d .dn{color:var(--rose)}
+.chart-x{display:flex;justify-content:space-between;font-size:9.5px;color:var(--faint);font-family:"JetBrains Mono",monospace;margin-top:5px}
+.legend2{display:flex;gap:14px;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.legend2 span{display:flex;align-items:center;gap:6px}.legend2 span i{width:10px;height:3px;border-radius:2px}
+.report .two{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media (max-width:560px){.report .two{grid-template-columns:1fr}}
+.donutwrap{display:flex;align-items:center;gap:14px}
+.donutwrap .dl{flex:1}
+.donutwrap .dl>span{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);padding:2px 0}
+.donutwrap .dl i{width:9px;height:9px;border-radius:3px;margin-right:6px;display:inline-block;vertical-align:middle}
+.donutwrap .dl>span b{color:var(--ink2);font-weight:600;font-family:"JetBrains Mono",monospace}
+.donut-center{font-size:11px;fill:var(--muted)}.donut-num{font-size:20px;font-weight:600;fill:var(--ink)}
+.statd{display:flex;height:13px;border-radius:7px;overflow:hidden;background:#eef1f6;margin-bottom:9px}
+.statd i{height:100%}
+.statleg{display:flex;flex-wrap:wrap;gap:9px}.statleg span{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}.statleg span i{width:8px;height:8px;border-radius:2px}.statleg b{color:var(--ink2);font-weight:600}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8"/><path d="M17 7h4v4"/></symbol>
+  <symbol id="i-bar" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></symbol>
+  <symbol id="i-pie" viewBox="0 0 24 24"><path d="M12 2v10l8.5 5"/><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+</svg>
+
+<header class="page-head">
+  <p class="eyebrow">CSquared Change Management · Dashboard exploration · set v2</p>
+  <h1>One dashboard, <em>three jobs.</em></h1>
+  <p>This round varies along two axes only — the <b>job</b> the dashboard does and the <b>layout</b> that serves it. Monitor, triage, report.</p>
+  <p class="note">Held constant on purpose: <b>same skin</b> (light, navy/cyan, Space Grotesk) and <b>same audience</b> (the change coordinator who opens this daily), so the structure is what you're judging — not the paint. Same dataset as set v1.</p>
+</header>
+
+<main class="board">
+
+  <!-- ① MONITOR · STATUS WALL -->
+  <section class="panel wall">
+    <div class="phead">
+      <div class="row1"><span class="ix">①</span><span class="name">Status Wall</span></div>
+      <div class="tags"><span class="tag job">Monitor</span><span class="tag layout">Status tiles + live feed</span></div>
+      <div class="density"><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i></span> Glanceable, state-first</div>
+      <div class="tradeoff"><b>Trade-off</b>Maximizes awareness, not action — you see the whole state at a glance, but it doesn’t tell you what to do about any of it.</div>
+    </div>
+    <div class="mock">
+      <div class="mbar"><span class="logo">C²</span><span class="brand">CSquared</span><span class="crumb">/ Dashboard</span><span class="avatar">DK</span></div>
+      <div class="screen">
+        <div class="alert">
+          <div class="ar"><span class="big" data-bind="breach">2</span><span class="lbl">SLA<br>breached</span></div>
+          <span class="sep"></span>
+          <div class="ar amb"><span class="big" data-bind="atrisk">3</span><span class="lbl">at<br>risk</span></div>
+          <span class="sep"></span>
+          <div class="ar"><svg class="ic" style="stroke:#9f1239"><use href="#i-alert"/></svg><span class="lbl" style="color:#6b3b18">Both overdue items are high-risk network work</span></div>
+        </div>
+        <div class="tiles" id="wall-tiles"></div>
+        <div class="lower">
+          <div class="pcard">
+            <div class="ph"><h3><svg class="ic"><use href="#i-act"/></svg> Live activity</h3><span class="more">Stream</span></div>
+            <div class="feed" id="wall-feed"></div>
+          </div>
+          <div class="pcard miniblk">
+            <div class="ph"><h3><svg class="ic"><use href="#i-lock"/></svg> Active blackouts</h3></div>
+            <div id="wall-blackouts"></div>
+            <div class="ph" style="margin:14px 0 9px"><h3><svg class="ic"><use href="#i-globe"/></svg> Open by OpCo</h3></div>
+            <div id="wall-opco"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② TRIAGE · ACTION WORKLIST -->
+  <section class="panel work">
+    <div class="phead">
+      <div class="row1"><span class="ix">②</span><span class="name">Action Worklist</span><span class="rec">★ Recommended</span></div>
+      <div class="tags"><span class="tag job">Triage</span><span class="tag layout">Prioritized worklist</span></div>
+      <div class="density"><span class="meter"><i class="on"></i><i class="on"></i><i></i></span> Focused, action-first</div>
+      <div class="tradeoff"><b>Trade-off</b>Optimizes for doing, not seeing the whole — fast to act on the top of the list, but the big picture and trends recede.</div>
+    </div>
+    <div class="mock">
+      <div class="mbar"><span class="logo">C²</span><span class="brand">CSquared</span><span class="crumb">/ Dashboard</span><span class="avatar">DK</span></div>
+      <div class="screen">
+        <div class="summary">
+          <div class="sc red"><div class="n" data-bind="breach">2</div><div class="l">Overdue</div></div>
+          <div class="sc nv"><div class="n" data-bind="pending">5</div><div class="l">To decide</div></div>
+          <div class="sc amb"><div class="n" id="work-advance-n">5</div><div class="l">To advance</div></div>
+          <div class="sc"><div class="n" id="work-sched-n">1</div><div class="l">Scheduled today</div></div>
+        </div>
+        <div class="pcard" style="padding:13px 14px">
+          <div class="ph" style="margin-bottom:4px"><h3><svg class="ic"><use href="#i-list"/></svg> Your worklist</h3><span class="more">Sorted by urgency</span></div>
+          <div id="work-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ REPORT · HEALTH REVIEW -->
+  <section class="panel report">
+    <div class="phead">
+      <div class="row1"><span class="ix">③</span><span class="name">Health Review</span></div>
+      <div class="tags"><span class="tag job">Report</span><span class="tag layout">KPIs + trend charts</span></div>
+      <div class="density"><span class="meter"><i class="on"></i><i class="on"></i><i></i></span> Periodic, share-ready</div>
+      <div class="tradeoff"><b>Trade-off</b>Built for reporting, not operating — great for a weekly review or sharing upward, but you can’t act on anything from it.</div>
+    </div>
+    <div class="mock">
+      <div class="mbar"><span class="logo">C²</span><span class="brand">CSquared</span><span class="crumb">/ Dashboard</span><span class="avatar">DK</span></div>
+      <div class="screen">
+        <div class="pcard">
+          <div class="head"><div class="t">Change health</div><div class="s">Group · week of 1 Jun 2026 · all 6 OpCos</div></div>
+          <div class="narr">Throughput is up week-on-week, but <b>SLA compliance slipped to 86%</b> — two changes are currently overdue, both high-risk network work. Approvals are the bottleneck: 5 awaiting decision.</div>
+          <div class="kpis">
+            <div class="kpi"><div class="l">Open changes</div><div class="n" data-bind="open">12</div><div class="d"><span class="up">▲ 2</span> vs last week</div></div>
+            <div class="kpi"><div class="l">Closed this week</div><div class="n">12</div><div class="d"><span class="up">▲ 2</span> throughput</div></div>
+            <div class="kpi"><div class="l">SLA compliance</div><div class="n" style="color:#b45309">86%</div><div class="d"><span class="dn">▼ 4 pts</span> vs target 90%</div></div>
+            <div class="kpi"><div class="l">Avg approval time</div><div class="n">5.4h</div><div class="d"><span class="up">▲ 0.6h</span> slower</div></div>
+          </div>
+        </div>
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-trend"/></svg> Opened vs closed</h3><span class="more">8 weeks</span></div>
+          <div id="chart-throughput"></div>
+          <div class="legend2"><span><i style="background:var(--cyan)"></i>Opened</span><span><i style="background:var(--navy)"></i>Closed</span></div>
+        </div>
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-shield"/></svg> SLA compliance trend</h3><span class="more">target 90%</span></div>
+          <div id="chart-sla"></div>
+        </div>
+
+        <div class="two">
+          <div class="pcard">
+            <div class="ph"><h3><svg class="ic"><use href="#i-pie"/></svg> Risk mix</h3></div>
+            <div class="donutwrap"><div id="chart-donut"></div><div class="dl" id="donut-legend"></div></div>
+          </div>
+          <div class="pcard">
+            <div class="ph"><h3><svg class="ic"><use href="#i-bar"/></svg> Open by OpCo</h3></div>
+            <div id="report-opco"></div>
+          </div>
+        </div>
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-grid"/></svg> Status distribution</h3><span class="more">14 total</span></div>
+          <div class="statd" id="report-statd"></div>
+          <div class="statleg" id="report-statleg"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* ====== SAME DATASET AS v1 ====== */
+const SLA_HOURS={low:48,medium:24,high:4,emergency:1};
+const CHANGES=[
+  {id:"CHG-1042",t:"Backbone IP route table update",opco:"Ghana",risk:"medium",status:"pending",slaH:3.2,planH:50,own:"AM",em:false},
+  {id:"CHG-1043",t:"BGP peering change — Accra IXP",opco:"Ghana",risk:"high",status:"pending",slaH:1.1,planH:26,own:"KO",em:false},
+  {id:"CHG-1044",t:"DWDM card replacement — Kampala metro",opco:"Uganda",risk:"high",status:"approved",slaH:6.0,planH:14,own:"SN",em:false},
+  {id:"CHG-1045",t:"Firewall ruleset update — Lomé PoP",opco:"Togo",risk:"medium",status:"implemented",slaH:null,planH:-6,own:"DT",em:false},
+  {id:"CHG-1046",t:"OLT firmware upgrade — Lubumbashi",opco:"DRC",risk:"low",status:"draft",slaH:null,planH:null,own:"PM",em:false},
+  {id:"CHG-1047",t:"Core router OS patch — Monrovia",opco:"Liberia",risk:"high",status:"pending",slaH:-1.6,planH:30,own:"JG",em:false},
+  {id:"CHG-1048",t:"Submarine cable maintenance — Mauritius landing",opco:"Mauritius",risk:"emergency",status:"approved",slaH:0.4,planH:9,own:"RB",em:true},
+  {id:"CHG-1049",t:"VLAN re-segmentation — Kampala core",opco:"Uganda",risk:"medium",status:"verified",slaH:null,planH:-30,own:"SN",em:false},
+  {id:"CHG-1050",t:"Power redundancy test — Accra DC",opco:"Ghana",risk:"low",status:"closed",slaH:null,planH:-72,own:"AM",em:false},
+  {id:"CHG-1051",t:"MPLS LSP re-route — DRC backbone",opco:"DRC",risk:"high",status:"rejected",slaH:null,planH:null,own:"JG",em:false},
+  {id:"CHG-1052",t:"DNS resolver migration — group",opco:"Group",risk:"medium",status:"pending",slaH:13.5,planH:70,own:"LK",em:false},
+  {id:"CHG-1053",t:"Edge cache node deploy — Lomé",opco:"Togo",risk:"low",status:"approved",slaH:40.0,planH:74,own:"DT",em:false},
+  {id:"CHG-1054",t:"BGP community policy update — Mauritius",opco:"Mauritius",risk:"medium",status:"implemented",slaH:null,planH:-18,own:"RB",em:false},
+  {id:"CHG-1055",t:"Spectrum re-grooming — Kampala–Entebbe",opco:"Uganda",risk:"high",status:"pending",slaH:-0.3,planH:20,own:"SN",em:false},
+];
+const BLACKOUTS=[{label:"Year-end financial freeze",scope:"Group (all OpCos)",endsH:50,amber:false},{label:"Independence Day — Ghana",scope:"Ghana",endsH:6,amber:true}];
+const STATUS_ORDER=["draft","pending","approved","implemented","verified","closed"];
+const STATUS_COLOR={draft:"#a1a1aa",pending:"#f59e0b",approved:"#10b981",rejected:"#f43f5e",implemented:"#3b82f6",verified:"#8b5cf6",closed:"#64748b"};
+const RISK_ORDER=["low","medium","high","emergency"];
+const RISK_COLOR={low:"#10b981",medium:"#f59e0b",high:"#f97316",emergency:"#f43f5e"};
+const OPEN=s=>s!=="closed"&&s!=="rejected";
+const t0=Date.now();
+CHANGES.forEach(c=>{c.sla=c.slaH==null?null:t0+c.slaH*3600e3;c.planAt=c.planH==null?null:t0+c.planH*3600e3;});
+
+const M={open:CHANGES.filter(c=>OPEN(c.status)).length,pending:CHANGES.filter(c=>c.status==="pending").length,
+  breach:CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla<t0).length,
+  atrisk:CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla>=t0&&c.sla-t0<4*3600e3).length,
+  emerg:CHANGES.filter(c=>OPEN(c.status)&&c.em).length};
+document.querySelectorAll("[data-bind]").forEach(el=>{if(M[el.dataset.bind]!=null)el.textContent=M[el.dataset.bind];});
+
+const pad=n=>String(n).padStart(2,"0");
+const byStatus=s=>CHANGES.filter(c=>c.status===s).length;
+function dur(ms){const a=Math.abs(ms);const h=Math.floor(a/3600e3);const m=Math.round((a-h*3600e3)/60e3);return h>=1?h+"h":m+"m";}
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function whenLabel(ms){const d=new Date(ms);const sod=x=>{const y=new Date(x);y.setHours(0,0,0,0);return y.getTime();};
+  const dd=Math.round((sod(ms)-sod(Date.now()))/86400e3),hm=pad(d.getHours())+":"+pad(d.getMinutes());
+  if(dd<=0)return(d.getHours()>=18?"Tonight ":"Today ")+hm; if(dd===1)return"Tomorrow "+hm; return DOW[d.getDay()]+" "+hm;}
+const pillHTML=(k,v)=>`<span class="pill ${k}-${v}">${v}</span>`;
+const AVCOL={AM:"#0c8a5a",KO:"#2563eb",SN:"#b45309",DT:"#be185d",PM:"#6d28d9",JG:"#b91c1c",RB:"#0e7490",LK:"#c2410c"};
+
+/* ① WALL */
+(function(){
+  const tiles=document.getElementById("wall-tiles");
+  tiles.innerHTML=STATUS_ORDER.map(s=>{
+    const inSt=CHANGES.filter(c=>c.status===s);
+    const mini=RISK_ORDER.map(r=>{const n=inSt.filter(c=>c.risk===r).length;return n?`<i style="flex:${n};background:${RISK_COLOR[r]}"></i>`:"";}).join("")||`<i style="flex:1;background:#e5e7eb"></i>`;
+    const awaiting=s==="pending"?`${inSt.length} awaiting decision`:s==="approved"?`ready to implement`:s==="implemented"?`awaiting verification`:`${inSt.length?inSt[0].opco+(inSt.length>1?" +"+(inSt.length-1):""):"—"}`;
+    return `<div class="tile"><div class="tt"><span class="tn">${s}</span><span class="dotk" style="background:${STATUS_COLOR[s]}"></span></div>
+      <div class="tc">${inSt.length}</div><div class="mini">${mini}</div><div class="sub">${awaiting}</div></div>`;
+  }).join("");
+
+  const feed=[
+    {id:"CHG-1055",ev:"submitted for approval",who:"S. Nakato",m:8,c:STATUS_COLOR.pending},
+    {id:"CHG-1047",ev:"SLA deadline breached",who:"system",m:18,c:"#e11d48"},
+    {id:"CHG-1044",ev:"approved by CAB",who:"D. Koranteng",m:41,c:STATUS_COLOR.approved},
+    {id:"CHG-1048",ev:"scheduled (emergency)",who:"R. Bappoo",m:55,c:STATUS_COLOR.approved},
+    {id:"CHG-1054",ev:"marked implemented",who:"R. Bappoo",m:88,c:STATUS_COLOR.implemented},
+    {id:"CHG-1051",ev:"rejected — insufficient backout",who:"D. Koranteng",m:120,c:"#f43f5e"},
+    {id:"CHG-1049",ev:"verified, ready to close",who:"S. Nakato",m:176,c:STATUS_COLOR.verified},
+  ];
+  document.getElementById("wall-feed").innerHTML=feed.map(f=>
+    `<div class="fe"><span class="fdot" style="background:${f.c}"></span><div><div class="ft"><b>${f.id}</b> ${f.ev}</div><div class="fm">${f.who} · ${dur(f.m*60e3)} ago</div></div></div>`
+  ).join("");
+
+  document.getElementById("wall-blackouts").innerHTML=BLACKOUTS.map(b=>
+    `<div class="mb"><svg class="ic lk ${b.amber?'amb':''}" style="width:13px;height:13px"><use href="#i-lock"/></svg><div><div class="mt">${b.label}</div><div class="mm">${b.scope} · ends in ${b.endsH}h</div></div></div>`
+  ).join("");
+
+  const opens=CHANGES.filter(c=>OPEN(c.status));
+  const opcos=[...new Set(opens.map(c=>c.opco))].map(o=>({o,n:opens.filter(c=>c.opco===o).length})).sort((a,b)=>b.n-a.n);
+  const mx=Math.max(...opcos.map(x=>x.n));
+  document.getElementById("wall-opco").innerHTML=opcos.map(x=>
+    `<div class="opbar"><span class="on">${x.o}</span><span class="ob"><i style="width:${x.n/mx*100}%"></i></span><span class="oc">${x.n}</span></div>`
+  ).join("");
+})();
+
+/* ② WORKLIST */
+(function(){
+  const breached=CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla<t0).sort((a,b)=>a.sla-b.sla);
+  const decide=CHANGES.filter(c=>c.status==="pending"&&!breached.includes(c)).sort((a,b)=>(a.sla??9e15)-(b.sla??9e15));
+  const advance=CHANGES.filter(c=>c.status==="approved"||c.status==="implemented").sort((a,b)=>(a.planAt??9e15)-(b.planAt??9e15));
+  document.getElementById("work-advance-n").textContent=advance.length;
+  const schedToday=CHANGES.filter(c=>c.planAt!=null&&c.planAt>=t0&&c.planAt-t0<24*3600e3&&OPEN(c.status)).length;
+  document.getElementById("work-sched-n").textContent=schedToday;
+
+  const row=(c,kind,why,whyCls,actions)=>`<div class="wi ${kind}">
+    <span class="av" style="background:${AVCOL[c.own]||'#64748b'}">${c.own}</span>
+    <div class="mid"><div class="t">${c.t}</div>
+      <div class="m"><span class="id">${c.id}</span> · ${c.opco} ${pillHTML('r',c.risk)} <span class="why ${whyCls}">${why}</span></div></div>
+    <div class="acts">${actions}</div></div>`;
+
+  const approveBtns=`<button class="ok">Approve</button><button class="no">Reject</button>`;
+  let html="";
+  html+=`<div class="wgh"><span class="gd" style="background:#e11d48"></span>Overdue · escalate<span class="gc">${breached.length}</span></div>`;
+  html+=breached.map(c=>row(c,"over",`SLA breached ${dur(c.sla-t0)} ago`,"bad",approveBtns)).join("");
+  html+=`<div class="wgh"><span class="gd" style="background:#f59e0b"></span>Awaiting your decision<span class="gc">${decide.length}</span></div>`;
+  html+=decide.map(c=>{const rem=c.sla-t0;const warn=rem<4*3600e3;return row(c,warn?"soon":"go",`${dur(rem)} to SLA`,warn?"warn":"",approveBtns);}).join("");
+  html+=`<div class="wgh"><span class="gd" style="background:#0a3d91"></span>Ready to advance<span class="gc">${advance.length}</span></div>`;
+  html+=advance.map(c=>{
+    if(c.status==="approved"){const why=c.planAt?`Approved · ${whenLabel(c.planAt)}`:"Approved · ready to implement";
+      return row(c,"go",why,"",`<button class="ok">${c.em?'Start now':'Advance'}</button><button class="no">Open</button>`);}
+    return row(c,"go","Implemented · ready to verify","",`<button class="ok">Verify</button><button class="no">Open</button>`);
+  }).join("");
+  document.getElementById("work-list").innerHTML=html;
+})();
+
+/* ③ REPORT */
+(function(){
+  // hand-authored 8-week history (illustrative trend)
+  const opened=[9,11,8,12,10,13,11,14], closed=[7,9,8,10,9,11,10,12], compliance=[82,85,80,88,86,90,84,86];
+  const W=480,H=148,pL=10,pR=10,pT=12,pB=20,plotW=W-pL-pR,plotH=H-pT-pB;
+  const ix=(i,n)=>pL+i*plotW/(n-1);
+  const line=(v,max)=>v.map((y,i)=>(i?"L":"M")+ix(i,v.length).toFixed(1)+" "+(pT+plotH-(y/max)*plotH).toFixed(1)).join(" ");
+  const area=(v,max)=>{let d="M"+pL+" "+(pT+plotH);v.forEach((y,i)=>d+=" L"+ix(i,v.length).toFixed(1)+" "+(pT+plotH-(y/max)*plotH).toFixed(1));return d+" L"+(W-pR)+" "+(pT+plotH)+" Z";};
+  const grid=[0,.5,1].map(f=>`<line x1="${pL}" y1="${(pT+plotH-f*plotH).toFixed(1)}" x2="${W-pR}" y2="${(pT+plotH-f*plotH).toFixed(1)}" stroke="#eef1f6" stroke-width="1"/>`).join("");
+
+  document.getElementById("chart-throughput").innerHTML=
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">${grid}
+     <path d="${area(opened,16)}" fill="rgba(0,163,255,.10)"/>
+     <path d="${line(opened,16)}" fill="none" stroke="#00a3ff" stroke-width="2.2"/>
+     <path d="${line(closed,16)}" fill="none" stroke="#0a3d91" stroke-width="2.2"/>
+     <circle cx="${ix(7,8).toFixed(1)}" cy="${(pT+plotH-14/16*plotH).toFixed(1)}" r="3.2" fill="#00a3ff"/>
+     <circle cx="${ix(7,8).toFixed(1)}" cy="${(pT+plotH-12/16*plotH).toFixed(1)}" r="3.2" fill="#0a3d91"/></svg>
+     <div class="chart-x"><span>8w ago</span><span>6w</span><span>4w</span><span>2w</span><span>now</span></div>`;
+
+  const cMin=70,cMax=100,cy=y=>pT+plotH-((y-cMin)/(cMax-cMin))*plotH;
+  const cline=compliance.map((y,i)=>(i?"L":"M")+ix(i,8).toFixed(1)+" "+cy(y).toFixed(1)).join(" ");
+  const carea="M"+pL+" "+(pT+plotH)+compliance.map((y,i)=>" L"+ix(i,8).toFixed(1)+" "+cy(y).toFixed(1)).join("")+" L"+(W-pR)+" "+(pT+plotH)+" Z";
+  document.getElementById("chart-sla").innerHTML=
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">${grid}
+     <line x1="${pL}" y1="${cy(90).toFixed(1)}" x2="${W-pR}" y2="${cy(90).toFixed(1)}" stroke="#10b981" stroke-width="1.3" stroke-dasharray="5 4"/>
+     <text x="${W-pR}" y="${(cy(90)-4).toFixed(1)}" text-anchor="end" font-size="9" fill="#0a7d52" font-family="JetBrains Mono">target 90%</text>
+     <path d="${carea}" fill="rgba(245,158,11,.10)"/>
+     <path d="${cline}" fill="none" stroke="#f59e0b" stroke-width="2.4"/>
+     <circle cx="${ix(7,8).toFixed(1)}" cy="${cy(86).toFixed(1)}" r="3.6" fill="#f59e0b"/>
+     <text x="${ix(7,8).toFixed(1)}" y="${(cy(86)-8).toFixed(1)}" text-anchor="middle" font-size="10" fill="#b45309" font-weight="600" font-family="JetBrains Mono">86%</text></svg>
+     <div class="chart-x"><span>8w ago</span><span>6w</span><span>4w</span><span>2w</span><span>now</span></div>`;
+
+  // risk donut (open)
+  const opens=CHANGES.filter(c=>OPEN(c.status));
+  const segs=RISK_ORDER.map(r=>({r,v:opens.filter(c=>c.risk===r).length})).filter(s=>s.v);
+  const sz=120,R=46,cx=sz/2,C=2*Math.PI*R,tot=segs.reduce((a,s)=>a+s.v,0);let off=0;
+  const arcs=segs.map(s=>{const len=s.v/tot*C;const el=`<circle cx="${cx}" cy="${cx}" r="${R}" fill="none" stroke="${RISK_COLOR[s.r]}" stroke-width="15" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cx})"/>`;off+=len;return el;}).join("");
+  document.getElementById("chart-donut").innerHTML=`<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">${arcs}
+    <text x="${cx}" y="${cx-2}" text-anchor="middle" class="donut-num">${tot}</text>
+    <text x="${cx}" y="${cx+13}" text-anchor="middle" class="donut-center">open</text></svg>`;
+  document.getElementById("donut-legend").innerHTML=segs.map(s=>`<span><span><i style="background:${RISK_COLOR[s.r]}"></i>${s.r}</span><b>${s.v}</b></span>`).join("");
+
+  // open by opco
+  const opcos=[...new Set(opens.map(c=>c.opco))].map(o=>({o,n:opens.filter(c=>c.opco===o).length})).sort((a,b)=>b.n-a.n);
+  const mx=Math.max(...opcos.map(x=>x.n));
+  document.getElementById("report-opco").innerHTML=opcos.map(x=>
+    `<div class="opbar"><span class="on">${x.o}</span><span class="ob"><i style="width:${x.n/mx*100}%"></i></span><span class="oc">${x.n}</span></div>`
+  ).join("");
+
+  // status distribution (all 14)
+  const order=["pending","approved","implemented","verified","draft","rejected","closed"];
+  const sd=document.getElementById("report-statd"),sl=document.getElementById("report-statleg");
+  order.forEach(s=>{const n=byStatus(s);if(!n)return;
+    sd.innerHTML+=`<i style="flex:${n};background:${STATUS_COLOR[s]}"></i>`;
+    sl.innerHTML+=`<span><i style="background:${STATUS_COLOR[s]}"></i>${s} <b>${n}</b></span>`;});
+})();
+</script>
+</body>
+</html>

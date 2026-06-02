@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard — tabbed, hardened · CSquared Change Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --navy:#0a3d91;--navy2:#0c4cb0;--ink:#0c1220;--ink2:#1a2231;--muted:#667085;--faint:#98a2b3;
+  --line:#e6eaf0;--line2:#eef1f6;--bg:#eef2f7;--card:#fff;
+  --cyan:#00a3ff;--teal:#14b8a6;--rose:#e11d48;--amber:#f59e0b;--orange:#f97316;--emerald:#10b981;--violet:#8b5cf6;--blue:#3b82f6;--slate:#64748b;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08);
+  --shadow-lg:0 1px 2px rgba(16,24,40,.06),0 18px 44px -16px rgba(16,24,40,.24);
+}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"Space Grotesk",system-ui,sans-serif;background:var(--bg);
+  background-image:radial-gradient(1200px 600px at 50% -10%,#f5f8fc 0,transparent 60%);
+  color:var(--ink);-webkit-font-smoothing:antialiased;padding:34px 24px 70px}
+.page-head{max-width:1040px;margin:0 auto 20px}
+.page-head .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--navy);font-weight:600;margin:0 0 10px}
+.page-head h1{font-family:"Fraunces",serif;font-weight:400;font-size:30px;line-height:1.12;margin:0;letter-spacing:-.01em}
+.page-head h1 em{font-style:italic;color:var(--navy)}
+.page-head p{margin:9px 0 0;color:#4b5563;font-size:14px;max-width:780px;line-height:1.55}
+.page-head .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.page-head .ch{font-size:11.5px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 11px;color:#475467;display:flex;align-items:center;gap:7px}
+.page-head .ch b{color:var(--ink2);font-weight:600}
+.page-head .ch .nu{width:7px;height:7px;border-radius:50%;background:var(--rose)}
+
+.wrap{max-width:1040px;margin:0 auto}
+.mock{border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg);border:1px solid rgba(16,24,40,.08)}
+.mbar{display:flex;align-items:center;gap:9px;padding:11px 16px;background:#fff;border-bottom:1px solid var(--line);font-size:13px;color:#475467}
+.mbar .logo{width:23px;height:23px;border-radius:6px;background:var(--navy);color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;font-family:"Fraunces",serif}
+.mbar .brand{font-weight:600;color:var(--ink2)}.mbar .crumb{color:var(--faint)}
+.mbar .avatar{margin-left:auto;width:25px;height:25px;border-radius:50%;background:#0c4cb0;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.screen{background:var(--bg);padding:16px 18px 20px}
+
+/* ---- persistent status bar (always visible, all tabs) ---- */
+.statusbar{display:flex;align-items:center;background:#fff;border:1px solid var(--line);border-left-width:3px;border-radius:12px;padding:9px 16px;margin-bottom:13px;box-shadow:var(--shadow)}
+.statusbar.sev-red{border-left-color:var(--rose);background:linear-gradient(90deg,#fff6f7,#fff 38%)}
+.statusbar.sev-amber{border-left-color:var(--amber);background:linear-gradient(90deg,#fffaf0,#fff 38%)}
+.statusbar.sev-ok{border-left-color:var(--emerald)}
+.statusbar .live{display:flex;align-items:center;gap:7px;color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;padding-right:16px}
+.statusbar .live .d{width:8px;height:8px;border-radius:50%;background:var(--emerald)}
+.statusbar.sev-red .live .d{background:var(--rose);animation:pulse 1.8s infinite}
+.statusbar.sev-amber .live .d{background:var(--amber)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(225,29,72,.5)}70%{box-shadow:0 0 0 6px rgba(225,29,72,0)}100%{box-shadow:0 0 0 0 rgba(225,29,72,0)}}
+.statusbar .seg{display:flex;align-items:center;gap:7px;padding:0 16px;border-left:1px solid var(--line2);color:var(--muted);font-size:12.5px}
+.statusbar .seg b{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:15px}
+.statusbar .seg.breach b{color:var(--rose)}.statusbar .seg.risk b{color:var(--amber)}.statusbar .seg.emerg b{color:#0e7490}
+.statusbar .seg.bo svg{stroke:var(--rose)}
+.statusbar .seg.ok{color:#0a7d52;font-weight:600;border-left:none}
+.statusbar .right{margin-left:auto;color:var(--faint);font-size:11.5px;padding-left:14px}
+
+/* ---- tabs ---- */
+.tabs{display:flex;gap:5px;background:#eef1f6;border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px}
+.tab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:transparent;border:none;border-radius:9px;padding:9px 6px;cursor:pointer;transition:.12s}
+.tab svg{stroke:currentColor}
+.tab:hover{color:var(--ink2)}
+.tab.active{background:#fff;color:var(--navy);box-shadow:var(--shadow)}
+.tab .tnum{font-family:"JetBrains Mono",monospace;font-size:11px;background:#e7f0ff;color:#1e40af;border-radius:999px;padding:1px 7px}
+.tab .tdot{width:7px;height:7px;border-radius:50%;background:var(--rose);display:none}
+.tab .tsub{font-size:11px;font-weight:500;color:var(--faint)}
+.tab.active .tsub{color:#6b8fd6}
+.pane{display:none}.pane.active{display:block}
+
+/* ---- shared atoms ---- */
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);padding:15px}
+.pcard+.pcard{margin-top:12px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.ph h3{margin:0;font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px}
+.ph h3 svg{stroke:var(--navy)}.ph .more{font-size:12px;color:var(--cyan);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;font-size:10.5px;font-weight:600;padding:2px 8px;text-transform:capitalize;white-space:nowrap}
+.r-low{background:#d1fae5;color:#065f46}.r-medium{background:#fef3c7;color:#92400e}.r-high{background:#ffedd5;color:#9a3412}.r-emergency{background:#ffe4e6;color:#9f1239}
+svg.ic{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.av{width:25px;height:25px;border-radius:50%;font-size:9.5px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;flex:none}
+
+/* monitor */
+.alert{display:flex;gap:10px;align-items:center;background:linear-gradient(90deg,#fff1f3,#fff);border:1px solid #fbd0d8;border-radius:12px;padding:11px 14px;margin-bottom:12px}
+.alert .ar{display:flex;align-items:center;gap:8px}.alert .big{font-family:"JetBrains Mono",monospace;font-size:20px;font-weight:600;color:var(--rose)}
+.alert .amb .big{color:var(--amber)}.alert .lbl{font-size:12.5px;color:#9f1239;font-weight:500}.alert .amb .lbl{color:#92560a}.alert .sep{width:1px;height:26px;background:#f3c4cd;margin:0 4px}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:var(--shadow)}
+.tile .tt{display:flex;align-items:center;justify-content:space-between}.tile .tn{font-size:11px;text-transform:capitalize;color:var(--muted);font-weight:600}.tile .dotk{width:8px;height:8px;border-radius:50%}
+.tile .tc{font-size:30px;font-weight:600;color:var(--ink);line-height:1;margin:7px 0 9px;font-feature-settings:"tnum"}
+.tile .mini{display:flex;height:5px;border-radius:3px;overflow:hidden;background:#f1f3f7}.tile .mini i{height:100%}.tile .sub{font-size:10px;color:var(--faint);margin-top:7px}
+.lower{display:grid;grid-template-columns:1.6fr 1fr;gap:12px}@media (max-width:720px){.lower{grid-template-columns:1fr}}
+.feed{max-height:260px;overflow:auto}
+.fe{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line2)}.fe:first-child{border-top:none}
+.fe .fdot{margin-top:5px;width:8px;height:8px;border-radius:50%;flex:none}.fe .ft{font-size:12.5px;color:var(--ink2)}.fe .ft b{font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:600;color:var(--navy)}.fe .fm{font-size:11px;color:var(--faint);margin-top:1px}
+.miniblk .mb2{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--line2);font-size:12px}.miniblk .mb2:first-of-type{border-top:none}.miniblk .mt2{color:var(--ink2)}.miniblk .mm{color:var(--faint);font-size:11px;margin-top:1px}
+.opbar{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12px;color:var(--muted)}
+.opbar .on{width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink2);font-weight:500}
+.opbar .ob{flex:1;height:7px;border-radius:4px;background:#eef1f6;overflow:hidden}.opbar .ob i{display:block;height:100%;background:linear-gradient(90deg,var(--navy),var(--cyan));border-radius:4px}
+.opbar .oc{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);width:14px;text-align:right}
+
+/* triage */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:13px}
+.sc{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 13px;box-shadow:var(--shadow)}
+.sc .n{font-size:22px;font-weight:600;line-height:1;font-feature-settings:"tnum"}.sc .l{font-size:11px;color:var(--muted);margin-top:4px;font-weight:500}
+.sc.red .n{color:var(--rose)}.sc.amb .n{color:var(--amber)}.sc.nv .n{color:var(--navy)}
+.wgh{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:14px 4px 8px}.wgh .gc{margin-left:auto;font-family:"JetBrains Mono",monospace;color:var(--faint);letter-spacing:0}.wgh .gd{width:8px;height:8px;border-radius:50%}
+.wi{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-left-width:3px;border-radius:11px;padding:12px 14px;box-shadow:var(--shadow)}
+.wi+.wi{margin-top:7px}.wi.over{border-left-color:var(--rose)}.wi.soon{border-left-color:var(--amber)}.wi.go{border-left-color:var(--navy)}
+.wi .mid{flex:1;min-width:0}.wi .t{font-size:13.5px;font-weight:500;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wi .m{display:flex;align-items:center;gap:9px;margin-top:4px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}.wi .m .id{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--faint)}
+.wi .why{font-weight:500}.wi .why.bad{color:var(--rose)}.wi .why.warn{color:#b45309}
+.wi .acts{display:flex;gap:6px;flex:none}.wi .acts button{font:inherit;font-size:12px;font-weight:500;border-radius:8px;padding:6px 13px;cursor:pointer;border:1px solid}
+.wi .acts .ok{background:var(--navy);color:#fff;border-color:var(--navy)}.wi .acts .no{background:#fff;color:var(--muted);border-color:#dfe4ea}
+.wmore{text-align:center;margin-top:9px;font-size:12px;color:var(--cyan);font-weight:500}
+
+/* report */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi .l{font-size:11px;color:var(--muted);font-weight:500}.kpi .n{font-size:25px;font-weight:600;margin-top:5px;line-height:1;font-feature-settings:"tnum"}.kpi .d{font-size:11px;margin-top:5px;display:flex;align-items:center;gap:5px;color:var(--faint)}.kpi .d .up{color:#0a7d52}.kpi .d .dn{color:var(--rose)}
+.chart-x{display:flex;justify-content:space-between;font-size:9.5px;color:var(--faint);font-family:"JetBrains Mono",monospace;margin-top:5px}
+.legend2{display:flex;gap:14px;margin-top:9px;font-size:11.5px;color:var(--muted)}.legend2 span{display:flex;align-items:center;gap:6px}.legend2 span i{width:10px;height:3px;border-radius:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media (max-width:720px){.two{grid-template-columns:1fr}}
+.donutwrap{display:flex;align-items:center;gap:16px}.donutwrap .dl{flex:1}
+.donutwrap .dl>span{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);padding:2px 0}
+.donutwrap .dl i{width:9px;height:9px;border-radius:3px;margin-right:6px;display:inline-block;vertical-align:middle}
+.donutwrap .dl>span b{color:var(--ink2);font-weight:600;font-family:"JetBrains Mono",monospace}
+.donut-center{font-size:11px;fill:var(--muted)}.donut-num{font-size:20px;font-weight:600;fill:var(--ink)}
+.statd{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef1f6;margin-bottom:9px}.statd i{height:100%}
+.statleg{display:flex;flex-wrap:wrap;gap:10px}.statleg span{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}.statleg span i{width:8px;height:8px;border-radius:2px}.statleg b{color:var(--ink2);font-weight:600}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8"/><path d="M17 7h4v4"/></symbol>
+  <symbol id="i-bar" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></symbol>
+  <symbol id="i-pie" viewBox="0 0 24 24"><path d="M12 2v10l8.5 5"/><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+</svg>
+
+<header class="page-head">
+  <p class="eyebrow">CSquared Change Management · Dashboard · Tabbed (hardened)</p>
+  <h1>Tabbed — <em>with an always-on status bar.</em></h1>
+  <p>Direction B, focused and full-width. Each job gets its own clean view behind a toggle — but a slim status bar sits above the tabs on every view, and the Monitor tab flags red when something’s breaching, so a clean screen can never quietly hide an emergency.</p>
+  <div class="chips">
+    <span class="ch"><b>The tweak →</b></span>
+    <span class="ch"><span class="nu"></span> Persistent breach/at-risk bar</span>
+    <span class="ch"><span class="nu"></span> Red dot on Monitor when breaching</span>
+    <span class="ch"><b>Click the tabs</b> to switch views</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="mock">
+    <div class="mbar"><span class="logo">C²</span><span class="brand">CSquared</span><span class="crumb">/ Dashboard</span><span class="avatar">DK</span></div>
+    <div class="screen">
+
+      <!-- persistent status bar -->
+      <div class="statusbar" id="statusbar"></div>
+
+      <!-- tabs -->
+      <div class="tabs">
+        <button class="tab" data-pane="monitor"><svg class="ic"><use href="#i-grid"/></svg> Monitor <span class="tdot" id="mon-dot"></span></button>
+        <button class="tab active" data-pane="triage"><svg class="ic"><use href="#i-list"/></svg> Triage <span class="tnum" id="triage-n">10</span></button>
+        <button class="tab" data-pane="report"><svg class="ic"><use href="#i-bar"/></svg> Report</button>
+      </div>
+
+      <!-- MONITOR -->
+      <div class="pane" id="pane-monitor">
+        <div class="alert">
+          <div class="ar"><span class="big" data-bind="breach">2</span><span class="lbl">SLA<br>breached</span></div><span class="sep"></span>
+          <div class="ar amb"><span class="big" data-bind="atrisk">3</span><span class="lbl">at<br>risk</span></div><span class="sep"></span>
+          <div class="ar"><svg class="ic" style="stroke:#9f1239"><use href="#i-alert"/></svg><span class="lbl" style="color:#6b3b18">Both overdue items are high-risk network work</span></div>
+        </div>
+        <div class="tiles" id="tiles"></div>
+        <div class="lower">
+          <div class="pcard"><div class="ph"><h3><svg class="ic"><use href="#i-act"/></svg> Live activity</h3><span class="more">Stream</span></div><div class="feed" id="feed"></div></div>
+          <div class="pcard miniblk">
+            <div class="ph"><h3><svg class="ic"><use href="#i-lock"/></svg> Active blackouts</h3></div><div id="bo"></div>
+            <div class="ph" style="margin:14px 0 9px"><h3><svg class="ic"><use href="#i-globe"/></svg> Open by OpCo</h3></div><div id="opco"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRIAGE -->
+      <div class="pane active" id="pane-triage">
+        <div class="summary">
+          <div class="sc red"><div class="n" data-bind="breach">2</div><div class="l">Overdue</div></div>
+          <div class="sc nv"><div class="n" data-bind="pending">5</div><div class="l">To decide</div></div>
+          <div class="sc amb"><div class="n" id="adv-n">5</div><div class="l">To advance</div></div>
+          <div class="sc"><div class="n" id="sched-n">3</div><div class="l">Scheduled today</div></div>
+        </div>
+        <div class="pcard" style="padding:13px 15px">
+          <div class="ph" style="margin-bottom:2px"><h3><svg class="ic"><use href="#i-list"/></svg> Your worklist</h3><span class="more">Sorted by urgency</span></div>
+          <div id="work"></div>
+        </div>
+      </div>
+
+      <!-- REPORT -->
+      <div class="pane" id="pane-report">
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-shield"/></svg> Change health · this week</h3><span class="more">Group · all 6 OpCos</span></div>
+          <div class="kpis">
+            <div class="kpi"><div class="l">Open changes</div><div class="n" data-bind="open">12</div><div class="d"><span class="up">▲ 2</span> vs last week</div></div>
+            <div class="kpi"><div class="l">Closed this week</div><div class="n">12</div><div class="d"><span class="up">▲ 2</span> throughput</div></div>
+            <div class="kpi"><div class="l">SLA compliance</div><div class="n" style="color:#b45309">86%</div><div class="d"><span class="dn">▼ 4 pts</span> vs target 90%</div></div>
+            <div class="kpi"><div class="l">Avg approval</div><div class="n">5.4h</div><div class="d"><span class="up">▲ 0.6h</span> slower</div></div>
+          </div>
+        </div>
+        <div class="pcard"><div class="ph"><h3><svg class="ic"><use href="#i-trend"/></svg> Opened vs closed</h3><span class="more">8 weeks</span></div><div id="thru"></div>
+          <div class="legend2"><span><i style="background:var(--cyan)"></i>Opened</span><span><i style="background:var(--navy)"></i>Closed</span></div></div>
+        <div class="pcard"><div class="ph"><h3><svg class="ic"><use href="#i-shield"/></svg> SLA compliance trend</h3><span class="more">target 90%</span></div><div id="sla"></div></div>
+        <div class="two">
+          <div class="pcard"><div class="ph"><h3><svg class="ic"><use href="#i-pie"/></svg> Risk mix</h3></div><div class="donutwrap"><div id="donut"></div><div class="dl" id="donleg"></div></div></div>
+          <div class="pcard"><div class="ph"><h3><svg class="ic"><use href="#i-bar"/></svg> Open by OpCo</h3></div><div id="ropco"></div></div>
+        </div>
+        <div class="pcard"><div class="ph"><h3><svg class="ic"><use href="#i-grid"/></svg> Status distribution</h3><span class="more">14 total</span></div>
+          <div class="statd" id="statd"></div><div class="statleg" id="statleg"></div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SLA_HOURS={low:48,medium:24,high:4,emergency:1};
+const CHANGES=[
+  {id:"CHG-1042",t:"Backbone IP route table update",opco:"Ghana",risk:"medium",status:"pending",slaH:3.2,planH:50,own:"AM",em:false},
+  {id:"CHG-1043",t:"BGP peering change — Accra IXP",opco:"Ghana",risk:"high",status:"pending",slaH:1.1,planH:26,own:"KO",em:false},
+  {id:"CHG-1044",t:"DWDM card replacement — Kampala metro",opco:"Uganda",risk:"high",status:"approved",slaH:6.0,planH:14,own:"SN",em:false},
+  {id:"CHG-1045",t:"Firewall ruleset update — Lomé PoP",opco:"Togo",risk:"medium",status:"implemented",slaH:null,planH:-6,own:"DT",em:false},
+  {id:"CHG-1046",t:"OLT firmware upgrade — Lubumbashi",opco:"DRC",risk:"low",status:"draft",slaH:null,planH:null,own:"PM",em:false},
+  {id:"CHG-1047",t:"Core router OS patch — Monrovia",opco:"Liberia",risk:"high",status:"pending",slaH:-1.6,planH:30,own:"JG",em:false},
+  {id:"CHG-1048",t:"Submarine cable maintenance — Mauritius landing",opco:"Mauritius",risk:"emergency",status:"approved",slaH:0.4,planH:9,own:"RB",em:true},
+  {id:"CHG-1049",t:"VLAN re-segmentation — Kampala core",opco:"Uganda",risk:"medium",status:"verified",slaH:null,planH:-30,own:"SN",em:false},
+  {id:"CHG-1050",t:"Power redundancy test — Accra DC",opco:"Ghana",risk:"low",status:"closed",slaH:null,planH:-72,own:"AM",em:false},
+  {id:"CHG-1051",t:"MPLS LSP re-route — DRC backbone",opco:"DRC",risk:"high",status:"rejected",slaH:null,planH:null,own:"JG",em:false},
+  {id:"CHG-1052",t:"DNS resolver migration — group",opco:"Group",risk:"medium",status:"pending",slaH:13.5,planH:70,own:"LK",em:false},
+  {id:"CHG-1053",t:"Edge cache node deploy — Lomé",opco:"Togo",risk:"low",status:"approved",slaH:40.0,planH:74,own:"DT",em:false},
+  {id:"CHG-1054",t:"BGP community policy update — Mauritius",opco:"Mauritius",risk:"medium",status:"implemented",slaH:null,planH:-18,own:"RB",em:false},
+  {id:"CHG-1055",t:"Spectrum re-grooming — Kampala–Entebbe",opco:"Uganda",risk:"high",status:"pending",slaH:-0.3,planH:20,own:"SN",em:false},
+];
+const BLACKOUTS=[{label:"Year-end financial freeze",scope:"Group (all OpCos)",endsH:50,amber:false},{label:"Independence Day — Ghana",scope:"Ghana",endsH:6,amber:true}];
+const STATUS_ORDER=["draft","pending","approved","implemented","verified","closed"];
+const STATUS_COLOR={draft:"#a1a1aa",pending:"#f59e0b",approved:"#10b981",rejected:"#f43f5e",implemented:"#3b82f6",verified:"#8b5cf6",closed:"#64748b"};
+const RISK_ORDER=["low","medium","high","emergency"];const RISK_COLOR={low:"#10b981",medium:"#f59e0b",high:"#f97316",emergency:"#f43f5e"};
+const OPEN=s=>s!=="closed"&&s!=="rejected";
+const t0=Date.now();
+CHANGES.forEach(c=>{c.sla=c.slaH==null?null:t0+c.slaH*3600e3;c.planAt=c.planH==null?null:t0+c.planH*3600e3;});
+const M={open:CHANGES.filter(c=>OPEN(c.status)).length,pending:CHANGES.filter(c=>c.status==="pending").length,
+  breach:CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla<t0).length,
+  atrisk:CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla>=t0&&c.sla-t0<4*3600e3).length,
+  emerg:CHANGES.filter(c=>OPEN(c.status)&&c.em).length};
+document.querySelectorAll("[data-bind]").forEach(el=>{if(M[el.dataset.bind]!=null)el.textContent=M[el.dataset.bind];});
+const pad=n=>String(n).padStart(2,"0");const byStatus=s=>CHANGES.filter(c=>c.status===s).length;
+function dur(ms){const a=Math.abs(ms);const h=Math.floor(a/3600e3);const m=Math.round((a-h*3600e3)/60e3);return h>=1?h+"h":m+"m";}
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function whenLabel(ms){const d=new Date(ms);const sod=x=>{const y=new Date(x);y.setHours(0,0,0,0);return y.getTime();};const dd=Math.round((sod(ms)-sod(Date.now()))/86400e3),hm=pad(d.getHours())+":"+pad(d.getMinutes());if(dd<=0)return(d.getHours()>=18?"Tonight ":"Today ")+hm;if(dd===1)return"Tomorrow "+hm;return DOW[d.getDay()]+" "+hm;}
+const pillHTML=(k,v)=>`<span class="pill ${k}-${v}">${v}</span>`;
+const AVCOL={AM:"#0c8a5a",KO:"#2563eb",SN:"#b45309",DT:"#be185d",PM:"#6d28d9",JG:"#b91c1c",RB:"#0e7490",LK:"#c2410c"};
+const $=id=>document.getElementById(id);
+
+/* persistent status bar */
+(function(){
+  const sev=M.breach>0?'red':(M.atrisk>0?'amber':'ok');
+  const segs=[];
+  if(M.breach)segs.push(`<span class="seg breach"><b>${M.breach}</b> breached</span>`);
+  if(M.atrisk)segs.push(`<span class="seg risk"><b>${M.atrisk}</b> at risk</span>`);
+  if(M.emerg)segs.push(`<span class="seg emerg"><b>${M.emerg}</b> emergency</span>`);
+  segs.push(`<span class="seg bo"><svg class="ic" style="width:13px;height:13px"><use href="#i-lock"/></svg>${BLACKOUTS.length} active blackout${BLACKOUTS.length>1?'s':''}</span>`);
+  if(!M.breach&&!M.atrisk&&!M.emerg)segs.unshift(`<span class="seg ok">✓ All clear</span>`);
+  const sb=$("statusbar");sb.className="statusbar sev-"+sev;
+  sb.innerHTML=`<span class="live"><span class="d"></span>Live</span>`+segs.join("")+`<span class="right">updated just now</span>`;
+  if(M.breach>0)$("mon-dot").style.display="inline-block";
+})();
+
+/* renderers */
+function tilesFull(){return STATUS_ORDER.map(s=>{const inSt=CHANGES.filter(c=>c.status===s);
+  const mini=RISK_ORDER.map(r=>{const n=inSt.filter(c=>c.risk===r).length;return n?`<i style="flex:${n};background:${RISK_COLOR[r]}"></i>`:"";}).join("")||`<i style="flex:1;background:#e5e7eb"></i>`;
+  const sub=s==="pending"?`${inSt.length} to decide`:s==="approved"?`to implement`:s==="implemented"?`to verify`:(inSt.length?inSt[0].opco:"—");
+  return `<div class="tile"><div class="tt"><span class="tn">${s}</span><span class="dotk" style="background:${STATUS_COLOR[s]}"></span></div><div class="tc">${inSt.length}</div><div class="mini">${mini}</div><div class="sub">${sub}</div></div>`;}).join("");}
+$("tiles").innerHTML=tilesFull();
+$("feed").innerHTML=[
+  {id:"CHG-1055",ev:"submitted for approval",who:"S. Nakato",m:8,c:STATUS_COLOR.pending},
+  {id:"CHG-1047",ev:"SLA deadline breached",who:"system",m:18,c:"#e11d48"},
+  {id:"CHG-1044",ev:"approved by CAB",who:"D. Koranteng",m:41,c:STATUS_COLOR.approved},
+  {id:"CHG-1048",ev:"scheduled (emergency)",who:"R. Bappoo",m:55,c:STATUS_COLOR.approved},
+  {id:"CHG-1054",ev:"marked implemented",who:"R. Bappoo",m:88,c:STATUS_COLOR.implemented},
+  {id:"CHG-1051",ev:"rejected — insufficient backout",who:"D. Koranteng",m:120,c:"#f43f5e"},
+  {id:"CHG-1049",ev:"verified, ready to close",who:"S. Nakato",m:176,c:STATUS_COLOR.verified},
+].map(x=>`<div class="fe"><span class="fdot" style="background:${x.c}"></span><div><div class="ft"><b>${x.id}</b> ${x.ev}</div><div class="fm">${x.who} · ${dur(x.m*60e3)} ago</div></div></div>`).join("");
+$("bo").innerHTML=BLACKOUTS.map(b=>`<div class="mb2"><svg class="ic" style="width:13px;height:13px;stroke:${b.amber?'#f59e0b':'#e11d48'}"><use href="#i-lock"/></svg><div><div class="mt2">${b.label}</div><div class="mm">${b.scope} · ends in ${b.endsH}h</div></div></div>`).join("");
+function opcoHTML(){const o=CHANGES.filter(c=>OPEN(c.status));const list=[...new Set(o.map(c=>c.opco))].map(x=>({o:x,n:o.filter(c=>c.opco===x).length})).sort((a,b)=>b.n-a.n);const mx=Math.max(...list.map(x=>x.n));return list.map(x=>`<div class="opbar"><span class="on">${x.o}</span><span class="ob"><i style="width:${x.n/mx*100}%"></i></span><span class="oc">${x.n}</span></div>`).join("");}
+$("opco").innerHTML=opcoHTML();$("ropco").innerHTML=opcoHTML();
+
+/* worklist */
+function row(c,kind,why,whyCls,actions){return `<div class="wi ${kind}"><span class="av" style="background:${AVCOL[c.own]||'#64748b'}">${c.own}</span><div class="mid"><div class="t">${c.t}</div><div class="m"><span class="id">${c.id}</span> · ${c.opco} ${pillHTML('r',c.risk)} <span class="why ${whyCls}">${why}</span></div></div><div class="acts">${actions}</div></div>`;}
+(function(){
+  const breached=CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla<t0).sort((a,b)=>a.sla-b.sla);
+  const decide=CHANGES.filter(c=>c.status==="pending"&&!breached.includes(c)).sort((a,b)=>(a.sla??9e15)-(b.sla??9e15));
+  const advance=CHANGES.filter(c=>c.status==="approved"||c.status==="implemented").sort((a,b)=>(a.planAt??9e15)-(b.planAt??9e15));
+  $("triage-n").textContent=breached.length+decide.length+advance.length;
+  $("adv-n").textContent=advance.length;
+  $("sched-n").textContent=CHANGES.filter(c=>c.planAt!=null&&c.planAt>=t0&&c.planAt-t0<24*3600e3&&OPEN(c.status)).length;
+  const A=`<button class="ok">Approve</button><button class="no">Reject</button>`;
+  let h=`<div class="wgh"><span class="gd" style="background:#e11d48"></span>Overdue · escalate<span class="gc">${breached.length}</span></div>`;
+  h+=breached.map(c=>row(c,"over",`SLA breached ${dur(c.sla-t0)} ago`,"bad",A)).join("");
+  h+=`<div class="wgh"><span class="gd" style="background:#f59e0b"></span>Awaiting your decision<span class="gc">${decide.length}</span></div>`;
+  h+=decide.map(c=>{const rem=c.sla-t0,warn=rem<4*3600e3;return row(c,warn?"soon":"go",`${dur(rem)} to SLA`,warn?"warn":"",A);}).join("");
+  h+=`<div class="wgh"><span class="gd" style="background:#0a3d91"></span>Ready to advance<span class="gc">${advance.length}</span></div>`;
+  h+=advance.map(c=>{if(c.status==="approved"){const why=c.planAt?`Approved · ${whenLabel(c.planAt)}`:"Approved · ready to implement";return row(c,"go",why,"",`<button class="ok">${c.em?'Start now':'Advance'}</button><button class="no">Open</button>`);}return row(c,"go","Implemented · ready to verify","",`<button class="ok">Verify</button><button class="no">Open</button>`);}).join("");
+  $("work").innerHTML=h;
+})();
+
+/* charts */
+(function(){const W=900,H=150,pL=10,pR=10,pT=12,pB=20,plotW=W-pL-pR,plotH=H-pT-pB;
+  const ix=(i,n)=>pL+i*plotW/(n-1);
+  const line=(v,max)=>v.map((y,i)=>(i?"L":"M")+ix(i,v.length).toFixed(1)+" "+(pT+plotH-(y/max)*plotH).toFixed(1)).join(" ");
+  const area=(v,max)=>{let d="M"+pL+" "+(pT+plotH);v.forEach((y,i)=>d+=" L"+ix(i,v.length).toFixed(1)+" "+(pT+plotH-(y/max)*plotH).toFixed(1));return d+" L"+(W-pR)+" "+(pT+plotH)+" Z";};
+  const grid=[0,.5,1].map(f=>`<line x1="${pL}" y1="${(pT+plotH-f*plotH).toFixed(1)}" x2="${W-pR}" y2="${(pT+plotH-f*plotH).toFixed(1)}" stroke="#eef1f6"/>`).join("");
+  const opened=[9,11,8,12,10,13,11,14],closed=[7,9,8,10,9,11,10,12];
+  $("thru").innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">${grid}<path d="${area(opened,16)}" fill="rgba(0,163,255,.10)"/><path d="${line(opened,16)}" fill="none" stroke="#00a3ff" stroke-width="2.2"/><path d="${line(closed,16)}" fill="none" stroke="#0a3d91" stroke-width="2.2"/><circle cx="${ix(7,8).toFixed(1)}" cy="${(pT+plotH-14/16*plotH).toFixed(1)}" r="3.2" fill="#00a3ff"/><circle cx="${ix(7,8).toFixed(1)}" cy="${(pT+plotH-12/16*plotH).toFixed(1)}" r="3.2" fill="#0a3d91"/></svg><div class="chart-x"><span>8w ago</span><span>6w</span><span>4w</span><span>2w</span><span>now</span></div>`;
+  const compliance=[82,85,80,88,86,90,84,86],cMin=70,cMax=100,cy=y=>pT+plotH-((y-cMin)/(cMax-cMin))*plotH;
+  const cline=compliance.map((y,i)=>(i?"L":"M")+ix(i,8).toFixed(1)+" "+cy(y).toFixed(1)).join(" ");
+  const carea="M"+pL+" "+(pT+plotH)+compliance.map((y,i)=>" L"+ix(i,8).toFixed(1)+" "+cy(y).toFixed(1)).join("")+" L"+(W-pR)+" "+(pT+plotH)+" Z";
+  $("sla").innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">${grid}<line x1="${pL}" y1="${cy(90).toFixed(1)}" x2="${W-pR}" y2="${cy(90).toFixed(1)}" stroke="#10b981" stroke-width="1.3" stroke-dasharray="5 4"/><text x="${W-pR}" y="${(cy(90)-4).toFixed(1)}" text-anchor="end" font-size="9" fill="#0a7d52" font-family="JetBrains Mono">target 90%</text><path d="${carea}" fill="rgba(245,158,11,.10)"/><path d="${cline}" fill="none" stroke="#f59e0b" stroke-width="2.4"/><circle cx="${ix(7,8).toFixed(1)}" cy="${cy(86).toFixed(1)}" r="3.6" fill="#f59e0b"/><text x="${ix(7,8).toFixed(1)}" y="${(cy(86)-8).toFixed(1)}" text-anchor="middle" font-size="10" fill="#b45309" font-weight="600" font-family="JetBrains Mono">86%</text></svg><div class="chart-x"><span>8w ago</span><span>6w</span><span>4w</span><span>2w</span><span>now</span></div>`;
+  // donut
+  const opens=CHANGES.filter(c=>OPEN(c.status));const segs=RISK_ORDER.map(r=>({r,v:opens.filter(c=>c.risk===r).length})).filter(s=>s.v);
+  const sz=120,R=46,cx=sz/2,C=2*Math.PI*R,tot=segs.reduce((a,s)=>a+s.v,0);let off=0;
+  const arcs=segs.map(s=>{const len=s.v/tot*C;const el=`<circle cx="${cx}" cy="${cx}" r="${R}" fill="none" stroke="${RISK_COLOR[s.r]}" stroke-width="15" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cx})"/>`;off+=len;return el;}).join("");
+  $("donut").innerHTML=`<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">${arcs}<text x="${cx}" y="${cx-2}" text-anchor="middle" class="donut-num">${tot}</text><text x="${cx}" y="${cx+13}" text-anchor="middle" class="donut-center">open</text></svg>`;
+  $("donleg").innerHTML=segs.map(s=>`<span><span><i style="background:${RISK_COLOR[s.r]}"></i>${s.r}</span><b>${s.v}</b></span>`).join("");
+  const order=["pending","approved","implemented","verified","draft","rejected","closed"];let sd="",sl="";
+  order.forEach(s=>{const n=byStatus(s);if(!n)return;sd+=`<i style="flex:${n};background:${STATUS_COLOR[s]}"></i>`;sl+=`<span><i style="background:${STATUS_COLOR[s]}"></i>${s} <b>${n}</b></span>`;});
+  $("statd").innerHTML=sd;$("statleg").innerHTML=sl;
+})();
+
+/* tab switching */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  const p=t.dataset.pane;
+  document.querySelectorAll('.pane').forEach(pane=>pane.classList.toggle('active',pane.id==='pane-'+p));
+}));
+</script>
+</body>
+</html>

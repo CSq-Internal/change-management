@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard — three directions · CSquared Change Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================= *
+ *  COMPARISON FRAME  —  neutral chrome around the three takes
+ * ============================================================= */
+:root{
+  /* app tokens (from src/app/globals.css) */
+  --navy:#0a3d91; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+  --card:#f9fafb; --cyan:#00a3ff; --teal:#14b8a6; --rose:#e11d48;
+  /* status (mirrors change-detail-client.tsx) */
+  --st-draft-bg:#e4e4e7; --st-draft-fg:#3f3f46;
+  --st-pending-bg:#fef3c7; --st-pending-fg:#92400e;
+  --st-approved-bg:#d1fae5; --st-approved-fg:#065f46;
+  --st-rejected-bg:#ffe4e6; --st-rejected-fg:#9f1239;
+  --st-implemented-bg:#dbeafe; --st-implemented-fg:#1e40af;
+  --st-verified-bg:#ede9fe; --st-verified-fg:#5b21b6;
+  --st-closed-bg:#e2e8f0; --st-closed-fg:#334155;
+  /* risk */
+  --rk-low-bg:#d1fae5; --rk-low-fg:#065f46;
+  --rk-medium-bg:#fef3c7; --rk-medium-fg:#92400e;
+  --rk-high-bg:#ffedd5; --rk-high-fg:#9a3412;
+  --rk-emergency-bg:#ffe4e6; --rk-emergency-fg:#9f1239;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"Space Grotesk",system-ui,sans-serif;
+  background:#e9ecf1;
+  background-image:radial-gradient(1200px 600px at 20% -5%, #f3f5f8 0, transparent 60%);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  padding:34px 30px 70px;
+}
+/* ---- page header ---- */
+.page-head{max-width:1860px;margin:0 auto 26px;}
+.page-head .eyebrow{
+  font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--navy);
+  font-weight:600;margin:0 0 10px;
+}
+.page-head h1{
+  font-family:"Fraunces",serif;font-weight:400;font-size:34px;line-height:1.1;margin:0;
+  letter-spacing:-.01em;color:#0c1220;
+}
+.page-head h1 em{font-style:italic;color:var(--navy)}
+.page-head p{margin:10px 0 0;color:#4b5563;font-size:14.5px;max-width:760px;line-height:1.55}
+.legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:#52606d}
+.legend b{color:var(--ink);font-weight:600}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;margin-right:5px}
+
+/* ---- the board: three columns, side by side ---- */
+.board{
+  max-width:1860px;margin:0 auto;
+  display:grid;grid-template-columns:repeat(3,minmax(540px,1fr));
+  gap:26px;align-items:start;
+}
+@media (max-width:1180px){ .board{grid-template-columns:1fr} body{padding:24px 16px 60px} }
+
+.panel{min-width:0}
+/* concept header strip — identical styling across all three for fair comparison */
+.phead{padding:0 2px 14px}
+.phead .row1{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.phead .ix{font-family:"Fraunces",serif;font-size:13px;font-weight:500;color:var(--muted)}
+.phead .name{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 11px}
+.tag{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:#475467;font-weight:500}
+.tag.user{background:#eef4ff;border-color:#d6e4ff;color:#1e40af}
+/* density meter */
+.density{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:11px}
+.meter{display:flex;gap:3px}
+.meter i{width:22px;height:5px;border-radius:3px;background:#d6dae1}
+.meter i.on{background:var(--navy)}
+.meter.hi i.on{background:#e11d48}
+.tradeoff{
+  font-size:12.5px;line-height:1.5;color:#3f4754;
+  border-left:3px solid var(--cyan);padding:6px 0 6px 12px;
+}
+.tradeoff b{color:#0c1220;font-weight:600;display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px;color:#7a8699}
+
+/* ---- mock window chrome (one per panel) ---- */
+.mock{border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.06),0 12px 34px -10px rgba(16,24,40,.22);border:1px solid rgba(16,24,40,.08)}
+.mbar{display:flex;align-items:center;gap:8px;padding:11px 15px;font-size:12px;font-weight:500}
+.mbar .lights{display:flex;gap:6px}
+.mbar .lights i{width:10px;height:10px;border-radius:50%;background:#d7dbe2}
+.mbar .url{margin-left:6px;display:flex;align-items:center;gap:7px;opacity:.85}
+.mbar .spacer{flex:1}
+
+/* shared pill atoms */
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;font-size:11px;font-weight:600;padding:2px 9px;text-transform:capitalize;letter-spacing:.01em;white-space:nowrap}
+.s-draft{background:var(--st-draft-bg);color:var(--st-draft-fg)}
+.s-pending{background:var(--st-pending-bg);color:var(--st-pending-fg)}
+.s-approved{background:var(--st-approved-bg);color:var(--st-approved-fg)}
+.s-rejected{background:var(--st-rejected-bg);color:var(--st-rejected-fg)}
+.s-implemented{background:var(--st-implemented-bg);color:var(--st-implemented-fg)}
+.s-verified{background:var(--st-verified-bg);color:var(--st-verified-fg)}
+.s-closed{background:var(--st-closed-bg);color:var(--st-closed-fg)}
+.r-low{background:var(--rk-low-bg);color:var(--rk-low-fg)}
+.r-medium{background:var(--rk-medium-bg);color:var(--rk-medium-fg)}
+.r-high{background:var(--rk-high-bg);color:var(--rk-high-fg)}
+.r-emergency{background:var(--rk-emergency-bg);color:var(--rk-emergency-fg)}
+
+svg.ic{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ===================  A · EXECUTIVE PULSE  =================== *
+ *  low density · refined editorial · warm ivory                */
+.exec .mbar{background:#f3efe6;color:#6b6358;border-bottom:1px solid #e7e0d2}
+.exec .mbar .url svg{stroke:#9a8f7c}
+.exec-screen{background:#faf7f0;color:#1b2231;padding:38px 40px 34px;font-feature-settings:"ss01"}
+.exec .kick{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:#a07b3a;font-weight:600;margin:0 0 18px}
+.exec h2{font-family:"Fraunces",serif;font-weight:400;font-size:35px;line-height:1.12;letter-spacing:-.015em;margin:0;color:#16203a}
+.exec h2 .accent{font-style:italic}
+.exec .sub{margin:14px 0 0;color:#5d6573;font-size:15px;line-height:1.55;max-width:42ch}
+.exec .heroes{display:flex;margin:34px 0 6px}
+.exec .hero{flex:1;padding:0 22px}
+.exec .hero:first-child{padding-left:0}
+.exec .hero+.hero{border-left:1px solid #e6ded0}
+.exec .hero .n{font-family:"Fraunces",serif;font-weight:300;font-size:52px;line-height:1;letter-spacing:-.02em;color:#16203a}
+.exec .hero .n.warn{color:#b23a48}
+.exec .hero .l{font-size:12.5px;color:#6b7280;margin-top:10px;font-weight:500}
+.exec .hero .d{font-size:11.5px;color:#9aa1ab;margin-top:5px;display:flex;align-items:center;gap:5px}
+.exec .hero .d .up{color:#3f8f6e}
+.exec hr.rule{border:none;border-top:1px solid #ece5d8;margin:30px 0 24px}
+.exec .distrib .dh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.exec .distrib .dh span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#94918a;font-weight:600}
+.exec .distrib .dh em{font-style:normal;font-size:12.5px;color:#6b7280}
+.exec .bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:#efe9dd}
+.exec .bar i{height:100%}
+.exec .dlegend{display:flex;flex-wrap:wrap;gap:13px;margin-top:14px}
+.exec .dlegend span{font-size:11.5px;color:#6b7280;display:flex;align-items:center;gap:6px}
+.exec .dlegend span i{width:9px;height:9px;border-radius:3px}
+.exec .attn{margin-top:30px}
+.exec .attn .ah{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#94918a;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.exec .attn .ah .cnt{background:#b23a48;color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;letter-spacing:0}
+.exec .arow{display:flex;align-items:center;gap:14px;padding:13px 0;border-top:1px solid #ece5d8}
+.exec .arow:last-child{border-bottom:1px solid #ece5d8}
+.exec .arow .tk{font-family:"JetBrains Mono",monospace;font-size:11px;color:#a99c83;flex:none;width:64px}
+.exec .arow .mid{flex:1;min-width:0}
+.exec .arow .mid .t{font-size:14px;font-weight:500;color:#1b2231;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exec .arow .mid .m{font-size:12px;color:#8b929c;margin-top:2px}
+.exec .arow .when{font-size:12px;font-weight:500;text-align:right;flex:none}
+.exec .arow .when.bad{color:#b23a48}
+.exec .arow .when.warn{color:#b07d1e}
+.exec .foot{margin-top:26px;font-size:11.5px;color:#aaa395;display:flex;align-items:center;gap:7px}
+
+/* ===================  B · OPERATIONS CONSOLE  =============== *
+ *  high density · dark NOC wallboard · mono                    */
+.console{ --cbg:#0b0e13; --ccard:#14181f; --cln:rgba(255,255,255,.09);
+  --ctx:#e7ecf3; --cmut:#8b95a6; --ccyan:#36b9ff; --cteal:#1fe3c0; --cred:#ff4d6d; --camb:#ffc24b; }
+.console .mbar{background:#0d1117;color:#9aa3b2;border-bottom:1px solid var(--cln)}
+.console .mbar .lights i{background:#2a3140}
+.console .mbar .live{margin-left:auto;display:flex;align-items:center;gap:7px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--cteal)}
+.console .mbar .live .pulse{width:8px;height:8px;border-radius:50%;background:var(--cteal);box-shadow:0 0 0 0 rgba(31,227,192,.6);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(31,227,192,.55)}70%{box-shadow:0 0 0 7px rgba(31,227,192,0)}100%{box-shadow:0 0 0 0 rgba(31,227,192,0)}}
+.console .mbar .clock{font-family:"JetBrains Mono",monospace;font-size:11px;color:#7e8a9c}
+.con-screen{
+  background:var(--cbg);color:var(--ctx);padding:15px 15px 0;
+  background-image:
+    radial-gradient(620px 280px at 78% -8%, rgba(54,185,255,.12), transparent 62%),
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+  background-size:auto, 24px 24px, 24px 24px;
+}
+.con-screen .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:11px}
+.con-screen .kpi{background:var(--ccard);border:1px solid var(--cln);border-radius:9px;padding:9px 10px}
+.con-screen .kpi .kl{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--cmut);font-weight:600}
+.con-screen .kpi .kn{font-family:"JetBrains Mono",monospace;font-size:24px;font-weight:600;margin-top:4px;line-height:1}
+.con-screen .kpi.breach{border-color:rgba(255,77,109,.4);background:linear-gradient(180deg,rgba(255,77,109,.12),var(--ccard))}
+.con-screen .kpi.breach .kn{color:var(--cred);text-shadow:0 0 14px rgba(255,77,109,.5)}
+.con-screen .kpi.risk .kn{color:var(--camb)}
+.con-screen .kpi.emerg .kn{color:var(--ccyan)}
+.alertbar{display:flex;align-items:center;gap:8px;background:rgba(255,77,109,.1);border:1px solid rgba(255,77,109,.32);color:#ff8197;
+  border-radius:8px;padding:7px 11px;font-size:12px;font-weight:500;margin-bottom:11px}
+.alertbar svg{stroke:var(--cred)}
+.qwrap{border:1px solid var(--cln);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.012)}
+.qhead{display:grid;grid-template-columns:58px 1fr 64px 78px 116px 34px;gap:8px;padding:8px 12px;
+  font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--cmut);font-weight:600;border-bottom:1px solid var(--cln);
+  font-family:"JetBrains Mono",monospace}
+.qbody{max-height:300px;overflow-y:auto}
+.qbody::-webkit-scrollbar{width:7px}.qbody::-webkit-scrollbar-thumb{background:#2a3340;border-radius:4px}
+.qrow{display:grid;grid-template-columns:58px 1fr 64px 78px 116px 34px;gap:8px;padding:8px 12px;align-items:center;
+  border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;transition:background .12s}
+.qrow:hover{background:rgba(54,185,255,.06)}
+.qrow:last-child{border-bottom:none}
+.qrow .id{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ccyan)}
+.qrow .ti{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d6dce6}
+.qrow .ti small{color:var(--cmut);font-size:10.5px}
+.qrow .pill{font-size:10px;padding:1px 7px}
+.con .s-pending{background:rgba(255,194,75,.16);color:#ffce6b}
+.con .s-approved{background:rgba(31,227,192,.14);color:#5eead4}
+.con .s-implemented{background:rgba(54,185,255,.16);color:#7cc9ff}
+.con .s-verified{background:rgba(167,139,250,.18);color:#c4b5fd}
+.con .s-draft{background:rgba(255,255,255,.08);color:#aab2c0}
+.con .r-low{background:rgba(31,227,192,.13);color:#5eead4}
+.con .r-medium{background:rgba(255,194,75,.16);color:#ffce6b}
+.con .r-high{background:rgba(255,138,76,.18);color:#ffb27a}
+.con .r-emergency{background:rgba(255,77,109,.18);color:#ff8aa0}
+.sla{display:flex;flex-direction:column;gap:3px}
+.sla .st{font-family:"JetBrains Mono",monospace;font-size:11px;color:#c2c9d4}
+.sla .st.over{color:var(--cred);font-weight:600}
+.sla .track{height:4px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.sla .track i{display:block;height:100%;background:linear-gradient(90deg,var(--cteal),var(--ccyan))}
+.sla .track i.warn{background:linear-gradient(90deg,var(--camb),#ff8a4c)}
+.sla .track i.over{background:var(--cred)}
+.av{width:24px;height:24px;border-radius:50%;font-size:9.5px;font-weight:700;color:#0b0e13;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace}
+.con-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
+.con-box{border:1px solid var(--cln);border-radius:10px;background:var(--ccard);padding:11px 12px}
+.con-box h4{margin:0 0 9px;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--cmut);font-weight:600;display:flex;align-items:center;gap:6px}
+.bo{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.05);font-size:12px}
+.bo:first-of-type{border-top:none}
+.bo .ldot{margin-top:3px;color:var(--cred)}
+.bo .ldot.amb{color:var(--camb)}
+.bo .bt{color:#d6dce6}
+.bo .bm{color:var(--cmut);font-size:11px;margin-top:1px;font-family:"JetBrains Mono",monospace}
+.bo .bm .em{color:var(--ccyan)}
+.ticker{margin:11px -15px 0;border-top:1px solid var(--cln);background:#0d1117;overflow:hidden;white-space:nowrap;padding:8px 0}
+.ticker .lab{display:inline-flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--cred);padding:0 14px;letter-spacing:.1em}
+.ticker .lab .pulse{width:6px;height:6px;border-radius:50%;background:var(--cred);animation:pulse 1.6s infinite}
+.ticker .track{display:inline-block;animation:scroll 26s linear infinite}
+.ticker .track span{font-family:"JetBrains Mono",monospace;font-size:11px;color:#9aa3b2;padding:0 22px}
+.ticker .track span b{color:var(--cteal);font-weight:500}
+@keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ===================  C · LIFECYCLE PIPELINE  ============== *
+ *  medium density · guided two-tone · light                   */
+.pipe .mbar{background:#fff;color:#475467;border-bottom:1px solid var(--line)}
+.pipe .mbar .url svg{stroke:#9aa3b2}
+.pipe .mbar .avatar{width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-left:auto}
+.pipe-screen{background:#eef2f7;padding:18px 16px 20px}
+.pipe-screen .pcard{background:#fff;border:1px solid #e7ebf1;border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.05);padding:16px}
+.pipe-screen .pcard+.pcard{margin-top:13px}
+.pcard .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.pcard .ph h3{margin:0;font-size:13.5px;font-weight:600;color:#0c1220;display:flex;align-items:center;gap:8px}
+.pcard .ph h3 svg{stroke:var(--navy)}
+.pcard .ph .more{font-size:12px;color:var(--cyan);font-weight:500}
+/* pipeline strip */
+.flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:4px}
+.stage{flex:1;min-width:74px;text-align:center;position:relative;padding:0 4px}
+.stage .node{border:1.5px solid #e3e8ef;border-radius:11px;background:#fbfcfe;padding:11px 4px 9px;transition:.15s}
+.stage.active .node{border-color:var(--cyan);background:#f0f9ff;box-shadow:0 0 0 3px rgba(0,163,255,.12)}
+.stage.done .node{background:#f6f8fb}
+.stage .qn{font-size:23px;font-weight:600;color:#0c1220;line-height:1}
+.stage.active .qn{color:var(--navy)}
+.stage .sn{font-size:10px;color:#667085;margin-top:5px;text-transform:capitalize;font-weight:500}
+.stage .arrow{position:absolute;right:-7px;top:22px;color:#cdd5df;z-index:2}
+.stage:last-child .arrow{display:none}
+.branch{display:flex;align-items:center;gap:7px;margin-top:11px;padding-left:2px}
+.branch .bl{width:74px;display:flex;justify-content:center;color:#cdd5df}
+.branch .rej{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#9f1239;background:#fff1f3;border:1px solid #fecdd6;border-radius:8px;padding:3px 9px;font-weight:500}
+/* decision list */
+.dec{display:flex;align-items:center;gap:11px;padding:11px;border:1px solid #eceff3;border-radius:11px;border-left-width:3px;border-left-color:#e3e8ef}
+.dec+.dec{margin-top:8px}
+.dec.urgent{border-left-color:var(--rose);background:#fff8f8}
+.dec.soon{border-left-color:#f59e0b;background:#fffdf6}
+.dec .di{min-width:0;flex:1}
+.dec .di .dt{font-size:13px;font-weight:500;color:#1a2231;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dec .di .dm{font-size:11.5px;color:#667085;margin-top:3px;display:flex;align-items:center;gap:8px}
+.dec .di .dm .sla{display:inline;font-weight:600}
+.dec .di .dm .sla.bad{color:var(--rose)}
+.dec .di .dm .sla.warn{color:#b45309}
+.dec .acts{display:flex;gap:6px;flex:none}
+.dec .acts button{font:inherit;font-size:11.5px;font-weight:500;border-radius:8px;padding:5px 11px;cursor:pointer;border:1px solid}
+.dec .acts .ok{background:var(--navy);color:#fff;border-color:var(--navy)}
+.dec .acts .no{background:#fff;color:#667085;border-color:#dfe4ea}
+/* week strip */
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{border:1px solid #eceff3;border-radius:9px;padding:7px 4px;text-align:center;min-height:58px}
+.day .dn{font-size:10px;color:#98a2b3;text-transform:uppercase;letter-spacing:.05em}
+.day .dd{font-size:13px;font-weight:600;color:#344054;margin-top:2px}
+.day.today{border-color:var(--navy);background:#f5f8ff}
+.day.today .dd{color:var(--navy)}
+.day.blackout{background:#fff1f3;border-color:#fecdd6}
+.day .chips{display:flex;justify-content:center;gap:3px;margin-top:6px;flex-wrap:wrap}
+.day .chips i{width:6px;height:6px;border-radius:50%}
+.day .lk{color:#e11d48;margin-top:5px;display:inline-block}
+.wlist{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.wl{display:flex;align-items:center;gap:10px;font-size:12.5px;color:#475467}
+.wl .wt{font-family:"JetBrains Mono",monospace;font-size:11px;color:#fff;background:var(--navy);border-radius:6px;padding:3px 8px;flex:none}
+.wl .wt.em{background:var(--rose)}
+.wl b{color:#1a2231;font-weight:500}
+/* risk mix */
+.rmix{display:flex;height:30px;border-radius:9px;overflow:hidden;border:1px solid #eceff3}
+.rmix i{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.rlegend{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap}
+.rlegend span{font-size:11.5px;color:#667085;display:flex;align-items:center;gap:6px}
+.rlegend span i{width:9px;height:9px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+  <symbol id="i-flow" viewBox="0 0 24 24"><path d="M3 6h13M3 6l3-3M3 6l3 3M21 12H8M21 12l-3-3M21 12l-3 3M3 18h13"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></symbol>
+</svg>
+
+<header class="page-head">
+  <p class="eyebrow">CSquared Change Management · Dashboard exploration</p>
+  <h1>One dashboard, <em>three directions.</em></h1>
+  <p>Same live data, three takes on layout, tone and density. Each is a different bet about who the dashboard is really for. Skim the trade-off under each title, then pick the direction worth building for real.</p>
+  <div class="legend">
+    <span><b>Density</b> &nbsp;<span class="meter" style="display:inline-flex"><i class="on"></i><i></i><i></i></span> low &nbsp;→&nbsp; <span class="meter" style="display:inline-flex"><i class="on"></i><i class="on"></i><i class="on"></i></span> high</span>
+    <span><span class="dot" style="background:#e11d48"></span>SLA breached</span>
+    <span><span class="dot" style="background:#f59e0b"></span>At risk</span>
+    <span><b>14</b> change requests · <b>6</b> OpCos · same dataset across all three</span>
+  </div>
+</header>
+
+<main class="board">
+
+  <!-- ============ PANEL A · EXECUTIVE PULSE ============ -->
+  <section class="panel exec">
+    <div class="phead">
+      <div class="row1"><span class="ix">A</span><span class="name">Executive Pulse</span></div>
+      <div class="tags"><span class="tag user">For execs / leadership</span><span class="tag">Editorial</span><span class="tag">Ivory · light</span></div>
+      <div class="density"><span class="meter"><i class="on"></i><i></i><i></i></span> Low density</div>
+      <div class="tradeoff"><b>Trade-off</b>Clarity over completeness — readable in three seconds, but operators must click through for any detail.</div>
+    </div>
+    <div class="mock">
+      <div class="mbar"><span class="lights"><i></i><i></i><i></i></span><span class="url"><svg class="ic" style="width:13px;height:13px"><use href="#i-shield"/></svg> csquared.app/dashboard</span></div>
+      <div class="exec-screen">
+        <p class="kick">Portfolio health · Group · June 2026</p>
+        <h2>Two changes have <span class="accent">slipped SLA.</span></h2>
+        <p class="sub">Everything else is tracking. Five approvals are waiting on the board, and one emergency goes ahead tonight.</p>
+
+        <div class="heroes">
+          <div class="hero"><div class="n" data-bind="open">12</div><div class="l">Changes in flight</div><div class="d"><span class="up">▲ 2</span> vs last week</div></div>
+          <div class="hero"><div class="n" data-bind="pending">5</div><div class="l">Awaiting approval</div><div class="d">3 high-risk</div></div>
+          <div class="hero"><div class="n warn" data-bind="breach">2</div><div class="l">SLA breached</div><div class="d" style="color:#b07d1e">+3 at risk</div></div>
+        </div>
+
+        <hr class="rule" />
+
+        <div class="distrib">
+          <div class="dh"><span>Status distribution</span><em>14 total</em></div>
+          <div class="bar" id="exec-bar"></div>
+          <div class="dlegend" id="exec-legend"></div>
+        </div>
+
+        <div class="attn">
+          <div class="ah">Needs attention <span class="cnt">3</span></div>
+          <div id="exec-attn"></div>
+        </div>
+
+        <div class="foot"><svg class="ic" style="width:13px;height:13px;stroke:#bcae97"><use href="#i-clock"/></svg> Updated just now · 6 operating companies</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL B · OPERATIONS CONSOLE ============ -->
+  <section class="panel console con">
+    <div class="phead">
+      <div class="row1"><span class="ix">B</span><span class="name">Operations Console</span></div>
+      <div class="tags"><span class="tag user">For operators</span><span class="tag">NOC wallboard</span><span class="tag">Dark · mono</span></div>
+      <div class="density"><span class="meter hi"><i class="on"></i><i class="on"></i><i class="on"></i></span> High density</div>
+      <div class="tradeoff"><b>Trade-off</b>Density over calm — everything on one screen, nothing hidden, but it’s busy and intimidating to newcomers.</div>
+    </div>
+    <div class="mock">
+      <div class="mbar"><span class="lights"><i></i><i></i><i></i></span><span class="url" style="color:#7e8a9c">csquared.app/dashboard</span>
+        <span class="live"><span class="pulse"></span>LIVE</span><span class="clock" id="b-clock" style="margin-left:12px;color:#7e8a9c">--:--:--</span></div>
+      <div class="con-screen">
+        <div class="kpis">
+          <div class="kpi"><div class="kl">Open</div><div class="kn" data-bind="open">12</div></div>
+          <div class="kpi"><div class="kl">Pending</div><div class="kn" data-bind="pending">5</div></div>
+          <div class="kpi breach"><div class="kl">SLA breach</div><div class="kn" data-bind="breach">2</div></div>
+          <div class="kpi risk"><div class="kl">At risk</div><div class="kn" data-bind="atrisk">3</div></div>
+          <div class="kpi emerg"><div class="kl">Emergency</div><div class="kn" data-bind="emerg">1</div></div>
+        </div>
+        <div class="alertbar"><svg class="ic"><use href="#i-alert"/></svg> <span><b data-bind="breach">2</b> changes are past their SLA deadline — escalate now.</span></div>
+
+        <div class="qwrap">
+          <div class="qhead"><span>ID</span><span>Change</span><span>Risk</span><span>Status</span><span>SLA</span><span></span></div>
+          <div class="qbody" id="con-queue"></div>
+        </div>
+
+        <div class="con-grid">
+          <div class="con-box">
+            <h4><svg class="ic" style="width:13px;height:13px;stroke:#ff8197"><use href="#i-lock"/></svg> Active blackouts</h4>
+            <div id="con-blackouts"></div>
+          </div>
+          <div class="con-box">
+            <h4><svg class="ic" style="width:13px;height:13px;stroke:#7cc9ff"><use href="#i-cal"/></svg> Next 7 days</h4>
+            <div id="con-upcoming"></div>
+          </div>
+        </div>
+
+        <div class="ticker">
+          <span class="lab"><span class="pulse"></span>STREAM</span><span class="track" id="con-ticker"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL C · LIFECYCLE PIPELINE ============ -->
+  <section class="panel pipe">
+    <div class="phead">
+      <div class="row1"><span class="ix">C</span><span class="name">Lifecycle Pipeline</span></div>
+      <div class="tags"><span class="tag user">For approvers / CAB</span><span class="tag">Guided</span><span class="tag">Two-tone · light</span></div>
+      <div class="density"><span class="meter"><i class="on"></i><i class="on"></i><i></i></span> Medium density</div>
+      <div class="tradeoff"><b>Trade-off</b>Process-centric — your next action is obvious, but it assumes everyone thinks in stages and shows less raw data than the console.</div>
+    </div>
+    <div class="mock">
+      <div class="mbar"><span class="lights"><i></i><i></i><i></i></span><span class="url"><svg class="ic" style="width:13px;height:13px"><use href="#i-flow"/></svg> csquared.app/dashboard</span><span class="avatar">DK</span></div>
+      <div class="pipe-screen">
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-flow"/></svg> Change lifecycle</h3><span class="more">View all →</span></div>
+          <div class="flow" id="pipe-flow"></div>
+          <div class="branch"><span class="bl"><svg class="ic" style="width:13px;height:13px;transform:rotate(90deg)"><use href="#i-chev"/></svg></span><span class="rej" id="pipe-rej">✕ 1 rejected · reopen to draft</span></div>
+        </div>
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-shield"/></svg> Needs your decision</h3><span class="more" id="pipe-decmore">5 pending</span></div>
+          <div id="pipe-dec"></div>
+        </div>
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-cal"/></svg> This week</h3><span class="more">3 scheduled</span></div>
+          <div class="week" id="pipe-week"></div>
+          <div class="wlist" id="pipe-wlist"></div>
+        </div>
+
+        <div class="pcard">
+          <div class="ph"><h3><svg class="ic"><use href="#i-act"/></svg> Risk mix · open changes</h3></div>
+          <div class="rmix" id="pipe-rmix"></div>
+          <div class="rlegend" id="pipe-rleg"></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* ============ ONE SHARED DATASET (drives all three panels) ============ *
+ * slaH  = hours until SLA deadline now (negative = already breached; null = n/a)
+ * planH = hours until planned start  (negative = in the past; null = unscheduled)   */
+const SLA_HOURS = {low:48, medium:24, high:4, emergency:1};
+const CHANGES = [
+  {id:"CHG-1042", t:"Backbone IP route table update",        opco:"Ghana",     risk:"medium",    status:"pending",     slaH: 3.2,  planH: 50, own:"AM", em:false},
+  {id:"CHG-1043", t:"BGP peering change — Accra IXP",        opco:"Ghana",     risk:"high",      status:"pending",     slaH: 1.1,  planH: 26, own:"KO", em:false},
+  {id:"CHG-1044", t:"DWDM card replacement — Kampala metro", opco:"Uganda",    risk:"high",      status:"approved",    slaH: 6.0,  planH: 14, own:"SN", em:false},
+  {id:"CHG-1045", t:"Firewall ruleset update — Lomé PoP",    opco:"Togo",      risk:"medium",    status:"implemented", slaH: null, planH:-6,  own:"DT", em:false},
+  {id:"CHG-1046", t:"OLT firmware upgrade — Lubumbashi",     opco:"DRC",       risk:"low",       status:"draft",       slaH: null, planH:null,own:"PM", em:false},
+  {id:"CHG-1047", t:"Core router OS patch — Monrovia",       opco:"Liberia",   risk:"high",      status:"pending",     slaH:-1.6,  planH: 30, own:"JG", em:false},
+  {id:"CHG-1048", t:"Submarine cable maintenance — Mauritius landing", opco:"Mauritius", risk:"emergency", status:"approved", slaH:0.4, planH:9, own:"RB", em:true},
+  {id:"CHG-1049", t:"VLAN re-segmentation — Kampala core",   opco:"Uganda",    risk:"medium",    status:"verified",    slaH: null, planH:-30, own:"SN", em:false},
+  {id:"CHG-1050", t:"Power redundancy test — Accra DC",      opco:"Ghana",     risk:"low",       status:"closed",      slaH: null, planH:-72, own:"AM", em:false},
+  {id:"CHG-1051", t:"MPLS LSP re-route — DRC backbone",      opco:"DRC",       risk:"high",      status:"rejected",    slaH: null, planH:null,own:"JG", em:false},
+  {id:"CHG-1052", t:"DNS resolver migration — group",        opco:"Group",     risk:"medium",    status:"pending",     slaH:13.5,  planH: 70, own:"LK", em:false},
+  {id:"CHG-1053", t:"Edge cache node deploy — Lomé",         opco:"Togo",      risk:"low",       status:"approved",    slaH:40.0,  planH: 74, own:"DT", em:false},
+  {id:"CHG-1054", t:"BGP community policy update — Mauritius",opco:"Mauritius", risk:"medium",    status:"implemented", slaH: null, planH:-18, own:"RB", em:false},
+  {id:"CHG-1055", t:"Spectrum re-grooming — Kampala–Entebbe",opco:"Uganda",    risk:"high",      status:"pending",     slaH:-0.3,  planH: 20, own:"SN", em:false},
+];
+const BLACKOUTS = [
+  {label:"Year-end financial freeze", scope:"Group (all OpCos)", endsH:50, amber:false},
+  {label:"Independence Day — Ghana",  scope:"Ghana",             endsH:6,  amber:true},
+];
+const STATUS_ORDER = ["draft","pending","approved","implemented","verified","closed"];
+const STATUS_COLOR = {draft:"#a1a1aa",pending:"#f59e0b",approved:"#10b981",rejected:"#f43f5e",implemented:"#3b82f6",verified:"#8b5cf6",closed:"#64748b"};
+const RISK_ORDER = ["low","medium","high","emergency"];
+const RISK_COLOR = {low:"#10b981",medium:"#f59e0b",high:"#f97316",emergency:"#f43f5e"};
+const OPEN = s => s!=="closed" && s!=="rejected";
+
+const t0 = Date.now();
+CHANGES.forEach(c=>{
+  c.sla    = c.slaH ==null ? null : t0 + c.slaH*3600e3;
+  c.planAt = c.planH==null ? null : t0 + c.planH*3600e3;
+});
+
+/* ---- derived metrics ---- */
+const M = {
+  open:    CHANGES.filter(c=>OPEN(c.status)).length,
+  pending: CHANGES.filter(c=>c.status==="pending").length,
+  breach:  CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla<t0).length,
+  atrisk:  CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla>=t0&&c.sla-t0<4*3600e3).length,
+  emerg:   CHANGES.filter(c=>OPEN(c.status)&&c.em).length,
+};
+document.querySelectorAll("[data-bind]").forEach(el=>{ if(M[el.dataset.bind]!=null) el.textContent=M[el.dataset.bind]; });
+
+const byStatus = s => CHANGES.filter(c=>c.status===s).length;
+const pad = n => String(n).padStart(2,"0");
+function hms(ms){ let s=Math.abs(ms)/1000; const h=Math.floor(s/3600); s-=h*3600; const m=Math.floor(s/60); return pad(h)+":"+pad(m)+":"+pad(Math.floor(s-m*60)); }
+function leftText(ms){ const a=Math.abs(ms); const h=Math.floor(a/3600e3); const m=Math.round((a-h*3600e3)/60e3); const v=h>=1?h+"h":m+"m"; return ms<0 ? v+" ago" : v+" left"; }
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function whenLabel(ms){ const d=new Date(ms); const sod=x=>{const y=new Date(x);y.setHours(0,0,0,0);return y.getTime();};
+  const dd=Math.round((sod(ms)-sod(Date.now()))/86400e3), hm=pad(d.getHours())+":"+pad(d.getMinutes());
+  if(dd<=0) return (d.getHours()>=18?"Tonight ":"Today ")+hm;
+  if(dd===1) return "Tomorrow "+hm;
+  return DOW[d.getDay()]+" "+hm; }
+function pillHTML(kind,val){ return `<span class="pill ${kind}-${val}">${val}</span>`; }
+const AVCOL={AM:"#34d399",KO:"#60a5fa",SN:"#fbbf24",DT:"#f472b6",PM:"#a78bfa",JG:"#f87171",RB:"#22d3ee",LK:"#fb923c"};
+
+/* =================== PANEL A · EXECUTIVE =================== */
+(function execPanel(){
+  const segs = ["pending","approved","implemented","verified","draft","rejected","closed"];
+  const bar = document.getElementById("exec-bar");
+  const leg = document.getElementById("exec-legend");
+  segs.forEach(s=>{ const n=byStatus(s); if(!n) return;
+    const i=document.createElement("i"); i.style.flex=n; i.style.background=STATUS_COLOR[s]; i.title=`${s}: ${n}`; bar.appendChild(i);
+    const sp=document.createElement("span"); sp.innerHTML=`<i style="background:${STATUS_COLOR[s]}"></i>${s} <b style="color:#16203a;font-weight:600">${n}</b>`; leg.appendChild(sp);
+  });
+  // needs attention: breaches first, then the emergency
+  const attn = CHANGES.filter(c=>OPEN(c.status)&&c.sla!=null&&c.sla<t0)
+    .concat(CHANGES.filter(c=>OPEN(c.status)&&c.em&&!(c.sla!=null&&c.sla<t0)))
+    .slice(0,3);
+  document.getElementById("exec-attn").innerHTML = attn.map(c=>{
+    const over = c.sla!=null && c.sla<t0;
+    const when = c.em && !over ? `<span class="when warn">${leftText(c.sla-t0)} to SLA</span>`
+                               : `<span class="when bad">SLA ${leftText(c.sla-t0)}</span>`;
+    return `<div class="arow"><span class="tk">${c.id}</span>
+      <span class="mid"><span class="t">${c.t}</span><span class="m">${c.opco} · ${c.risk}${c.em&&c.risk!=="emergency"?" · emergency override":""}</span></span>
+      ${when}</div>`;
+  }).join("");
+})();
+
+/* =================== PANEL B · CONSOLE =================== */
+(function consolePanel(){
+  const order = c => c.sla==null ? 9e15 : c.sla;      // urgency = soonest deadline first
+  const rows = CHANGES.filter(c=>OPEN(c.status)).sort((a,b)=>order(a)-order(b));
+  const queue = document.getElementById("con-queue");
+  queue.innerHTML = rows.map(c=>{
+    const av=`<span class="av" style="background:${AVCOL[c.own]||'#64748b'}">${c.own}</span>`;
+    let sla;
+    if(c.sla==null){ sla=`<div class="sla"><span class="st" style="color:#5b6577">—</span><div class="track"></div></div>`; }
+    else{ const rem=c.sla-t0, tot=SLA_HOURS[c.risk]*3600e3, frac=Math.max(0,Math.min(1,1-rem/tot));
+      const over=rem<0, warn=!over&&rem<4*3600e3;
+      sla=`<div class="sla"><span class="st ${over?'over':''}" data-deadline="${c.sla}">${over?'+':''}${hms(rem)}${over?' over':''}</span>
+        <div class="track"><i class="${over?'over':warn?'warn':''}" data-bar="${c.sla}" data-tot="${tot}" style="width:${over?100:frac*100}%"></i></div></div>`; }
+    return `<div class="qrow"><span class="id">${c.id}</span>
+      <span class="ti">${c.t}<br><small>${c.opco}</small></span>
+      ${pillHTML('r',c.risk)}${pillHTML('s',c.status)}${sla}${av}</div>`;
+  }).join("");
+
+  document.getElementById("con-blackouts").innerHTML = BLACKOUTS.map(b=>
+    `<div class="bo"><span class="ldot ${b.amber?'amb':''}">●</span><span><span class="bt">${b.label}</span><div class="bm">${b.scope} · ends in ${b.endsH}h</div></span></div>`
+  ).join("");
+
+  const up = CHANGES.filter(c=>c.planAt!=null&&c.planAt>t0&&OPEN(c.status)).sort((a,b)=>a.planAt-b.planAt).slice(0,3);
+  document.getElementById("con-upcoming").innerHTML = up.map(c=>
+    `<div class="bo"><span class="ldot" style="color:${c.em?'#ff8aa0':'#7cc9ff'}">▸</span><span><span class="bt">${c.id}</span><div class="bm"><span class="em">${whenLabel(c.planAt)}</span> · ${c.risk}</div></span></div>`
+  ).join("");
+
+  const feed=["CHG-1055 submitted","CHG-1044 approved","CHG-1051 rejected","CHG-1048 scheduled","CHG-1047 SLA breached","CHG-1054 implemented","CHG-1049 verified","CHG-1043 submitted"];
+  const track=document.getElementById("con-ticker");
+  const line=feed.map(f=>`<span><b>${f.split(' ')[0]}</b> ${f.split(' ').slice(1).join(' ')}</span>`).join("");
+  track.innerHTML=line+line;
+
+  // live tick: clock + countdowns
+  function tick(){
+    const now=Date.now();
+    const ck=document.getElementById("b-clock");
+    if(ck){ const d=new Date(); ck.textContent=pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds()); }
+    document.querySelectorAll("#con-queue .st[data-deadline]").forEach(el=>{
+      const rem=+el.dataset.deadline-now, over=rem<0;
+      el.textContent=(over?'+':'')+hms(rem)+(over?' over':''); el.classList.toggle("over",over);
+    });
+    document.querySelectorAll("#con-queue [data-bar]").forEach(el=>{
+      const rem=+el.dataset.bar-now, tot=+el.dataset.tot, over=rem<0;
+      el.style.width=(over?100:Math.max(0,Math.min(1,1-rem/tot))*100)+"%";
+      el.className= over?"over":(rem<4*3600e3?"warn":"");
+    });
+  }
+  tick(); setInterval(tick,1000);
+})();
+
+/* =================== PANEL C · PIPELINE =================== */
+(function pipePanel(){
+  const flow=document.getElementById("pipe-flow");
+  const peak=Math.max(...STATUS_ORDER.map(byStatus));
+  flow.innerHTML = STATUS_ORDER.map((s,idx)=>{
+    const n=byStatus(s), active=n===peak&&s==="pending", done=idx<1;
+    return `<div class="stage ${active?'active':''} ${done?'done':''}">
+      <div class="node"><div class="qn">${n}</div><div class="sn">${s}</div></div>
+      <span class="arrow"><svg class="ic" style="width:14px;height:14px"><use href="#i-chev"/></svg></span></div>`;
+  }).join("");
+
+  // decisions: pending, most urgent first
+  const dec=CHANGES.filter(c=>c.status==="pending").sort((a,b)=>(a.sla??9e15)-(b.sla??9e15));
+  document.getElementById("pipe-decmore").textContent=dec.length+" pending";
+  document.getElementById("pipe-dec").innerHTML = dec.slice(0,4).map(c=>{
+    const rem=c.sla-t0, over=rem<0, warn=!over&&rem<4*3600e3;
+    const cls=over?"urgent":warn?"soon":"";
+    const slaTxt=`<span class="sla ${over?'bad':warn?'warn':''}">SLA ${leftText(rem)}</span>`;
+    return `<div class="dec ${cls}"><div class="di"><div class="dt">${c.t}</div>
+      <div class="dm">${c.id} · ${c.opco} ${pillHTML('r',c.risk)} ${slaTxt}</div></div>
+      <div class="acts"><button class="ok">Approve</button><button class="no">Reject</button></div></div>`;
+  }).join("") + (dec.length>4?`<div style="text-align:center;margin-top:10px;font-size:12px;color:#00a3ff;font-weight:500">+${dec.length-4} more awaiting decision →</div>`:"");
+
+  // week strip
+  const today=new Date(); today.setHours(0,0,0,0);
+  const sched=CHANGES.filter(c=>c.planAt!=null&&c.planAt>=t0&&OPEN(c.status));
+  const blackoutDays={0:false,1:false,2:false,3:false,4:false,5:false,6:false}; // mark day 0 (today, Ghana indep.) blackout
+  let week="";
+  for(let i=0;i<7;i++){
+    const d=new Date(today.getTime()+i*24*3600e3);
+    const isToday=i===0, bo=i===0; // Independence Day — Ghana active today
+    const items=sched.filter(c=>{const cd=new Date(c.planAt);cd.setHours(0,0,0,0);return cd.getTime()===d.getTime();});
+    const chips=items.map(c=>`<i style="background:${RISK_COLOR[c.risk]}"></i>`).join("");
+    week+=`<div class="day ${isToday?'today':''} ${bo?'blackout':''}"><div class="dn">${DOW[d.getDay()]}</div><div class="dd">${d.getDate()}</div>
+      <div class="chips">${chips}</div>${bo?'<svg class="ic lk" style="width:12px;height:12px"><use href="#i-lock"/></svg>':''}</div>`;
+  }
+  document.getElementById("pipe-week").innerHTML=week;
+  const up=sched.sort((a,b)=>a.planAt-b.planAt).slice(0,3);
+  document.getElementById("pipe-wlist").innerHTML=up.map(c=>
+    `<div class="wl"><span class="wt ${c.em?'em':''}">${whenLabel(c.planAt)}</span> <b>${c.t}</b> · ${c.opco}</div>`
+  ).join("");
+
+  // risk mix (open)
+  const openC=CHANGES.filter(c=>OPEN(c.status));
+  const rmix=document.getElementById("pipe-rmix"); const rleg=document.getElementById("pipe-rleg");
+  RISK_ORDER.forEach(r=>{ const n=openC.filter(c=>c.risk===r).length; if(!n)return;
+    const i=document.createElement("i"); i.style.flex=n; i.style.background=RISK_COLOR[r]; i.textContent=n; rmix.appendChild(i);
+    const sp=document.createElement("span"); sp.innerHTML=`<i style="background:${RISK_COLOR[r]}"></i>${r} <b style="color:#1a2231;font-weight:600">${n}</b>`; rleg.appendChild(sp);
+  });
+})();
+</script>
+</body>
+</html>
