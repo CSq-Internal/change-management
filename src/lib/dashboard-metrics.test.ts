@@ -1,5 +1,5 @@
 import { test, expect } from "vitest"
-import { isOpen, slaState, durLabel, type DashboardChange } from "./dashboard-metrics"
+import { isOpen, slaState, durLabel, STATUS_ORDER, type DashboardChange } from "./dashboard-metrics"
 import { whenLabel } from "./dashboard-metrics"
 
 const now = Date.parse("2026-06-02T09:00:00Z")
@@ -57,4 +57,37 @@ test("whenLabel buckets today/tomorrow/weekday", () => {
   expect(whenLabel(today9pm, today9pm - 1)).toMatch(/^Tonight /)
   const tomorrow = Date.parse("2026-06-03T08:00:00Z")
   expect(whenLabel(tomorrow, today9pm)).toMatch(/^Tomorrow /)
+})
+
+import { buildDashboardData } from "./dashboard-metrics"
+
+test("buildDashboardData matches the approved mock", () => {
+  const d = buildDashboardData(fixture(), now)
+
+  // status-bar / summary counts
+  expect(d.counts.open).toBe(12)
+  expect(d.counts.pending).toBe(5)
+  expect(d.counts.breached).toBe(2)        // 1047, 1055
+  expect(d.counts.atRisk).toBe(3)          // 1043, 1042, 1048
+  expect(d.counts.emergency).toBe(1)       // 1048
+  expect(d.counts.scheduledToday).toBe(3)  // 1048(9h), 1044(14h), 1055(20h)
+  expect(d.counts.readyToAdvance).toBe(5)  // 3 approved + 2 implemented
+
+  // triage worklist grouping
+  expect(d.triage.overdue.map((w) => w.id)).toEqual(["CHG-1055", "CHG-1047"]) // soonest-breached first
+  expect(d.triage.awaiting.map((w) => w.id)).toEqual(["CHG-1043", "CHG-1042", "CHG-1052"])
+  expect(d.triage.advance).toHaveLength(5)
+  expect(d.triage.overdue[0].severity).toBe("over")
+  expect(d.triage.overdue[0].why).toMatch(/breached/)
+
+  // distributions
+  expect(d.report.statusCounts).toMatchObject({
+    draft: 1, pending: 5, approved: 3, implemented: 2, verified: 1, rejected: 1, closed: 1,
+  })
+  expect(d.report.riskOpen).toMatchObject({ low: 2, medium: 5, high: 4, emergency: 1 })
+  expect(d.report.opcoOpen[0]).toEqual({ name: "Uganda", count: 3 })
+
+  // monitor tiles cover all 6 lifecycle statuses in order
+  expect(d.monitor.tiles.map((t) => t.status)).toEqual(STATUS_ORDER)
+  expect(d.monitor.tiles.find((t) => t.status === "pending")!.count).toBe(5)
 })

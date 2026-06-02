@@ -57,3 +57,113 @@ export function whenLabel(whenMs: number, nowMs: number): string {
   if (dayDelta === 1) return `Tomorrow ${hm}`
   return `${DOW[d.getDay()]} ${hm}`
 }
+
+export interface WorklistItem {
+  id: string
+  title: string
+  opcoName: string
+  risk: RiskLevelName
+  ownerInitials: string
+  why: string
+  severity: "over" | "soon" | "go"
+}
+export interface StatusTile {
+  status: ChangeStatusName
+  count: number
+  risk: Record<RiskLevelName, number>
+}
+export interface NamedCount { name: string; count: number }
+
+export interface DashboardData {
+  counts: {
+    open: number; pending: number; breached: number; atRisk: number
+    emergency: number; scheduledToday: number; readyToAdvance: number
+  }
+  triage: { overdue: WorklistItem[]; awaiting: WorklistItem[]; advance: WorklistItem[] }
+  monitor: { tiles: StatusTile[] }
+  report: {
+    statusCounts: Record<ChangeStatusName, number>
+    riskOpen: Record<RiskLevelName, number>
+    opcoOpen: NamedCount[]
+  }
+}
+
+const ONE_DAY_MS = 24 * 3600_000
+
+export function buildDashboardData(changes: DashboardChange[], nowMs: number): DashboardData {
+  const open = changes.filter((c) => isOpen(c.status))
+  const breachedOf = (c: DashboardChange) => slaState(c.slaDeadline, nowMs) === "breached"
+  const bySla = (a: DashboardChange, b: DashboardChange) =>
+    (a.slaDeadline ? Date.parse(a.slaDeadline) : Infinity) -
+    (b.slaDeadline ? Date.parse(b.slaDeadline) : Infinity)
+
+  // "soonest-breached first" = most recently breached = highest (least-negative) deadline first
+  const overdueChanges = open.filter((c) => c.status === "pending" && breachedOf(c))
+    .sort((a, b) => (b.slaDeadline ? Date.parse(b.slaDeadline) : -Infinity) - (a.slaDeadline ? Date.parse(a.slaDeadline) : -Infinity))
+  const awaitingChanges = open
+    .filter((c) => c.status === "pending" && !breachedOf(c)).sort(bySla)
+  const advanceChanges = open
+    .filter((c) => c.status === "approved" || c.status === "implemented")
+    .sort((a, b) =>
+      (a.plannedStart ? Date.parse(a.plannedStart) : Infinity) -
+      (b.plannedStart ? Date.parse(b.plannedStart) : Infinity))
+
+  const base = (c: DashboardChange) => ({
+    id: c.id, title: c.title, opcoName: c.opcoName, risk: c.riskLevel, ownerInitials: c.ownerInitials,
+  })
+  const overdue: WorklistItem[] = overdueChanges.map((c) => ({
+    ...base(c), severity: "over",
+    why: `SLA breached ${durLabel(Date.parse(c.slaDeadline!) - nowMs)} ago`,
+  }))
+  const awaiting: WorklistItem[] = awaitingChanges.map((c) => {
+    const remaining = Date.parse(c.slaDeadline!) - nowMs
+    return { ...base(c), severity: remaining < AT_RISK_WINDOW_MS ? "soon" : "go", why: `${durLabel(remaining)} to SLA` }
+  })
+  const advance: WorklistItem[] = advanceChanges.map((c) => ({
+    ...base(c), severity: "go",
+    why: c.status === "approved"
+      ? (c.plannedStart ? `Approved · ${whenLabel(Date.parse(c.plannedStart), nowMs)}` : "Approved · ready to implement")
+      : "Implemented · ready to verify",
+  }))
+
+  const zeroStatus = () =>
+    ({ draft: 0, pending: 0, approved: 0, rejected: 0, implemented: 0, verified: 0, closed: 0 }) as Record<ChangeStatusName, number>
+  const statusCounts = zeroStatus()
+  for (const c of changes) statusCounts[c.status]++
+
+  const zeroRisk = () => ({ low: 0, medium: 0, high: 0, emergency: 0 }) as Record<RiskLevelName, number>
+  const riskOpen = zeroRisk()
+  for (const c of open) riskOpen[c.riskLevel]++
+
+  const opcoMap = new Map<string, number>()
+  for (const c of open) opcoMap.set(c.opcoName, (opcoMap.get(c.opcoName) ?? 0) + 1)
+  const opcoOpen: NamedCount[] = [...opcoMap.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+
+  const tiles: StatusTile[] = STATUS_ORDER.map((status) => {
+    const rows = changes.filter((c) => c.status === status)
+    const risk = zeroRisk()
+    for (const c of rows) risk[c.riskLevel]++
+    return { status, count: rows.length, risk }
+  })
+
+  const scheduledToday = open.filter(
+    (c) => c.plannedStart && Date.parse(c.plannedStart) >= nowMs && Date.parse(c.plannedStart) - nowMs < ONE_DAY_MS,
+  ).length
+
+  return {
+    counts: {
+      open: open.length,
+      pending: changes.filter((c) => c.status === "pending").length,
+      breached: open.filter(breachedOf).length,
+      atRisk: open.filter((c) => slaState(c.slaDeadline, nowMs) === "atRisk").length,
+      emergency: open.filter((c) => c.isEmergency).length,
+      scheduledToday,
+      readyToAdvance: advanceChanges.length,
+    },
+    triage: { overdue, awaiting, advance },
+    monitor: { tiles },
+    report: { statusCounts, riskOpen, opcoOpen },
+  }
+}
