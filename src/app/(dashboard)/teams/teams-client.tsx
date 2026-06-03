@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageUsers } from "@/lib/permissions"
+import { canManageAnyOpCo } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -28,11 +28,7 @@ export default function TeamsClient({ teams }: TeamsClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
   const isAdmin = session
-    ? canManageUsers(
-        session.user.organizations,
-        session.user.realmRoles,
-        session.user.organizations[0]?.alias ?? ""
-      )
+    ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
     : false
   const { toast } = useToast()
   const [name, setName] = useState("")

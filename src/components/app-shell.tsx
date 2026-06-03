@@ -6,7 +6,7 @@ import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageUsers } from "@/lib/permissions"
+import { canManageAnyOpCo } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
@@ -116,11 +116,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // TODO: wire to server data (Phase 4)
   const pendingApprovals: unknown[] = []
   const showAdminNav = session
-    ? canManageUsers(
-        session.user.organizations,
-        session.user.realmRoles,
-        session.user.organizations[0]?.alias ?? ""
-      )
+    ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
     : false
   const effectiveNavGroups = useMemo(
     () => navGroups.filter((group) => group.labelKey !== "nav.userManagement" || showAdminNav),
