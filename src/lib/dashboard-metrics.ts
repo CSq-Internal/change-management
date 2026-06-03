@@ -46,12 +46,12 @@ export function durLabel(ms: number): string {
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const pad = (n: number) => String(n).padStart(2, "0")
+const startOfDayMs = (ms: number) => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime() }
 
 /** "Tonight 21:00" / "Tomorrow 08:00" / "Wed 14:00", relative to nowMs. */
 export function whenLabel(whenMs: number, nowMs: number): string {
   const d = new Date(whenMs)
-  const startOfDay = (ms: number) => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime() }
-  const dayDelta = Math.round((startOfDay(whenMs) - startOfDay(nowMs)) / 86_400_000)
+  const dayDelta = Math.round((startOfDayMs(whenMs) - startOfDayMs(nowMs)) / 86_400_000)
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
   if (dayDelta <= 0) return `${d.getHours() >= 18 ? "Tonight" : "Today"} ${hm}`
   if (dayDelta === 1) return `Tomorrow ${hm}`
@@ -99,9 +99,10 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
   const bySla = (a: DashboardChange, b: DashboardChange) =>
     (a.slaDeadline ? Date.parse(a.slaDeadline) : Infinity) -
     (b.slaDeadline ? Date.parse(b.slaDeadline) : Infinity)
-  const startOfDay = (ms: number) => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime() }
+  // "start" if the planned window is today or already past — deliberately broader than
+  // counts.scheduledToday (which is future-only, next 24h); they answer different questions.
   const scheduledTodayOrPast = (planned: string | null) =>
-    planned != null && Math.round((startOfDay(Date.parse(planned)) - startOfDay(nowMs)) / 86_400_000) <= 0
+    planned != null && Math.round((startOfDayMs(Date.parse(planned)) - startOfDayMs(nowMs)) / 86_400_000) <= 0
 
   // most-overdue first = earliest deadline first (matches the mock's worklist order)
   const overdueChanges = open.filter((c) => c.status === "pending" && breachedOf(c)).sort(bySla)
