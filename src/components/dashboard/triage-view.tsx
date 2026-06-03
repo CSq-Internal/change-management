@@ -23,7 +23,7 @@ function Chip({ n, label, tone }: { n: number; label: string; tone: string }) {
   )
 }
 
-function Row({ item, actionLabel }: { item: WorklistItem; actionLabel: string }) {
+function Row({ item, language }: { item: WorklistItem; language: Language }) {
   return (
     <Link
       href={`/changes/${item.id}`}
@@ -38,7 +38,7 @@ function Row({ item, actionLabel }: { item: WorklistItem; actionLabel: string })
           <span className={`font-medium ${SEV_WHY[item.severity]}`}>{item.why}</span>
         </div>
       </div>
-      <span className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground">{actionLabel}</span>
+      <span className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground">{t(language, `dashboard.action.${item.action}`)}</span>
     </Link>
   )
 }
@@ -53,7 +53,6 @@ function GroupHeader({ dot, label, count }: { dot: string; label: string; count:
 }
 
 export function TriageView({ data, language }: { data: DashboardData; language: Language }) {
-  const advanceLabel = (it: WorklistItem) => (it.why.startsWith("Implemented") ? "Verify" : it.why.includes("Tonight") || it.why.includes("Today") ? "Start" : "Advance")
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -70,11 +69,11 @@ export function TriageView({ data, language }: { data: DashboardData; language: 
         </CardHeader>
         <CardContent className="space-y-1.5">
           <GroupHeader dot="bg-rose-500" label={t(language, "dashboard.triage.overdue")} count={data.triage.overdue.length} />
-          {data.triage.overdue.map((it) => <Row key={it.id} item={it} actionLabel="Review" />)}
+          {data.triage.overdue.map((it) => <Row key={it.id} item={it} language={language} />)}
           <GroupHeader dot="bg-amber-500" label={t(language, "dashboard.triage.awaiting")} count={data.triage.awaiting.length} />
-          {data.triage.awaiting.map((it) => <Row key={it.id} item={it} actionLabel="Review" />)}
+          {data.triage.awaiting.map((it) => <Row key={it.id} item={it} language={language} />)}
           <GroupHeader dot="bg-primary" label={t(language, "dashboard.triage.advance")} count={data.triage.advance.length} />
-          {data.triage.advance.map((it) => <Row key={it.id} item={it} actionLabel={advanceLabel(it)} />)}
+          {data.triage.advance.map((it) => <Row key={it.id} item={it} language={language} />)}
         </CardContent>
       </Card>
     </div>
