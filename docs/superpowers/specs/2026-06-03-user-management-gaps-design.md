@@ -95,14 +95,19 @@ manageableOpCoSlugs(orgs, realmRoles): string[] | "all"
 - **`setUserAssignments(userId, desired: {opcoSlug, role}[])`** (new, declarative):
   - Reject duplicate `opcoSlug` in `desired`. Require `desired.length >= 1` (to remove all
     access use Deactivate).
-  - Load current **active** assignments (+ opco). `touched = union(currentSlugs, desiredSlugs)`.
-  - Authz: for every slug in `touched`, require
-    `isGroupAdmin || canManageUsers(session..., slug)`; else throw `Forbidden`.
+  - Load current **active** assignments (+ opco). Compute **changed** slugs: added (in
+    `desired`, not current) ∪ removed (in current, not `desired`) ∪ role-changed (in both,
+    different role).
+  - Authz: for every **changed** slug, require `isGroupAdmin ||
+    canManageUsers(session..., slug)`; else throw `Forbidden`. Unchanged assignments need no
+    rights, so an OpCo admin can save a user who also holds assignments in OpCos they don't
+    manage — the client passes those back **unchanged** (rendered read-only in the dialog).
   - **Self-lockout guard:** if `user.keycloakId === session.keycloakId`, reject removing or
     downgrading the caller's own `admin` assignment.
-  - Diff & apply: add (create + best-effort `assignToOrganization`), remove (soft-delete:
-    `isActive:false, endedAt:now`), role change (update `role`). No Keycloak org removal
-    (app reads roles from DB).
+  - Apply the diff: add/role-change via `upsert` on `[userId, opcoId]` (revives soft-deleted
+    rows; sets `isActive:true, endedAt:null`) + best-effort `assignToOrganization`; remove via
+    soft-delete (`isActive:false, endedAt:now`). No Keycloak org removal (app reads roles from
+    DB).
   - Role options limited to OpCo-level roles (`requester|approver|auditor|admin`).
 - **`deactivateUser(userId)`** — add a **self-lockout guard** (caller can't deactivate
   themselves: `user.keycloakId === session.keycloakId` → throw); otherwise unchanged.
