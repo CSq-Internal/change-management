@@ -17,7 +17,6 @@ export default async function UsersPage() {
       opcoAssignments: {
         some: {
           ...(groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }),
-          isActive: true,
         },
       },
     },
@@ -33,6 +32,7 @@ export default async function UsersPage() {
     isActive: u.isActive,
     opcoAssignments: u.opcoAssignments.map((a) => ({
       role: a.role,
+      isActive: a.isActive,
       opco: { name: a.opco.name, slug: a.opco.slug },
     })),
   }))
