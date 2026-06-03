@@ -1,5 +1,5 @@
 // src/test/actions/users-authz.test.ts
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/session', () => ({
   getAppSession: vi.fn().mockResolvedValue({
@@ -29,12 +29,15 @@ const mockDb = {
   userOpCoAssignment: {
     create: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({}),
+    findMany: vi.fn().mockResolvedValue([]),
+    upsert: vi.fn().mockResolvedValue({}),
+    update: vi.fn().mockResolvedValue({}),
   },
 }
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
-import { createUser, deactivateUser, reactivateUser } from '@/server/actions/users'
+import { createUser, deactivateUser, reactivateUser, setUserAssignments } from '@/server/actions/users'
 import { getAppSession } from '@/lib/session'
 
 const groupAdmin = {
@@ -122,5 +125,63 @@ describe('reactivateUser — authorization', () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
     mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
     await expect(reactivateUser('target')).resolves.toBeUndefined()
+  })
+})
+
+describe('setUserAssignments — authorization & diff', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.user.findUnique.mockResolvedValue({ id: 'target', keycloakId: 'kc-target' })
+  })
+
+  it('rejects a ghana admin changing a uganda assignment', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([])
+    await expect(
+      setUserAssignments('target', [{ opcoSlug: 'uganda', role: 'requester' }])
+    ).rejects.toThrow(/Forbidden/)
+  })
+
+  it('allows a group_admin to add an assignment', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([])
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: 'opco-gh', slug: 'ghana' })
+    await setUserAssignments('target', [{ opcoSlug: 'ghana', role: 'approver' }])
+    expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not require rights for unchanged out-of-scope assignments', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { opco: { slug: 'ghana', id: 'opco-gh' }, role: 'requester' },
+      { opco: { slug: 'uganda', id: 'opco-ug' }, role: 'approver' },
+    ])
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: 'opco-gh', slug: 'ghana' })
+    await setUserAssignments('target', [
+      { opcoSlug: 'ghana', role: 'admin' },
+      { opcoSlug: 'uganda', role: 'approver' },
+    ])
+    expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects removing your own admin assignment', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin) // keycloakId kc-gha
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'self', keycloakId: 'kc-gha' })
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { opco: { slug: 'ghana', id: 'opco-gh' }, role: 'admin' },
+    ])
+    await expect(
+      setUserAssignments('self', [{ opcoSlug: 'ghana', role: 'requester' }])
+    ).rejects.toThrow(/own admin/)
+  })
+
+  it('rejects duplicate opco slugs', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    await expect(
+      setUserAssignments('target', [
+        { opcoSlug: 'ghana', role: 'admin' },
+        { opcoSlug: 'ghana', role: 'requester' },
+      ])
+    ).rejects.toThrow(/Duplicate/)
   })
 })

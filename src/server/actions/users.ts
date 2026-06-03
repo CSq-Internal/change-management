@@ -114,3 +114,84 @@ export async function reactivateUser(userId: string) {
     data: { isActive: true, endedAt: null },
   })
 }
+
+export async function setUserAssignments(
+  userId: string,
+  desired: Array<{ opcoSlug: string; role: Role }>
+) {
+  const session = await getAppSession()
+  const db = getPrisma()
+
+  const slugs = desired.map((d) => d.opcoSlug)
+  if (new Set(slugs).size !== slugs.length) {
+    throw new Error("Duplicate OpCo in assignments")
+  }
+  if (desired.length === 0) {
+    throw new Error("At least one assignment is required")
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, keycloakId: true },
+  })
+  if (!user) throw new Error("User not found")
+
+  const current = await db.userOpCoAssignment.findMany({
+    where: { userId, isActive: true },
+    include: { opco: true },
+  })
+  const currentBySlug = new Map(current.map((a: { opco: { slug: string }; role: string }) => [a.opco.slug, a.role]))
+  const desiredBySlug = new Map(desired.map((d) => [d.opcoSlug, d.role]))
+
+  const changed = new Set<string>()
+  for (const [slug, role] of desiredBySlug) {
+    if (currentBySlug.get(slug) !== role) changed.add(slug) // added or role-changed
+  }
+  for (const slug of currentBySlug.keys()) {
+    if (!desiredBySlug.has(slug)) changed.add(slug) // removed
+  }
+
+  for (const slug of changed) {
+    if (
+      !isGroupAdmin(session.realmRoles) &&
+      !canManageUsers(session.organizations, session.realmRoles, slug)
+    ) {
+      throw new Error(`Forbidden: cannot manage users in ${slug}`)
+    }
+  }
+
+  if (user.keycloakId === session.keycloakId) {
+    for (const [slug, role] of currentBySlug) {
+      if (role === "admin" && desiredBySlug.get(slug) !== "admin") {
+        throw new Error("Forbidden: cannot remove your own admin access")
+      }
+    }
+  }
+
+  for (const slug of changed) {
+    const desiredRole = desiredBySlug.get(slug)
+    if (desiredRole === undefined) {
+      const opcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
+      await db.userOpCoAssignment.update({
+        where: { userId_opcoId: { userId, opcoId } },
+        data: { isActive: false, endedAt: new Date() },
+      })
+    } else {
+      const opco = await db.opCo.findUnique({ where: { slug } })
+      if (!opco) {
+        console.warn(`[setUserAssignments] OpCo not found for slug: ${slug}`)
+        continue
+      }
+      await db.userOpCoAssignment.upsert({
+        where: { userId_opcoId: { userId, opcoId: opco.id } },
+        update: { role: desiredRole, isActive: true, endedAt: null },
+        create: { userId, opcoId: opco.id, role: desiredRole },
+      })
+      try {
+        await assignToOrganization(user.keycloakId, slug)
+      } catch (err) {
+        console.warn(`[keycloak] org assignment skipped for ${slug}:`, err)
+      }
+    }
+  }
+}
