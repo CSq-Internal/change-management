@@ -54,3 +54,18 @@ export function isMemberOfOpCo(organizations: SessionOrganization[], slug: strin
 export function getUserOpCos(organizations: SessionOrganization[]): string[] {
   return organizations.map((o) => o.alias)
 }
+
+export function canManageAnyOpCo(
+  organizations: SessionOrganization[],
+  realmRoles: string[]
+): boolean {
+  return isGroupAdmin(realmRoles) || organizations.some((o) => o.roles.includes("admin"))
+}
+
+export function manageableOpCoSlugs(
+  organizations: SessionOrganization[],
+  realmRoles: string[]
+): string[] | "all" {
+  if (isGroupAdmin(realmRoles)) return "all"
+  return organizations.filter((o) => o.roles.includes("admin")).map((o) => o.alias)
+}

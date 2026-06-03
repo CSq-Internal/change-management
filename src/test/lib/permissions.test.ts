@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canApprove, canAudit, canManageUsers, isGroupAdmin } from '@/lib/permissions'
+import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs } from '@/lib/permissions'
 import type { SessionOrganization } from '@/types/next-auth'
 
 const ghanaApprover: SessionOrganization = { id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }
@@ -45,5 +45,35 @@ describe('isGroupAdmin', () => {
   })
   it('returns false without group_admin', () => {
     expect(isGroupAdmin(['approver'])).toBe(false)
+  })
+})
+
+describe('canManageAnyOpCo', () => {
+  it('true when admin in any opco (even a non-first one)', () => {
+    const orgs: SessionOrganization[] = [
+      { id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['requester'] },
+      { id: 'o2', name: 'Uganda', alias: 'uganda', roles: ['admin'] },
+    ]
+    expect(canManageAnyOpCo(orgs, [])).toBe(true)
+  })
+  it('false when no admin role anywhere', () => {
+    const orgs: SessionOrganization[] = [{ id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['requester'] }]
+    expect(canManageAnyOpCo(orgs, [])).toBe(false)
+  })
+  it('true for group_admin with no orgs', () => {
+    expect(canManageAnyOpCo([], ['group_admin'])).toBe(true)
+  })
+})
+
+describe('manageableOpCoSlugs', () => {
+  it('returns "all" for group_admin', () => {
+    expect(manageableOpCoSlugs([], ['group_admin'])).toBe('all')
+  })
+  it('returns only admin opco slugs for an opco admin', () => {
+    const orgs: SessionOrganization[] = [
+      { id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['admin'] },
+      { id: 'o2', name: 'Uganda', alias: 'uganda', roles: ['requester'] },
+    ]
+    expect(manageableOpCoSlugs(orgs, [])).toEqual(['ghana'])
   })
 })
