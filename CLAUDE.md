@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm dev          # start dev server
 pnpm build        # prisma generate + next build
 pnpm lint         # eslint
+pnpm test         # vitest run (one-shot)
+pnpm test:watch   # vitest watch mode
 ```
 
 Type-check without building:
@@ -16,7 +18,13 @@ Type-check without building:
 pnpm tsc --noEmit
 ```
 
-There are no tests yet. The README roadmap lists them as a future item.
+Tests run on Vitest (jsdom + React Testing Library; config in `vitest.config.ts`, setup in
+`src/test/setup.ts`). Coverage spans auth/enrichment (`src/test/auth*.test.ts`), permissions
+(`src/test/lib/permissions.test.ts`), server actions
+(`src/test/actions/*` — changes, approvals, blackout, authz, audit immutability), and the
+dashboard (`src/lib/dashboard-metrics.test.ts` pure logic + `src/app/dashboard-client.test.tsx`
+render smoke test). `src/test/integration/isolation.test.ts` spins up a real Postgres via
+Testcontainers and therefore needs Docker running — it fails (rather than skips) without it.
 
 Use `pnpm` — `package-lock.json` has been deleted and the project uses `pnpm-lock.yaml`.
 
