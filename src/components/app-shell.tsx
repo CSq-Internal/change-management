@@ -10,7 +10,7 @@ import { canManageUsers } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
-import { resolveTheme, type ThemeMode } from "@/lib/theme"
+import { resolveTheme, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme"
 import {
   ArrowLeft,
   BarChart3,
@@ -139,7 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const savedScale = window.localStorage.getItem("csq-font-scale")
     if (savedLang) setLanguage(savedLang)
     if (savedScale) setFontScale(Number(savedScale))
-    const savedTheme = window.localStorage.getItem("csq-theme") as ThemeMode | null
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null
     if (savedTheme) setTheme(savedTheme)
   }, [])
 
