@@ -87,3 +87,18 @@ describe('deactivateUser — authorization', () => {
     await expect(deactivateUser('target')).resolves.toBeUndefined()
   })
 })
+
+describe('deactivateUser — self-lockout', () => {
+  it('rejects deactivating yourself', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce({
+      keycloakId: 'kc-self', email: 's@csquared.com', name: 'S',
+      organizations: [{ id: 'o', name: 'Ghana', alias: 'ghana', roles: ['admin'] }],
+      realmRoles: [],
+    })
+    mockDb.user.findUnique.mockResolvedValueOnce({
+      id: 'self', keycloakId: 'kc-self',
+      opcoAssignments: [{ opco: { slug: 'ghana' }, isActive: true }],
+    })
+    await expect(deactivateUser('self')).rejects.toThrow(/yourself/)
+  })
+})

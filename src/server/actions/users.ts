@@ -65,6 +65,10 @@ export async function deactivateUser(userId: string) {
   })
   if (!user) throw new Error("User not found")
 
+  if (user.keycloakId === session.keycloakId) {
+    throw new Error("Forbidden: cannot deactivate yourself")
+  }
+
   const authorized =
     isGroupAdmin(session.realmRoles) ||
     user.opcoAssignments.some((a) =>
