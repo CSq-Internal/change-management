@@ -40,6 +40,8 @@ import {
   PanelLeftOpen,
   Menu,
   X,
+  Sun,
+  Moon,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -336,6 +338,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     }}
                   />
                 </label>
+                <button
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                  onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                  aria-label={translate("theme.toggle")}
+                >
+                  {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </button>
                 <div className="relative">
                   <button
                     className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"
