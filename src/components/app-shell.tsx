@@ -10,6 +10,7 @@ import { canManageUsers } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
+import { resolveTheme, type ThemeMode } from "@/lib/theme"
 import {
   ArrowLeft,
   BarChart3,
@@ -96,13 +97,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light")
   const { data: session } = useSession()
   const currentUser = session?.user ?? null
   const {
     language,
     fontScale,
+    theme,
     setLanguage,
     setFontScale,
+    setTheme,
   } = useStore()
   const translate = (key: string) => t(language, key)
   // TODO: wire to server data (Phase 4)
@@ -135,6 +139,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const savedScale = window.localStorage.getItem("csq-font-scale")
     if (savedLang) setLanguage(savedLang)
     if (savedScale) setFontScale(Number(savedScale))
+    const savedTheme = window.localStorage.getItem("csq-theme") as ThemeMode | null
+    if (savedTheme) setTheme(savedTheme)
   }, [])
 
   useEffect(() => {
@@ -149,6 +155,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem("csq-font-scale", String(value))
     document.documentElement.style.setProperty("--app-font-scale", String(value))
   }, [fontScale])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const mql = window.matchMedia("(prefers-color-scheme: dark)")
+    const apply = () => {
+      const resolved = resolveTheme(theme, mql.matches)
+      document.documentElement.classList.toggle("dark", resolved === "dark")
+      document.documentElement.style.colorScheme = resolved
+      setResolvedTheme(resolved)
+    }
+    apply()
+    if (theme === "system") {
+      mql.addEventListener("change", apply)
+      return () => mql.removeEventListener("change", apply)
+    }
+  }, [theme])
 
   if (pathname === "/login") {
     return (
