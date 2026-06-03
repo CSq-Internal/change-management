@@ -91,3 +91,16 @@ test("buildDashboardData matches the approved mock", () => {
   expect(d.monitor.tiles.map((t) => t.status)).toEqual(STATUS_ORDER)
   expect(d.monitor.tiles.find((t) => t.status === "pending")!.count).toBe(5)
 })
+
+test("buildDashboardData carries an explicit action per worklist item", () => {
+  const d = buildDashboardData(fixture(), now)
+
+  // overdue + awaiting are always a plain review
+  expect(d.triage.overdue.every((w) => w.action === "review")).toBe(true)
+  expect(d.triage.awaiting.every((w) => w.action === "review")).toBe(true)
+
+  // advance: implemented -> verify; approved scheduled today -> start; approved later -> advance
+  expect(d.triage.advance.map((w) => w.action)).toEqual([
+    "verify", "verify", "start", "start", "advance",
+  ])
+})

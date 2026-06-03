@@ -58,6 +58,8 @@ export function whenLabel(whenMs: number, nowMs: number): string {
   return `${DOW[d.getDay()]} ${hm}`
 }
 
+export type WorklistAction = "review" | "start" | "advance" | "verify"
+
 export interface WorklistItem {
   id: string
   title: string
@@ -66,6 +68,7 @@ export interface WorklistItem {
   ownerInitials: string
   why: string
   severity: "over" | "soon" | "go"
+  action: WorklistAction
 }
 export interface StatusTile {
   status: ChangeStatusName
@@ -96,6 +99,9 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
   const bySla = (a: DashboardChange, b: DashboardChange) =>
     (a.slaDeadline ? Date.parse(a.slaDeadline) : Infinity) -
     (b.slaDeadline ? Date.parse(b.slaDeadline) : Infinity)
+  const startOfDay = (ms: number) => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime() }
+  const scheduledTodayOrPast = (planned: string | null) =>
+    planned != null && Math.round((startOfDay(Date.parse(planned)) - startOfDay(nowMs)) / 86_400_000) <= 0
 
   // most-overdue first = earliest deadline first (matches the mock's worklist order)
   const overdueChanges = open.filter((c) => c.status === "pending" && breachedOf(c)).sort(bySla)
@@ -111,19 +117,25 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
     id: c.id, title: c.title, opcoName: c.opcoName, risk: c.riskLevel, ownerInitials: c.ownerInitials,
   })
   const overdue: WorklistItem[] = overdueChanges.map((c) => ({
-    ...base(c), severity: "over",
+    ...base(c), severity: "over", action: "review" as const,
     why: `SLA breached ${durLabel(Date.parse(c.slaDeadline!) - nowMs)} ago`,
   }))
   const awaiting: WorklistItem[] = awaitingChanges.map((c) => {
     const remaining = Date.parse(c.slaDeadline!) - nowMs
-    return { ...base(c), severity: remaining < AT_RISK_WINDOW_MS ? "soon" : "go", why: `${durLabel(remaining)} to SLA` }
+    return { ...base(c), severity: remaining < AT_RISK_WINDOW_MS ? "soon" : "go", action: "review" as const, why: `${durLabel(remaining)} to SLA` }
   })
-  const advance: WorklistItem[] = advanceChanges.map((c) => ({
-    ...base(c), severity: "go",
-    why: c.status === "approved"
-      ? (c.plannedStart ? `Approved · ${whenLabel(Date.parse(c.plannedStart), nowMs)}` : "Approved · ready to implement")
-      : "Implemented · ready to verify",
-  }))
+  const advance: WorklistItem[] = advanceChanges.map((c) => {
+    const action: WorklistAction =
+      c.status === "implemented" ? "verify"
+        : scheduledTodayOrPast(c.plannedStart) ? "start"
+          : "advance"
+    return {
+      ...base(c), severity: "go", action,
+      why: c.status === "approved"
+        ? (c.plannedStart ? `Approved · ${whenLabel(Date.parse(c.plannedStart), nowMs)}` : "Approved · ready to implement")
+        : "Implemented · ready to verify",
+    }
+  })
 
   const zeroStatus = () =>
     ({ draft: 0, pending: 0, approved: 0, rejected: 0, implemented: 0, verified: 0, closed: 0 }) as Record<ChangeStatusName, number>
