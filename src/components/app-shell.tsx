@@ -542,6 +542,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {translate("prefs.text.current")}: {(fontScale * 100).toFixed(0)}%
                 </div>
               </div>
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  {translate("prefs.theme")}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["light", "dark", "system"] as ThemeMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setTheme(mode)}
+                      className={`h-9 rounded-md border text-sm ${
+                        theme === mode
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                      aria-pressed={theme === mode}
+                    >
+                      {translate(`prefs.theme.${mode}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
