@@ -4,7 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers } from "@/lib/permissions"
-import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser } from "@/server/keycloak"
+import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
 import type { Role } from "@prisma/client"
 
 export async function createUser(input: {
@@ -84,5 +84,33 @@ export async function deactivateUser(userId: string) {
   await db.userOpCoAssignment.updateMany({
     where: { userId },
     data: { isActive: false, endedAt: new Date() },
+  })
+}
+
+export async function reactivateUser(userId: string) {
+  const session = await getAppSession()
+
+  const db = getPrisma()
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    include: { opcoAssignments: { include: { opco: true } } },
+  })
+  if (!user) throw new Error("User not found")
+
+  const authorized =
+    isGroupAdmin(session.realmRoles) ||
+    user.opcoAssignments.some((a) =>
+      canManageUsers(session.organizations, session.realmRoles, a.opco.slug)
+    )
+  if (!authorized) {
+    throw new Error("Forbidden: cannot manage this user")
+  }
+
+  await reactivateKeycloakUser(user.keycloakId)
+
+  await db.user.update({ where: { id: userId }, data: { isActive: true } })
+  await db.userOpCoAssignment.updateMany({
+    where: { userId },
+    data: { isActive: true, endedAt: null },
   })
 }

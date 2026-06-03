@@ -13,6 +13,7 @@ vi.mock('@/server/keycloak', () => ({
   createKeycloakUser: vi.fn().mockResolvedValue('kc-new'),
   assignToOrganization: vi.fn().mockResolvedValue(undefined),
   deactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
+  reactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
 }))
 
 const mockDb = {
@@ -33,7 +34,7 @@ const mockDb = {
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
-import { createUser, deactivateUser } from '@/server/actions/users'
+import { createUser, deactivateUser, reactivateUser } from '@/server/actions/users'
 import { getAppSession } from '@/lib/session'
 
 const groupAdmin = {
@@ -100,5 +101,26 @@ describe('deactivateUser — self-lockout', () => {
       opcoAssignments: [{ opco: { slug: 'ghana' }, isActive: true }],
     })
     await expect(deactivateUser('self')).rejects.toThrow(/yourself/)
+  })
+})
+
+describe('reactivateUser — authorization', () => {
+  const inactiveTarget = {
+    id: 'target', keycloakId: 'kc-target', isActive: false,
+    opcoAssignments: [{ opco: { slug: 'ghana' } }],
+  }
+  it('rejects a non-admin caller', async () => {
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    await expect(reactivateUser('target')).rejects.toThrow(/Forbidden/)
+  })
+  it('allows a group_admin to reactivate', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    await expect(reactivateUser('target')).resolves.toBeUndefined()
+  })
+  it('allows a ghana admin to reactivate a ghana user', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    await expect(reactivateUser('target')).resolves.toBeUndefined()
   })
 })

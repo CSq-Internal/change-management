@@ -116,3 +116,21 @@ export async function deactivateKeycloakUser(keycloakUserId: string): Promise<vo
     throw new Error(`Failed to deactivate Keycloak user: ${res.status} ${await res.text()}`)
   }
 }
+
+export async function reactivateKeycloakUser(keycloakUserId: string): Promise<void> {
+  const token = await getAdminToken()
+  const res = await fetch(
+    `${KC_BASE}/admin/realms/csquared/users/${keycloakUserId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ enabled: true }),
+    }
+  )
+  if (!res.ok) {
+    throw new Error(`Failed to reactivate Keycloak user: ${res.status} ${await res.text()}`)
+  }
+}
