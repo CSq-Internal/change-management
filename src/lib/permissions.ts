@@ -91,3 +91,11 @@ export function canManageTeams(
 ): boolean {
   return isGroupAdmin(realmRoles) || hasRoleInOpCo(organizations, opcoSlug, "admin")
 }
+
+export function canManageCab(
+  organizations: SessionOrganization[],
+  realmRoles: string[],
+  opcoSlug: string
+): boolean {
+  return isGroupAdmin(realmRoles) || hasRoleInOpCo(organizations, opcoSlug, "admin")
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole, canManageTeams } from '@/lib/permissions'
+import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole, canManageTeams, canManageCab } from '@/lib/permissions'
 import type { SessionOrganization } from '@/types/next-auth'
 
 const ghanaApprover: SessionOrganization = { id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }
@@ -123,5 +123,26 @@ describe("canManageTeams", () => {
 
   it("forbids a non-admin OpCo member", () => {
     expect(canManageTeams(ghanaRequesterOrgs, [], "ghana")).toBe(false)
+  })
+})
+
+describe("canManageCab", () => {
+  const ghanaAdminOrgs = [{ id: "o", name: "Ghana", alias: "ghana", roles: ["admin"] }]
+  const ghanaApproverOrgs = [{ id: "o", name: "Ghana", alias: "ghana", roles: ["approver"] }]
+
+  it("allows a group_admin to manage any OpCo's CAB", () => {
+    expect(canManageCab([], ["group_admin"], "ghana")).toBe(true)
+  })
+
+  it("allows an OpCo admin to manage their OpCo's CAB", () => {
+    expect(canManageCab(ghanaAdminOrgs, [], "ghana")).toBe(true)
+  })
+
+  it("forbids an OpCo admin in an OpCo they don't administer", () => {
+    expect(canManageCab(ghanaAdminOrgs, [], "uganda")).toBe(false)
+  })
+
+  it("forbids a mere approver (eligibility is not management)", () => {
+    expect(canManageCab(ghanaApproverOrgs, [], "ghana")).toBe(false)
   })
 })
