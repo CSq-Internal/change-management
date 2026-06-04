@@ -83,3 +83,11 @@ export function canAssignRole(
   if (role === "admin") return false // OpCo admins cannot mint admins
   return hasRoleInOpCo(organizations, opcoSlug, "admin")
 }
+
+export function canManageTeams(
+  organizations: SessionOrganization[],
+  realmRoles: string[],
+  opcoSlug: string
+): boolean {
+  return isGroupAdmin(realmRoles) || hasRoleInOpCo(organizations, opcoSlug, "admin")
+}
