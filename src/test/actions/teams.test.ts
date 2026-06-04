@@ -31,7 +31,14 @@ const mockDb = {
 
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { createTeam, updateTeam, deleteTeam } from "@/server/actions/teams"
+import {
+  createTeam,
+  updateTeam,
+  deleteTeam,
+  addTeamMember,
+  removeTeamMember,
+  setTeamMemberRole,
+} from "@/server/actions/teams"
 import { getAppSession } from "@/lib/session"
 
 const groupAdmin = { keycloakId: "kc-ga", email: "ga@test.com", name: "Group Admin", organizations: [], realmRoles: ["group_admin"] }
@@ -96,6 +103,56 @@ describe("deleteTeam", () => {
     await deleteTeam("team-1")
     expect(mockDb.teamMember.deleteMany).toHaveBeenCalledWith({ where: { teamId: "team-1" } })
     expect(mockDb.team.delete).toHaveBeenCalledTimes(1)
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("addTeamMember", () => {
+  it("rejects a non-admin", async () => {
+    await expect(addTeamMember("team-1", "user-2", "member")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("rejects a user who is not assigned to the team's OpCo", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findFirst.mockResolvedValueOnce(null)
+    await expect(addTeamMember("team-1", "outsider", "member")).rejects.toThrow(/not assigned/i)
+  })
+
+  it("adds an eligible member and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await addTeamMember("team-1", "user-2", "lead")
+    expect(mockDb.teamMember.upsert).toHaveBeenCalledTimes(1)
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("removeTeamMember", () => {
+  it("rejects a non-admin", async () => {
+    await expect(removeTeamMember("team-1", "user-2")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("removes a member and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    await removeTeamMember("team-1", "user-2")
+    expect(mockDb.teamMember.delete).toHaveBeenCalledWith({
+      where: { teamId_userId: { teamId: "team-1", userId: "user-2" } },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("setTeamMemberRole", () => {
+  it("rejects a non-admin", async () => {
+    await expect(setTeamMemberRole("team-1", "user-2", "lead")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("updates a member's role and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await setTeamMemberRole("team-1", "user-2", "lead")
+    expect(mockDb.teamMember.update).toHaveBeenCalledWith({
+      where: { teamId_userId: { teamId: "team-1", userId: "user-2" } },
+      data: { role: "lead" },
+    })
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
   })
 })

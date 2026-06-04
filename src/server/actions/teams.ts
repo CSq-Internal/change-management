@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { canManageTeams } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import type { SessionOrganization } from "@/types/next-auth"
+import type { TeamRole } from "@prisma/client"
 
 type Session = { keycloakId: string; organizations: SessionOrganization[]; realmRoles: string[] }
 
@@ -81,5 +82,74 @@ export async function deleteTeam(teamId: string) {
       opcoId,
       summary: `Deleted team ${teamId}`,
     })
+  })
+}
+
+export async function addTeamMember(teamId: string, userId: string, role: TeamRole = "member") {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
+  assertCanManageTeams(session, opcoSlug)
+
+  // Eligibility: a team member must hold an active assignment in the team's OpCo.
+  const assignment = await db.userOpCoAssignment.findFirst({
+    where: { userId, opcoId, isActive: true },
+  })
+  if (!assignment) throw new Error("Forbidden: user is not assigned to this team's OpCo")
+
+  return db.$transaction(async (tx) => {
+    const member = await tx.teamMember.upsert({
+      where: { teamId_userId: { teamId, userId } },
+      update: { role },
+      create: { teamId, userId, role },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "team.member.add",
+      opcoId,
+      targetUserId: userId,
+      summary: `Added user ${userId} to team ${teamId} as ${role}`,
+    })
+    return member
+  })
+}
+
+export async function removeTeamMember(teamId: string, userId: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
+  assertCanManageTeams(session, opcoSlug)
+
+  await db.$transaction(async (tx) => {
+    await tx.teamMember.delete({ where: { teamId_userId: { teamId, userId } } })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "team.member.remove",
+      opcoId,
+      targetUserId: userId,
+      summary: `Removed user ${userId} from team ${teamId}`,
+    })
+  })
+}
+
+export async function setTeamMemberRole(teamId: string, userId: string, role: TeamRole) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
+  assertCanManageTeams(session, opcoSlug)
+
+  return db.$transaction(async (tx) => {
+    const member = await tx.teamMember.update({
+      where: { teamId_userId: { teamId, userId } },
+      data: { role },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "team.member.role",
+      opcoId,
+      targetUserId: userId,
+      summary: `Set user ${userId} role to ${role} in team ${teamId}`,
+    })
+    return member
   })
 }
