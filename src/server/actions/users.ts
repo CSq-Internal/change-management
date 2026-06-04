@@ -7,6 +7,19 @@ import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
 import type { Role, Prisma } from "@prisma/client"
+import type { SessionOrganization } from "@/types/next-auth"
+
+// Throws unless the caller may manage a user — a group_admin, or an admin of any
+// OpCo the user is assigned to.
+function assertCanManageUser(
+  session: { organizations: SessionOrganization[]; realmRoles: string[] },
+  assignments: Array<{ opco: { slug: string } }>
+) {
+  const authorized =
+    isGroupAdmin(session.realmRoles) ||
+    assignments.some((a) => canManageUsers(session.organizations, session.realmRoles, a.opco.slug))
+  if (!authorized) throw new Error("Forbidden: cannot manage this user")
+}
 
 export async function onboardUser(input: {
   name: string
@@ -97,14 +110,7 @@ export async function deactivateUser(userId: string) {
     throw new Error("Forbidden: cannot deactivate yourself")
   }
 
-  const authorized =
-    isGroupAdmin(session.realmRoles) ||
-    user.opcoAssignments.some((a) =>
-      canManageUsers(session.organizations, session.realmRoles, a.opco.slug)
-    )
-  if (!authorized) {
-    throw new Error("Forbidden: cannot manage this user")
-  }
+  assertCanManageUser(session, user.opcoAssignments)
 
   for (const a of user.opcoAssignments) {
     if (a.isActive && a.role === "admin") {
@@ -139,14 +145,7 @@ export async function reactivateUser(userId: string) {
   })
   if (!user) throw new Error("User not found")
 
-  const authorized =
-    isGroupAdmin(session.realmRoles) ||
-    user.opcoAssignments.some((a) =>
-      canManageUsers(session.organizations, session.realmRoles, a.opco.slug)
-    )
-  if (!authorized) {
-    throw new Error("Forbidden: cannot manage this user")
-  }
+  assertCanManageUser(session, user.opcoAssignments)
 
   await reactivateKeycloakUser(user.keycloakId)
 

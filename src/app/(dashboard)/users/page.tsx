@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { manageableOpCoSlugs } from "@/lib/permissions"
+import { isGroupLevel, manageableOpCoSlugs } from "@/lib/permissions"
 import UsersClient from "./users-client"
 
 export default async function UsersPage() {
@@ -9,7 +9,11 @@ export default async function UsersPage() {
   if (!session) redirect("/login")
 
   const db = getPrisma()
-  const scope = manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
+  // Group-level roles (group_admin and read-only group_auditor) see every user;
+  // OpCo admins are scoped to the OpCos they manage.
+  const scope = isGroupLevel(session.user.realmRoles)
+    ? "all"
+    : manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
 
   const users = await db.user.findMany({
     where:
