@@ -42,6 +42,8 @@ import {
   X,
   Sun,
   Moon,
+  Gavel,
+  ArrowLeftRight,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -61,6 +63,8 @@ const navGroups = [
     items: [
       { href: "/users", labelKey: "nav.users", icon: Users },
       { href: "/teams", labelKey: "nav.teams", icon: UsersRound },
+      { href: "/cab", labelKey: "nav.cab", icon: Gavel },
+      { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight },
     ],
   },
   {
