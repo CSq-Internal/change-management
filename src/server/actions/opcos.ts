@@ -13,11 +13,21 @@ function assertGroupAdmin(session: { realmRoles: string[] }) {
   }
 }
 
-// Loads an OpCo by id; throws if missing. (Used by rename/archive actions.)
+// Loads an OpCo by id; throws if missing.
 async function loadOpCo(db: ReturnType<typeof getPrisma>, opcoId: string) {
   const opco = await db.opCo.findUnique({ where: { id: opcoId } })
   if (!opco) throw new Error("OpCo not found")
   return opco
+}
+
+// Shared preamble for actions on an existing OpCo: resolves the session and client,
+// asserts group_admin, and loads the OpCo.
+async function authorizeOpCoAction(opcoId: string) {
+  const session = await getAppSession()
+  assertGroupAdmin(session)
+  const db = getPrisma()
+  const opco = await loadOpCo(db, opcoId)
+  return { session, db, opco }
 }
 
 export async function createOpCo(input: { slug: string; name: string; locale?: string }) {
@@ -52,10 +62,7 @@ export async function createOpCo(input: { slug: string; name: string; locale?: s
 }
 
 export async function renameOpCo(opcoId: string, name: string) {
-  const session = await getAppSession()
-  assertGroupAdmin(session)
-  const db = getPrisma()
-  const opco = await loadOpCo(db, opcoId)
+  const { session, db, opco } = await authorizeOpCoAction(opcoId)
 
   return db.$transaction(async (tx) => {
     const updated = await tx.opCo.update({ where: { id: opcoId }, data: { name } })
@@ -70,36 +77,25 @@ export async function renameOpCo(opcoId: string, name: string) {
   })
 }
 
-export async function archiveOpCo(opcoId: string) {
-  const session = await getAppSession()
-  assertGroupAdmin(session)
-  const db = getPrisma()
-  const opco = await loadOpCo(db, opcoId)
+// Archive and unarchive are the same write with opposite values.
+async function setOpCoArchived(opcoId: string, archived: boolean) {
+  const { session, db, opco } = await authorizeOpCoAction(opcoId)
 
   await db.$transaction(async (tx) => {
-    await tx.opCo.update({ where: { id: opcoId }, data: { archivedAt: new Date() } })
+    await tx.opCo.update({ where: { id: opcoId }, data: { archivedAt: archived ? new Date() : null } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
-      action: "opco.archive",
+      action: archived ? "opco.archive" : "opco.unarchive",
       opcoId,
-      summary: `Archived OpCo ${opco.slug}`,
+      summary: `${archived ? "Archived" : "Unarchived"} OpCo ${opco.slug}`,
     })
   })
 }
 
-export async function unarchiveOpCo(opcoId: string) {
-  const session = await getAppSession()
-  assertGroupAdmin(session)
-  const db = getPrisma()
-  const opco = await loadOpCo(db, opcoId)
+export async function archiveOpCo(opcoId: string) {
+  return setOpCoArchived(opcoId, true)
+}
 
-  await db.$transaction(async (tx) => {
-    await tx.opCo.update({ where: { id: opcoId }, data: { archivedAt: null } })
-    await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId,
-      action: "opco.unarchive",
-      opcoId,
-      summary: `Unarchived OpCo ${opco.slug}`,
-    })
-  })
+export async function unarchiveOpCo(opcoId: string) {
+  return setOpCoArchived(opcoId, false)
 }
