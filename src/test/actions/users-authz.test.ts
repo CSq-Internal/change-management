@@ -41,7 +41,7 @@ const mockDb = {
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
-import { onboardUser, deactivateUser, reactivateUser, setUserAssignments } from '@/server/actions/users'
+import { onboardUser, deactivateUser, reactivateUser, setUserAssignments, listOpCoApprovers } from '@/server/actions/users'
 import { getAppSession } from '@/lib/session'
 
 const groupAdmin = {
@@ -265,5 +265,41 @@ describe('setUserAssignments — authorization & diff', () => {
     await expect(
       setUserAssignments("other", [{ opcoSlug: "ghana", role: "requester" }])
     ).rejects.toThrow(/last admin/i)
+  })
+})
+
+describe("listOpCoApprovers", () => {
+  it("rejects a non-admin for a per-OpCo request", async () => {
+    await expect(listOpCoApprovers("ghana")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("rejects a non-group_admin for a group request", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await expect(listOpCoApprovers(null)).rejects.toThrow(/Forbidden/)
+  })
+
+  it("returns approver users for an OpCo admin", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { user: { id: "u1", name: "Ada", email: "ada@csquared.com" } },
+    ])
+    const approvers = await listOpCoApprovers("ghana")
+    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
+      where: { role: "approver", isActive: true, opco: { slug: "ghana" } },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      distinct: ["userId"],
+    })
+    expect(approvers).toEqual([{ id: "u1", name: "Ada", email: "ada@csquared.com" }])
+  })
+
+  it("queries across all OpCos for a group_admin group request", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([])
+    await listOpCoApprovers(null)
+    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
+      where: { role: "approver", isActive: true },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      distinct: ["userId"],
+    })
   })
 })

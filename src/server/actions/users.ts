@@ -259,3 +259,22 @@ export async function setUserAssignments(
     })
   })
 }
+
+export async function listOpCoApprovers(opcoSlug: string | null) {
+  const session = await getAppSession()
+  if (opcoSlug === null) {
+    if (!isGroupAdmin(session.realmRoles)) {
+      throw new Error("Forbidden: only a group_admin can list group approvers")
+    }
+  } else if (!canManageUsers(session.organizations, session.realmRoles, opcoSlug)) {
+    throw new Error(`Forbidden: cannot list approvers in ${opcoSlug}`)
+  }
+
+  const db = getPrisma()
+  const rows = await db.userOpCoAssignment.findMany({
+    where: { role: "approver", isActive: true, ...(opcoSlug ? { opco: { slug: opcoSlug } } : {}) },
+    select: { user: { select: { id: true, name: true, email: true } } },
+    distinct: ["userId"],
+  })
+  return rows.map((r) => r.user)
+}
