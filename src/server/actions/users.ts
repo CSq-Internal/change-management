@@ -220,17 +220,16 @@ export async function setUserAssignments(
 
   await db.$transaction(async (tx) => {
     for (const slug of changed) {
-      const wasAdmin = currentBySlug.get(slug) === "admin"
-      if (wasAdmin && desiredBySlug.get(slug) !== "admin") {
-        const guardOpcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
-        await assertNotLastAdmin(tx, guardOpcoId, userId)
+      const currentOpcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)?.opco.id
+
+      if (currentBySlug.get(slug) === "admin" && desiredBySlug.get(slug) !== "admin") {
+        await assertNotLastAdmin(tx, currentOpcoId!, userId)
       }
 
       const desiredRole = desiredBySlug.get(slug)
       if (desiredRole === undefined) {
-        const opcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
         await tx.userOpCoAssignment.update({
-          where: { userId_opcoId: { userId, opcoId } },
+          where: { userId_opcoId: { userId, opcoId: currentOpcoId! } },
           data: { isActive: false, endedAt: new Date() },
         })
       } else {
