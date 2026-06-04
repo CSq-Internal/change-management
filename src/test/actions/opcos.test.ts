@@ -28,7 +28,7 @@ const mockDb = {
 
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { createOpCo } from "@/server/actions/opcos"
+import { createOpCo, renameOpCo, archiveOpCo, unarchiveOpCo } from "@/server/actions/opcos"
 import { getAppSession } from "@/lib/session"
 import { createKeycloakOrg } from "@/server/keycloak"
 
@@ -67,6 +67,57 @@ describe("createOpCo", () => {
     await createOpCo({ slug: "kenya", name: "Kenya", locale: "sw" })
     expect(mockDb.opCo.create).toHaveBeenCalledWith({
       data: { slug: "kenya", name: "Kenya", locale: "sw", keycloakOrgId: "pending-keycloak-kenya" },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("renameOpCo", () => {
+  it("rejects a non-group_admin", async () => {
+    await expect(renameOpCo("opco-1", "New Name")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("renames an OpCo and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-1", slug: "ghana", name: "Ghana" })
+    await renameOpCo("opco-1", "Ghana Telecom")
+    expect(mockDb.opCo.update).toHaveBeenCalledWith({
+      where: { id: "opco-1" },
+      data: { name: "Ghana Telecom" },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("throws when the OpCo does not exist", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.opCo.findUnique.mockResolvedValueOnce(null)
+    await expect(renameOpCo("missing", "X")).rejects.toThrow(/not found/i)
+  })
+})
+
+describe("archiveOpCo / unarchiveOpCo", () => {
+  it("rejects a non-group_admin archiving", async () => {
+    await expect(archiveOpCo("opco-1")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("archives an OpCo (sets archivedAt) and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-1", slug: "ghana", name: "Ghana" })
+    await archiveOpCo("opco-1")
+    expect(mockDb.opCo.update).toHaveBeenCalledWith({
+      where: { id: "opco-1" },
+      data: { archivedAt: expect.any(Date) },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("unarchives an OpCo (clears archivedAt) and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-1", slug: "ghana", name: "Ghana" })
+    await unarchiveOpCo("opco-1")
+    expect(mockDb.opCo.update).toHaveBeenCalledWith({
+      where: { id: "opco-1" },
+      data: { archivedAt: null },
     })
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
   })
