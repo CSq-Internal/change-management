@@ -69,3 +69,17 @@ export function manageableOpCoSlugs(
   if (isGroupAdmin(realmRoles)) return "all"
   return organizations.filter((o) => o.roles.includes("admin")).map((o) => o.alias)
 }
+
+const REALM_ROLES = ["group_admin", "group_auditor"]
+
+export function canAssignRole(
+  organizations: SessionOrganization[],
+  realmRoles: string[],
+  opcoSlug: string,
+  role: string
+): boolean {
+  if (REALM_ROLES.includes(role)) return false // realm roles are Keycloak-only
+  if (isGroupAdmin(realmRoles)) return true // group_admin assigns any OpCo role
+  if (role === "admin") return false // OpCo admins cannot mint admins
+  return hasRoleInOpCo(organizations, opcoSlug, "admin")
+}

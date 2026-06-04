@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs } from '@/lib/permissions'
+import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole } from '@/lib/permissions'
 import type { SessionOrganization } from '@/types/next-auth'
 
 const ghanaApprover: SessionOrganization = { id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }
@@ -75,5 +75,32 @@ describe('manageableOpCoSlugs', () => {
       { id: 'o2', name: 'Uganda', alias: 'uganda', roles: ['requester'] },
     ]
     expect(manageableOpCoSlugs(orgs, [])).toEqual(['ghana'])
+  })
+})
+
+describe("canAssignRole", () => {
+  const ghanaAdminOrgs = [{ id: "o", name: "Ghana", alias: "ghana", roles: ["admin"] }]
+
+  it("lets a group_admin assign the admin role in any OpCo", () => {
+    expect(canAssignRole([], ["group_admin"], "ghana", "admin")).toBe(true)
+  })
+
+  it("lets an OpCo admin assign requester/approver/auditor in their OpCo", () => {
+    expect(canAssignRole(ghanaAdminOrgs, [], "ghana", "requester")).toBe(true)
+    expect(canAssignRole(ghanaAdminOrgs, [], "ghana", "approver")).toBe(true)
+    expect(canAssignRole(ghanaAdminOrgs, [], "ghana", "auditor")).toBe(true)
+  })
+
+  it("forbids an OpCo admin from minting the admin role", () => {
+    expect(canAssignRole(ghanaAdminOrgs, [], "ghana", "admin")).toBe(false)
+  })
+
+  it("forbids an OpCo admin assigning in an OpCo they don't manage", () => {
+    expect(canAssignRole(ghanaAdminOrgs, [], "uganda", "requester")).toBe(false)
+  })
+
+  it("never allows assigning realm roles in-app, even for group_admin", () => {
+    expect(canAssignRole([], ["group_admin"], "ghana", "group_admin")).toBe(false)
+    expect(canAssignRole([], ["group_admin"], "ghana", "group_auditor")).toBe(false)
   })
 })
