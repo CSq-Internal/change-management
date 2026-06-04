@@ -168,12 +168,12 @@ export async function setUserAssignments(
   }
 
   for (const slug of changed) {
-    if (
-      !isGroupAdmin(session.realmRoles) &&
-      !canManageUsers(session.organizations, session.realmRoles, slug)
-    ) {
-      throw new Error(`Forbidden: cannot manage users in ${slug}`)
-    }
+    const desiredRole = desiredBySlug.get(slug)
+    const ok =
+      desiredRole === undefined
+        ? isGroupAdmin(session.realmRoles) || canManageUsers(session.organizations, session.realmRoles, slug)
+        : canAssignRole(session.organizations, session.realmRoles, slug, desiredRole)
+    if (!ok) throw new Error(`Forbidden: cannot manage roles in ${slug}`)
   }
 
   if (user.keycloakId === session.keycloakId) {
@@ -184,30 +184,40 @@ export async function setUserAssignments(
     }
   }
 
-  for (const slug of changed) {
-    const desiredRole = desiredBySlug.get(slug)
-    if (desiredRole === undefined) {
-      const opcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
-      await db.userOpCoAssignment.update({
-        where: { userId_opcoId: { userId, opcoId } },
-        data: { isActive: false, endedAt: new Date() },
-      })
-    } else {
-      const opco = await db.opCo.findUnique({ where: { slug } })
-      if (!opco) {
-        console.warn(`[setUserAssignments] OpCo not found for slug: ${slug}`)
-        continue
-      }
-      await db.userOpCoAssignment.upsert({
-        where: { userId_opcoId: { userId, opcoId: opco.id } },
-        update: { role: desiredRole, isActive: true, endedAt: null },
-        create: { userId, opcoId: opco.id, role: desiredRole },
-      })
-      try {
-        await assignToOrganization(user.keycloakId, slug)
-      } catch (err) {
-        console.warn(`[keycloak] org assignment skipped for ${slug}:`, err)
+  await db.$transaction(async (tx) => {
+    for (const slug of changed) {
+      const desiredRole = desiredBySlug.get(slug)
+      if (desiredRole === undefined) {
+        const opcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
+        await tx.userOpCoAssignment.update({
+          where: { userId_opcoId: { userId, opcoId } },
+          data: { isActive: false, endedAt: new Date() },
+        })
+      } else {
+        const opco = await tx.opCo.findUnique({ where: { slug } })
+        if (!opco) {
+          console.warn(`[setUserAssignments] OpCo not found for slug: ${slug}`)
+          continue
+        }
+        await tx.userOpCoAssignment.upsert({
+          where: { userId_opcoId: { userId, opcoId: opco.id } },
+          update: { role: desiredRole, isActive: true, endedAt: null },
+          create: { userId, opcoId: opco.id, role: desiredRole },
+        })
+        try {
+          await assignToOrganization(user.keycloakId, slug)
+        } catch (err) {
+          console.warn(`[keycloak] org assignment skipped for ${slug}:`, err)
+        }
       }
     }
-  }
+
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "role.update",
+      targetUserId: userId,
+      summary: `Updated assignments for user ${userId}: ${[...changed].join(", ")}`,
+      metadata: { changed: [...changed], desired },
+    })
+  })
 }

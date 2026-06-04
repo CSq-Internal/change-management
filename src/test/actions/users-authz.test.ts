@@ -180,7 +180,7 @@ describe('setUserAssignments — authorization & diff', () => {
     ])
     mockDb.opCo.findUnique.mockResolvedValueOnce({ id: 'opco-gh', slug: 'ghana' })
     await setUserAssignments('target', [
-      { opcoSlug: 'ghana', role: 'admin' },
+      { opcoSlug: 'ghana', role: 'approver' },
       { opcoSlug: 'uganda', role: 'approver' },
     ])
     expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
@@ -205,5 +205,25 @@ describe('setUserAssignments — authorization & diff', () => {
         { opcoSlug: 'ghana', role: 'requester' },
       ])
     ).rejects.toThrow(/Duplicate/)
+  })
+
+  it("rejects an OpCo admin promoting someone to admin (ceiling)", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { opco: { slug: "ghana", id: "opco-gh" }, role: "requester" },
+    ])
+    await expect(
+      setUserAssignments("target", [{ opcoSlug: "ghana", role: "admin" }])
+    ).rejects.toThrow(/Forbidden/)
+  })
+
+  it("writes an audit row when a group_admin changes a role", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { opco: { slug: "ghana", id: "opco-gh" }, role: "requester" },
+    ])
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-gh", slug: "ghana" })
+    await setUserAssignments("target", [{ opcoSlug: "ghana", role: "approver" }])
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
   })
 })
