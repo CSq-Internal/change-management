@@ -59,7 +59,7 @@ export async function onboardUser(input: {
       })
     }
 
-    await recordAdminAction(tx as unknown as Parameters<typeof recordAdminAction>[0], {
+    await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
       action: existing ? "user.link" : "user.onboard",
       targetUserId: user.id,

@@ -9,11 +9,9 @@ export interface AdminActionInput {
   metadata?: Prisma.InputJsonValue
 }
 
-// Minimal client shape needed; satisfied by both PrismaClient and a transaction client.
-type AuditClient = {
-  user: { findUnique: (args: unknown) => Promise<{ id: string } | null> }
-  adminAuditLog: { create: (args: unknown) => Promise<unknown> }
-}
+// Accepts a Prisma transaction client (or the full client) so callers can append
+// the audit row inside the same transaction as the action it records.
+type AuditClient = Pick<Prisma.TransactionClient, "user" | "adminAuditLog">
 
 export async function recordAdminAction(tx: AuditClient, input: AdminActionInput): Promise<void> {
   const actor = await tx.user.findUnique({
