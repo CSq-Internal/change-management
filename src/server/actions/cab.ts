@@ -6,6 +6,13 @@ import { getAppSession } from "@/lib/session"
 import { canManageCab, isGroupAdmin, isGroupLevel, canAudit } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 
+// Resolves an OpCo by slug; throws if it doesn't exist.
+async function resolveOpCo(db: ReturnType<typeof getPrisma>, slug: string) {
+  const opco = await db.opCo.findUnique({ where: { slug } })
+  if (!opco) throw new Error(`OpCo not found: ${slug}`)
+  return opco
+}
+
 export async function addCabMember(userId: string, opcoSlug: string | null) {
   const session = await getAppSession()
   const db = getPrisma()
@@ -44,8 +51,7 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
   if (!canManageCab(session.organizations, session.realmRoles, opcoSlug)) {
     throw new Error(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
   }
-  const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
-  if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
+  const opco = await resolveOpCo(db, opcoSlug)
 
   const eligible = await db.userOpCoAssignment.findFirst({
     where: { userId, opcoId: opco.id, role: "approver", isActive: true },
@@ -99,8 +105,7 @@ export async function removeCabMember(userId: string, opcoSlug: string | null) {
   if (!canManageCab(session.organizations, session.realmRoles, opcoSlug)) {
     throw new Error(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
   }
-  const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
-  if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
+  const opco = await resolveOpCo(db, opcoSlug)
 
   await db.$transaction(async (tx) => {
     await tx.cABMembership.update({
@@ -131,7 +136,6 @@ export async function listCabMembers(opcoSlug: string | null) {
   if (!canAudit(session.organizations, session.realmRoles, opcoSlug)) {
     throw new Error(`Forbidden: cannot read the CAB in ${opcoSlug}`)
   }
-  const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
-  if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
+  const opco = await resolveOpCo(db, opcoSlug)
   return db.cABMembership.findMany({ where: { opcoId: opco.id, isActive: true }, include: { user: true } })
 }
