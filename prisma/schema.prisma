@@ -39,6 +39,11 @@ enum ChangeCategory {
   process
 }
 
+enum TeamRole {
+  lead
+  member
+}
+
 model User {
   id           String   @id @default(cuid())
   keycloakId   String   @unique
@@ -54,6 +59,8 @@ model User {
   auditEntries    AuditLog[]
   delegationsFrom ApproverDelegation[] @relation("DelegatedBy")
   delegationsTo   ApproverDelegation[] @relation("DelegatedTo")
+  cabMemberships  CABMembership[]
+  adminActions    AdminAuditLog[]      @relation("AdminActor")
 }
 
 model OpCo {
@@ -64,10 +71,12 @@ model OpCo {
   keycloakOrgId String   @unique
   createdAt     DateTime @default(now())
 
-  users     UserOpCoAssignment[]
-  changes   ChangeRequest[]
-  teams     Team[]
-  blackouts BlackoutPeriod[]
+  users      UserOpCoAssignment[]
+  changes    ChangeRequest[]
+  teams      Team[]
+  blackouts  BlackoutPeriod[]
+  cab        CABMembership[]
+  archivedAt DateTime?
 }
 
 model UserOpCoAssignment {
@@ -102,10 +111,11 @@ model Team {
 }
 
 model TeamMember {
-  id     String @id @default(cuid())
+  id     String   @id @default(cuid())
   teamId String
-  team   Team   @relation(fields: [teamId], references: [id])
+  team   Team     @relation(fields: [teamId], references: [id])
   userId String
+  role   TeamRole @default(member)
 
   @@unique([teamId, userId])
 }
@@ -225,4 +235,36 @@ model BlackoutPeriod {
   createdAt   DateTime  @default(now())
 
   @@index([opcoId])
+}
+
+model CABMembership {
+  id       String    @id @default(cuid())
+  userId   String
+  user     User      @relation(fields: [userId], references: [id])
+  opcoId   String?
+  opco     OpCo?     @relation(fields: [opcoId], references: [id])
+  isActive Boolean   @default(true)
+  addedAt  DateTime  @default(now())
+  endedAt  DateTime?
+
+  @@unique([userId, opcoId])
+  @@index([opcoId])
+  @@index([userId])
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  actor        User     @relation("AdminActor", fields: [actorId], references: [id])
+  action       String
+  opcoId       String?
+  targetUserId String?
+  summary      String
+  metadata     Json?
+  at           DateTime @default(now())
+
+  @@index([opcoId])
+  @@index([actorId])
+  @@index([targetUserId])
+  @@index([at])
 }
