@@ -3,7 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { canManageCab, isGroupAdmin } from "@/lib/permissions"
+import { canManageCab, isGroupAdmin, isGroupLevel, canAudit } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 
 export async function addCabMember(userId: string, opcoSlug: string | null) {
@@ -67,4 +67,71 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
     })
     return member
   })
+}
+
+export async function removeCabMember(userId: string, opcoSlug: string | null) {
+  const session = await getAppSession()
+  const db = getPrisma()
+
+  if (opcoSlug === null) {
+    if (!isGroupAdmin(session.realmRoles)) {
+      throw new Error("Forbidden: only a group_admin can manage the group CAB")
+    }
+    const existing = await db.cABMembership.findFirst({
+      where: { userId, opcoId: null, isActive: true },
+    })
+    if (!existing) throw new Error("User is not an active group CAB member")
+    await db.$transaction(async (tx) => {
+      await tx.cABMembership.update({
+        where: { id: existing.id },
+        data: { isActive: false, endedAt: new Date() },
+      })
+      await recordAdminAction(tx, {
+        actorKeycloakId: session.keycloakId,
+        action: "cab.remove",
+        targetUserId: userId,
+        summary: `Removed user ${userId} from the group CAB`,
+      })
+    })
+    return
+  }
+
+  if (!canManageCab(session.organizations, session.realmRoles, opcoSlug)) {
+    throw new Error(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
+  }
+  const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
+  if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
+
+  await db.$transaction(async (tx) => {
+    await tx.cABMembership.update({
+      where: { userId_opcoId: { userId, opcoId: opco.id } },
+      data: { isActive: false, endedAt: new Date() },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "cab.remove",
+      opcoId: opco.id,
+      targetUserId: userId,
+      summary: `Removed user ${userId} from the ${opcoSlug} CAB`,
+    })
+  })
+}
+
+export async function listCabMembers(opcoSlug: string | null) {
+  const session = await getAppSession()
+  const db = getPrisma()
+
+  if (opcoSlug === null) {
+    if (!isGroupLevel(session.realmRoles)) {
+      throw new Error("Forbidden: cannot read the group CAB")
+    }
+    return db.cABMembership.findMany({ where: { opcoId: null, isActive: true }, include: { user: true } })
+  }
+
+  if (!canAudit(session.organizations, session.realmRoles, opcoSlug)) {
+    throw new Error(`Forbidden: cannot read the CAB in ${opcoSlug}`)
+  }
+  const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
+  if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
+  return db.cABMembership.findMany({ where: { opcoId: opco.id, isActive: true }, include: { user: true } })
 }

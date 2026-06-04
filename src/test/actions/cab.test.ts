@@ -26,10 +26,11 @@ const mockDb = {
 
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { addCabMember } from "@/server/actions/cab"
+import { addCabMember, removeCabMember, listCabMembers } from "@/server/actions/cab"
 import { getAppSession } from "@/lib/session"
 
 const groupAdmin = { keycloakId: "kc-ga", email: "ga@t.co", name: "GA", organizations: [], realmRoles: ["group_admin"] }
+const groupAuditor = { keycloakId: "kc-gaud", email: "gaud@t.co", name: "Gaud", organizations: [], realmRoles: ["group_auditor"] }
 const ghanaAdmin = {
   keycloakId: "kc-gha", email: "gha@t.co", name: "GhA",
   organizations: [{ id: "o", name: "Ghana", alias: "ghana", roles: ["admin"] }],
@@ -91,5 +92,66 @@ describe("addCabMember — group", () => {
       data: { isActive: true, endedAt: null },
     })
     expect(mockDb.cABMembership.create).not.toHaveBeenCalled()
+  })
+})
+
+describe("removeCabMember", () => {
+  it("soft-removes a per-OpCo member and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await removeCabMember("user-2", "ghana")
+    expect(mockDb.cABMembership.update).toHaveBeenCalledWith({
+      where: { userId_opcoId: { userId: "user-2", opcoId: "opco-gh" } },
+      data: { isActive: false, endedAt: expect.any(Date) },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects a non-admin removing a per-OpCo member", async () => {
+    await expect(removeCabMember("user-2", "ghana")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("soft-removes a group member (group_admin) and writes an audit row", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.cABMembership.findFirst.mockResolvedValueOnce({ id: "cab-g", isActive: true })
+    await removeCabMember("user-2", null)
+    expect(mockDb.cABMembership.update).toHaveBeenCalledWith({
+      where: { id: "cab-g" },
+      data: { isActive: false, endedAt: expect.any(Date) },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects an OpCo admin removing a group member", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await expect(removeCabMember("user-2", null)).rejects.toThrow(/Forbidden/)
+  })
+})
+
+describe("listCabMembers", () => {
+  it("lets an OpCo admin list their CAB", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await listCabMembers("ghana")
+    expect(mockDb.cABMembership.findMany).toHaveBeenCalledWith({
+      where: { opcoId: "opco-gh", isActive: true },
+      include: { user: true },
+    })
+  })
+
+  it("rejects a plain requester listing a per-OpCo CAB", async () => {
+    await expect(listCabMembers("ghana")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("lets a group_auditor read the group CAB", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAuditor)
+    await listCabMembers(null)
+    expect(mockDb.cABMembership.findMany).toHaveBeenCalledWith({
+      where: { opcoId: null, isActive: true },
+      include: { user: true },
+    })
+  })
+
+  it("rejects an OpCo admin reading the group CAB", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await expect(listCabMembers(null)).rejects.toThrow(/Forbidden/)
   })
 })
