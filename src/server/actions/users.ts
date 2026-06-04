@@ -3,11 +3,12 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { isGroupAdmin, canManageUsers } from "@/lib/permissions"
+import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
+import { recordAdminAction } from "@/server/audit"
 import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
 import type { Role } from "@prisma/client"
 
-export async function createUser(input: {
+export async function onboardUser(input: {
   name: string
   email: string
   tempPassword: string
@@ -15,23 +16,23 @@ export async function createUser(input: {
 }) {
   const session = await getAppSession()
 
+  if (input.assignments.length === 0) throw new Error("At least one assignment is required")
   for (const a of input.assignments) {
-    if (
-      !isGroupAdmin(session.realmRoles) &&
-      !canManageUsers(session.organizations, session.realmRoles, a.opcoSlug)
-    ) {
-      throw new Error(`Forbidden: cannot manage users in ${a.opcoSlug}`)
+    if (!canAssignRole(session.organizations, session.realmRoles, a.opcoSlug, a.role)) {
+      throw new Error(`Forbidden: cannot assign ${a.role} in ${a.opcoSlug}`)
     }
   }
 
-  const keycloakId = await createKeycloakUser(input.email, input.name, input.tempPassword)
-
   const db = getPrisma()
-  const user = await db.user.create({
-    data: { keycloakId, email: input.email, name: input.name },
-  })
+  const existing = await db.user.findFirst({ where: { email: input.email } })
 
-  // Best-effort: assign to Keycloak orgs (app reads roles from DB, not Keycloak orgs)
+  // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
+  let keycloakId: string
+  if (existing) {
+    keycloakId = existing.keycloakId
+  } else {
+    keycloakId = await createKeycloakUser(input.email, input.name, input.tempPassword)
+  }
   for (const { opcoSlug } of input.assignments) {
     try {
       await assignToOrganization(keycloakId, opcoSlug)
@@ -40,19 +41,34 @@ export async function createUser(input: {
     }
   }
 
-  // Authoritative: create DB assignments
-  for (const { opcoSlug, role } of input.assignments) {
-    const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
-    if (!opco) {
-      console.warn(`[createUser] OpCo not found for slug: ${opcoSlug}`)
-      continue
-    }
-    await db.userOpCoAssignment.create({
-      data: { userId: user.id, opcoId: opco.id, role },
-    })
-  }
+  return db.$transaction(async (tx) => {
+    const user = existing
+      ? existing
+      : await tx.user.create({ data: { keycloakId, email: input.email, name: input.name } })
 
-  return user
+    for (const { opcoSlug, role } of input.assignments) {
+      const opco = await tx.opCo.findUnique({ where: { slug: opcoSlug } })
+      if (!opco) {
+        console.warn(`[onboardUser] OpCo not found for slug: ${opcoSlug}`)
+        continue
+      }
+      await tx.userOpCoAssignment.upsert({
+        where: { userId_opcoId: { userId: user.id, opcoId: opco.id } },
+        update: { role, isActive: true, endedAt: null },
+        create: { userId: user.id, opcoId: opco.id, role },
+      })
+    }
+
+    await recordAdminAction(tx as unknown as Parameters<typeof recordAdminAction>[0], {
+      actorKeycloakId: session.keycloakId,
+      action: existing ? "user.link" : "user.onboard",
+      targetUserId: user.id,
+      summary: `${existing ? "Linked" : "Onboarded"} ${input.email} (${input.assignments.map((a) => `${a.role}@${a.opcoSlug}`).join(", ")})`,
+      metadata: { assignments: input.assignments },
+    })
+
+    return user
+  })
 }
 
 export async function deactivateUser(userId: string) {

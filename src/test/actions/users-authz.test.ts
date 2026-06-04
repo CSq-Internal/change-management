@@ -17,9 +17,11 @@ vi.mock('@/server/keycloak', () => ({
 }))
 
 const mockDb = {
+  $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   opCo: { findUnique: vi.fn().mockResolvedValue({ id: 'opco-gh', slug: 'ghana' }) },
   user: {
     create: vi.fn().mockResolvedValue({ id: 'user-new', keycloakId: 'kc-new' }),
+    findFirst: vi.fn().mockResolvedValue(null),
     findUnique: vi.fn().mockResolvedValue({
       id: 'target', keycloakId: 'kc-target',
       opcoAssignments: [{ opco: { slug: 'ghana' }, isActive: true }],
@@ -30,14 +32,16 @@ const mockDb = {
     create: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({}),
     findMany: vi.fn().mockResolvedValue([]),
+    count: vi.fn().mockResolvedValue(2),
     upsert: vi.fn().mockResolvedValue({}),
     update: vi.fn().mockResolvedValue({}),
   },
+  adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 }
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
-import { createUser, deactivateUser, reactivateUser, setUserAssignments } from '@/server/actions/users'
+import { onboardUser, deactivateUser, reactivateUser, setUserAssignments } from '@/server/actions/users'
 import { getAppSession } from '@/lib/session'
 
 const groupAdmin = {
@@ -50,29 +54,47 @@ const ghanaAdmin = {
   realmRoles: [],
 }
 
-describe('createUser — authorization', () => {
-  it('rejects a non-admin (ghana/requester) creating a user', async () => {
-    await expect(createUser({
-      name: 'New', email: 'new@csquared.com', tempPassword: 'p',
-      assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
+describe("onboardUser — authorization & ceiling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
+  })
+
+  it("rejects a non-admin (ghana/requester) onboarding a user", async () => {
+    await expect(onboardUser({
+      name: "New", email: "new@csquared.com", tempPassword: "p",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })).rejects.toThrow(/Forbidden/)
   })
 
-  it('rejects a ghana admin assigning a user to uganda', async () => {
+  it("rejects an OpCo admin trying to grant the admin role", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
-    await expect(createUser({
-      name: 'New', email: 'new@csquared.com', tempPassword: 'p',
-      assignments: [{ opcoSlug: 'uganda', role: 'requester' }],
+    await expect(onboardUser({
+      name: "New", email: "new@csquared.com", tempPassword: "p",
+      assignments: [{ opcoSlug: "ghana", role: "admin" }],
     })).rejects.toThrow(/Forbidden/)
   })
 
-  it('allows a group_admin to create a user', async () => {
+  it("lets a group_admin create a brand-new user and writes an audit row", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
-    const result = await createUser({
-      name: 'New', email: 'new@csquared.com', tempPassword: 'p',
-      assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
+    const result = await onboardUser({
+      name: "New", email: "new@csquared.com", tempPassword: "p",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })
-    expect(result).toHaveProperty('id', 'user-new')
+    expect(result).toHaveProperty("id", "user-new")
+    expect(mockDb.user.create).toHaveBeenCalledTimes(1)
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("links an existing email instead of creating a new identity", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findFirst.mockResolvedValueOnce({ id: "existing", keycloakId: "kc-existing" })
+    await onboardUser({
+      name: "Existing", email: "exists@csquared.com", tempPassword: "p",
+      assignments: [{ opcoSlug: "ghana", role: "approver" }],
+    })
+    expect(mockDb.user.create).not.toHaveBeenCalled()
+    expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
   })
 })
 

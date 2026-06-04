@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import type { Role } from "@/lib/types"
 import { OPCO_SLUGS, OPCO_NAMES, type OpCoSlug } from "@/lib/opco"
-import { createUser } from "@/server/actions/users"
+import { onboardUser } from "@/server/actions/users"
 
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
 type Assignment = { opcoSlug: string; role: Role }
@@ -86,7 +86,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
     }
     startTransition(async () => {
       try {
-        await createUser({ name, email, tempPassword: password || "ChangeMe123!", assignments })
+        await onboardUser({ name, email, tempPassword: password || "ChangeMe123!", assignments })
         toast({
           title: t(language, "users.toast.created"),
           description: `${name} — ${assignments.length} OpCo(s)`,
