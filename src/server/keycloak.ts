@@ -134,3 +134,27 @@ export async function reactivateKeycloakUser(keycloakUserId: string): Promise<vo
     throw new Error(`Failed to reactivate Keycloak user: ${res.status} ${await res.text()}`)
   }
 }
+
+export async function createKeycloakOrg(slug: string, name: string): Promise<string> {
+  const token = await getAdminToken()
+  const res = await fetch(`${KC_BASE}/admin/realms/csquared/organizations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      name,
+      alias: slug,
+      domains: [{ name: `${slug}.csquared.local`, verified: false }],
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to create Keycloak org: ${res.status} ${await res.text()}`)
+  }
+  const location = res.headers.get("Location")
+  if (!location) throw new Error("No Location header in Keycloak create-org response")
+  const id = location.split("/").at(-1)
+  if (!id) throw new Error(`Could not parse org id from Location: ${location}`)
+  return id
+}
