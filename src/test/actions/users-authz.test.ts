@@ -150,6 +150,34 @@ describe('reactivateUser — authorization', () => {
   })
 })
 
+describe("deactivateUser — last-admin guard & audit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
+  })
+
+  it("blocks deactivating the last admin of an OpCo", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce({
+      id: "target", keycloakId: "kc-target",
+      opcoAssignments: [{ role: "admin", isActive: true, opco: { slug: "ghana", id: "opco-gh" } }],
+    })
+    mockDb.userOpCoAssignment.count.mockResolvedValueOnce(0) // no OTHER active admins
+    await expect(deactivateUser("target")).rejects.toThrow(/last admin/i)
+  })
+
+  it("allows deactivation when another admin remains, and writes audit", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce({
+      id: "target", keycloakId: "kc-target",
+      opcoAssignments: [{ role: "admin", isActive: true, opco: { slug: "ghana", id: "opco-gh" } }],
+    })
+    mockDb.userOpCoAssignment.count.mockResolvedValueOnce(1)
+    await deactivateUser("target")
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('setUserAssignments — authorization & diff', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -225,5 +253,17 @@ describe('setUserAssignments — authorization & diff', () => {
     mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-gh", slug: "ghana" })
     await setUserAssignments("target", [{ opcoSlug: "ghana", role: "approver" }])
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it("blocks demoting the last admin of an OpCo", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: "other", keycloakId: "kc-other" })
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { opco: { slug: "ghana", id: "opco-gh" }, role: "admin" },
+    ])
+    mockDb.userOpCoAssignment.count.mockResolvedValueOnce(0)
+    await expect(
+      setUserAssignments("other", [{ opcoSlug: "ghana", role: "requester" }])
+    ).rejects.toThrow(/last admin/i)
   })
 })

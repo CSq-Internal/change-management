@@ -6,7 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
-import type { Role } from "@prisma/client"
+import type { Role, Prisma } from "@prisma/client"
 
 export async function onboardUser(input: {
   name: string
@@ -71,6 +71,18 @@ export async function onboardUser(input: {
   })
 }
 
+// Throws if ending `userId`'s admin role in `opcoId` would leave the OpCo with zero active admins.
+async function assertNotLastAdmin(
+  client: Pick<Prisma.TransactionClient, "userOpCoAssignment">,
+  opcoId: string,
+  excludingUserId: string
+) {
+  const others = await client.userOpCoAssignment.count({
+    where: { opcoId, role: "admin", isActive: true, userId: { not: excludingUserId } },
+  })
+  if (others === 0) throw new Error("Forbidden: cannot remove the last admin of an OpCo")
+}
+
 export async function deactivateUser(userId: string) {
   const session = await getAppSession()
 
@@ -94,12 +106,26 @@ export async function deactivateUser(userId: string) {
     throw new Error("Forbidden: cannot manage this user")
   }
 
+  for (const a of user.opcoAssignments) {
+    if (a.isActive && a.role === "admin") {
+      await assertNotLastAdmin(db, a.opco.id, userId)
+    }
+  }
+
   await deactivateKeycloakUser(user.keycloakId)
 
-  await db.user.update({ where: { id: userId }, data: { isActive: false } })
-  await db.userOpCoAssignment.updateMany({
-    where: { userId },
-    data: { isActive: false, endedAt: new Date() },
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { isActive: false } })
+    await tx.userOpCoAssignment.updateMany({
+      where: { userId },
+      data: { isActive: false, endedAt: new Date() },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "user.deactivate",
+      targetUserId: userId,
+      summary: `Deactivated user ${userId}`,
+    })
   })
 }
 
@@ -124,10 +150,18 @@ export async function reactivateUser(userId: string) {
 
   await reactivateKeycloakUser(user.keycloakId)
 
-  await db.user.update({ where: { id: userId }, data: { isActive: true } })
-  await db.userOpCoAssignment.updateMany({
-    where: { userId },
-    data: { isActive: true, endedAt: null },
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { isActive: true } })
+    await tx.userOpCoAssignment.updateMany({
+      where: { userId },
+      data: { isActive: true, endedAt: null },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "user.reactivate",
+      targetUserId: userId,
+      summary: `Reactivated user ${userId}`,
+    })
   })
 }
 
@@ -186,6 +220,12 @@ export async function setUserAssignments(
 
   await db.$transaction(async (tx) => {
     for (const slug of changed) {
+      const wasAdmin = currentBySlug.get(slug) === "admin"
+      if (wasAdmin && desiredBySlug.get(slug) !== "admin") {
+        const guardOpcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
+        await assertNotLastAdmin(tx, guardOpcoId, userId)
+      }
+
       const desiredRole = desiredBySlug.get(slug)
       if (desiredRole === undefined) {
         const opcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)!.opco.id
