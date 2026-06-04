@@ -26,6 +26,16 @@ async function loadTeamOpco(
   return { opcoId: team.opcoId, opcoSlug: team.opco.slug }
 }
 
+// Shared preamble for actions on an existing team: resolves the session and client,
+// loads the team's OpCo, and asserts the caller may manage teams there.
+async function authorizeTeamAction(teamId: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
+  assertCanManageTeams(session, opcoSlug)
+  return { session, db, opcoId }
+}
+
 export async function createTeam(input: { opcoSlug: string; name: string; description?: string }) {
   const session = await getAppSession()
   assertCanManageTeams(session, input.opcoSlug)
@@ -49,10 +59,7 @@ export async function createTeam(input: { opcoSlug: string; name: string; descri
 }
 
 export async function updateTeam(teamId: string, data: { name?: string; description?: string }) {
-  const session = await getAppSession()
-  const db = getPrisma()
-  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
-  assertCanManageTeams(session, opcoSlug)
+  const { session, db, opcoId } = await authorizeTeamAction(teamId)
 
   return db.$transaction(async (tx) => {
     const team = await tx.team.update({ where: { id: teamId }, data })
@@ -68,10 +75,7 @@ export async function updateTeam(teamId: string, data: { name?: string; descript
 }
 
 export async function deleteTeam(teamId: string) {
-  const session = await getAppSession()
-  const db = getPrisma()
-  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
-  assertCanManageTeams(session, opcoSlug)
+  const { session, db, opcoId } = await authorizeTeamAction(teamId)
 
   await db.$transaction(async (tx) => {
     await tx.teamMember.deleteMany({ where: { teamId } })
@@ -86,10 +90,7 @@ export async function deleteTeam(teamId: string) {
 }
 
 export async function addTeamMember(teamId: string, userId: string, role: TeamRole = "member") {
-  const session = await getAppSession()
-  const db = getPrisma()
-  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
-  assertCanManageTeams(session, opcoSlug)
+  const { session, db, opcoId } = await authorizeTeamAction(teamId)
 
   // Eligibility: a team member must hold an active assignment in the team's OpCo.
   const assignment = await db.userOpCoAssignment.findFirst({
@@ -115,10 +116,7 @@ export async function addTeamMember(teamId: string, userId: string, role: TeamRo
 }
 
 export async function removeTeamMember(teamId: string, userId: string) {
-  const session = await getAppSession()
-  const db = getPrisma()
-  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
-  assertCanManageTeams(session, opcoSlug)
+  const { session, db, opcoId } = await authorizeTeamAction(teamId)
 
   await db.$transaction(async (tx) => {
     await tx.teamMember.delete({ where: { teamId_userId: { teamId, userId } } })
@@ -133,10 +131,7 @@ export async function removeTeamMember(teamId: string, userId: string) {
 }
 
 export async function setTeamMemberRole(teamId: string, userId: string, role: TeamRole) {
-  const session = await getAppSession()
-  const db = getPrisma()
-  const { opcoId, opcoSlug } = await loadTeamOpco(db, teamId)
-  assertCanManageTeams(session, opcoSlug)
+  const { session, db, opcoId } = await authorizeTeamAction(teamId)
 
   return db.$transaction(async (tx) => {
     const member = await tx.teamMember.update({
