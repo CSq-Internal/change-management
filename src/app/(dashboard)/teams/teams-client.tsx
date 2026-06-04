@@ -1,24 +1,20 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo } from "@/lib/permissions"
+import { canManageAnyOpCo, manageableOpCoSlugs } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
-
-export type DbTeam = {
-  id: string
-  name: string
-  description: string | null
-  planSummary: string | null
-  memberCount: number
-  opco: { name: string; slug: string }
-}
+import { deleteTeam } from "@/server/actions/teams"
+import ConfirmDialog from "../users/confirm-dialog"
+import TeamList from "./team-list"
+import TeamFormDialog from "./team-form-dialog"
+import TeamMembersDialog from "./team-members-dialog"
+import type { DbTeam } from "./types"
 
 interface TeamsClientProps {
   teams: DbTeam[]
@@ -27,46 +23,45 @@ interface TeamsClientProps {
 export default function TeamsClient({ teams }: TeamsClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
+  const router = useRouter()
+  const { toast } = useToast()
+
   const isAdmin = session
     ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
     : false
-  const { toast } = useToast()
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
-  const [planSummary, setPlanSummary] = useState("")
+  const scope = session
+    ? manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
+    : []
+  const manageableSlugs =
+    scope === "all" ? Array.from(new Set(teams.map((tm) => tm.opco.slug))) : scope
 
-  const submit = () => {
-    if (!isAdmin) {
-      toast({
-        title: t(language, "teams.adminOnly"),
-        description: t(language, "teams.adminOnlyDesc"),
-        variant: "error",
-      })
-      return
+  const [formTeam, setFormTeam] = useState<DbTeam | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const [membersTeam, setMembersTeam] = useState<DbTeam | null>(null)
+  const [confirmTeam, setConfirmTeam] = useState<DbTeam | null>(null)
+  const [pending, setPending] = useState(false)
+
+  const refresh = () => router.refresh()
+
+  const handleDelete = async () => {
+    if (!confirmTeam) return
+    setPending(true)
+    try {
+      await deleteTeam(confirmTeam.id)
+      toast({ title: t(language, "teamsAdmin.deleted"), description: confirmTeam.name, variant: "success" })
+      setConfirmTeam(null)
+      refresh()
+    } catch (err) {
+      toast({ title: t(language, "teamsAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+    } finally {
+      setPending(false)
     }
-    if (!name) {
-      toast({
-        title: t(language, "teams.toast.nameRequired"),
-        description: t(language, "teams.toast.nameRequiredDesc"),
-        variant: "error",
-      })
-      return
-    }
-    // TODO: wire to team server actions (future)
-    toast({
-      title: t(language, "teams.toast.created"),
-      description: name,
-      variant: "success",
-    })
-    setName("")
-    setDescription("")
-    setPlanSummary("")
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div className="space-y-6">
       {!isAdmin && (
-        <Card className="border-border/80 bg-card/95 lg:col-span-2">
+        <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "teams.adminOnly")}</CardTitle>
           </CardHeader>
@@ -75,58 +70,55 @@ export default function TeamsClient({ teams }: TeamsClientProps) {
           </CardContent>
         </Card>
       )}
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader>
-          <CardTitle className="text-base">{t(language, "teams.title")}</CardTitle>
-          <CardDescription>{t(language, "teams.desc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {teams.length === 0 && (
-            <p className="text-sm text-muted-foreground">{t(language, "teams.none")}</p>
-          )}
-          {teams.map((team) => (
-            <div key={team.id} className="rounded-xl border border-border/70 bg-muted px-4 py-3">
-              <div className="text-sm font-medium">{team.name}</div>
-              {team.description && (
-                <p className="text-xs text-muted-foreground">{team.description}</p>
-              )}
-              {team.planSummary && (
-                <p className="mt-2 text-xs text-muted-foreground">{team.planSummary}</p>
-              )}
-              <div className="mt-1 text-xs text-muted-foreground">
-                {team.opco.slug} • {team.memberCount} member{team.memberCount !== 1 ? "s" : ""}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader>
-          <CardTitle className="text-base">{t(language, "teams.createTitle")}</CardTitle>
-          <CardDescription>{t(language, "teams.createDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Input
-            placeholder={t(language, "teams.name")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Textarea
-            placeholder={t(language, "teams.descField")}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <Textarea
-            placeholder="Plan summary for the team"
-            value={planSummary}
-            onChange={(e) => setPlanSummary(e.target.value)}
-          />
-          <Button onClick={submit} disabled={!isAdmin}>
-            {t(language, "teams.add")}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">{t(language, "teamsAdmin.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t(language, "teamsAdmin.desc")}</p>
+        </div>
+        <Button onClick={() => { setFormTeam(null); setFormOpen(true) }} disabled={!isAdmin || manageableSlugs.length === 0}>
+          {t(language, "teamsAdmin.new")}
+        </Button>
+      </div>
+
+      <TeamList
+        teams={teams}
+        language={language}
+        onEdit={(team) => { setFormTeam(team); setFormOpen(true) }}
+        onMembers={(team) => setMembersTeam(team)}
+        onDelete={(team) => setConfirmTeam(team)}
+      />
+
+      {formOpen && (
+        <TeamFormDialog
+          language={language}
+          manageableSlugs={manageableSlugs}
+          team={formTeam}
+          onClose={() => setFormOpen(false)}
+          onSaved={() => { setFormOpen(false); refresh() }}
+        />
+      )}
+
+      {membersTeam && (
+        <TeamMembersDialog
+          language={language}
+          team={membersTeam}
+          onClose={() => setMembersTeam(null)}
+          onChanged={refresh}
+        />
+      )}
+
+      {confirmTeam && (
+        <ConfirmDialog
+          title={t(language, "teamsAdmin.deleteTitle")}
+          body={t(language, "teamsAdmin.deleteBody")}
+          confirmLabel={t(language, "teamsAdmin.delete")}
+          cancelLabel={t(language, "teamsAdmin.cancel")}
+          pending={pending}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmTeam(null)}
+        />
+      )}
     </div>
   )
 }
