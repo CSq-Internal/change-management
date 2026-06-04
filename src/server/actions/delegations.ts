@@ -3,7 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { canManageUsers } from "@/lib/permissions"
+import { canManageUsers, canAudit } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 
 // Resolves an OpCo by slug; throws if it doesn't exist.
@@ -64,5 +64,43 @@ export async function createDelegation(input: {
       metadata: { toUserId: input.toUserId, validUntil: input.validUntil },
     })
     return delegation
+  })
+}
+
+export async function revokeDelegation(delegationId: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+
+  const delegation = await db.approverDelegation.findUnique({ where: { id: delegationId } })
+  if (!delegation) throw new Error("Delegation not found")
+
+  const opco = await db.opCo.findUnique({ where: { id: delegation.opcoId } })
+  if (!opco) throw new Error("OpCo not found")
+  if (!canManageUsers(session.organizations, session.realmRoles, opco.slug)) {
+    throw new Error(`Forbidden: cannot manage delegations in ${opco.slug}`)
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.approverDelegation.update({ where: { id: delegationId }, data: { isActive: false } })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      action: "delegation.revoke",
+      opcoId: opco.id,
+      targetUserId: delegation.fromUserId,
+      summary: `Revoked delegation ${delegationId} in ${opco.slug}`,
+    })
+  })
+}
+
+export async function listDelegations(opcoSlug: string) {
+  const session = await getAppSession()
+  if (!canAudit(session.organizations, session.realmRoles, opcoSlug)) {
+    throw new Error(`Forbidden: cannot read delegations in ${opcoSlug}`)
+  }
+  const db = getPrisma()
+  const opco = await resolveOpCo(db, opcoSlug)
+  return db.approverDelegation.findMany({
+    where: { opcoId: opco.id, isActive: true },
+    include: { fromUser: true, toUser: true },
   })
 }

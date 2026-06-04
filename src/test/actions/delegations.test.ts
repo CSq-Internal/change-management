@@ -27,13 +27,18 @@ const mockDb = {
 
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { createDelegation } from "@/server/actions/delegations"
+import { createDelegation, revokeDelegation, listDelegations } from "@/server/actions/delegations"
 import { getAppSession } from "@/lib/session"
 
 const groupAdmin = { keycloakId: "kc-ga", email: "ga@t.co", name: "GA", organizations: [], realmRoles: ["group_admin"] }
 const ghanaRequester = {
   keycloakId: "kc-ghr", email: "ghr@t.co", name: "GhR",
   organizations: [{ id: "o", name: "Ghana", alias: "ghana", roles: ["requester"] }],
+  realmRoles: [],
+}
+const ghanaAuditor = {
+  keycloakId: "kc-gaud", email: "gaud@t.co", name: "GhAud",
+  organizations: [{ id: "o", name: "Ghana", alias: "ghana", roles: ["auditor"] }],
   realmRoles: [],
 }
 
@@ -87,5 +92,49 @@ describe("createDelegation", () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     await createDelegation({ opcoSlug: "ghana", fromUserId: "u-from", toUserId: "u-to", validUntil })
     expect(mockDb.approverDelegation.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("revokeDelegation", () => {
+  it("throws when the delegation does not exist", async () => {
+    mockDb.approverDelegation.findUnique.mockResolvedValueOnce(null)
+    await expect(revokeDelegation("missing")).rejects.toThrow(/not found/i)
+  })
+
+  it("rejects a non-admin", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaRequester)
+    mockDb.approverDelegation.findUnique.mockResolvedValueOnce({ id: "del-1", opcoId: "opco-gh", fromUserId: "u-from", toUserId: "u-to" })
+    await expect(revokeDelegation("del-1")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("soft-revokes a delegation and writes an audit row", async () => {
+    mockDb.approverDelegation.findUnique.mockResolvedValueOnce({ id: "del-1", opcoId: "opco-gh", fromUserId: "u-from", toUserId: "u-to" })
+    await revokeDelegation("del-1")
+    expect(mockDb.approverDelegation.update).toHaveBeenCalledWith({
+      where: { id: "del-1" },
+      data: { isActive: false },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("listDelegations", () => {
+  it("lets an OpCo admin list delegations", async () => {
+    await listDelegations("ghana")
+    expect(mockDb.approverDelegation.findMany).toHaveBeenCalledWith({
+      where: { opcoId: "opco-gh", isActive: true },
+      include: { fromUser: true, toUser: true },
+    })
+  })
+
+  it("lets an auditor read delegations", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAuditor)
+    await listDelegations("ghana")
+    expect(mockDb.approverDelegation.findMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects a plain requester", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaRequester)
+    await expect(listDelegations("ghana")).rejects.toThrow(/Forbidden/)
   })
 })
