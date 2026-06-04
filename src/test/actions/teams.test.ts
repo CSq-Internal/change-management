@@ -24,7 +24,13 @@ const mockDb = {
     deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
     update: vi.fn().mockResolvedValue({ id: "tm-1", role: "lead" }),
   },
-  userOpCoAssignment: { findFirst: vi.fn().mockResolvedValue({ id: "a1" }) },
+  userOpCoAssignment: {
+    findFirst: vi.fn().mockResolvedValue({ id: "a1" }),
+    findMany: vi.fn().mockResolvedValue([
+      { user: { id: "u1", name: "Ada", email: "ada@csquared.com" } },
+      { user: { id: "u2", name: "Bo", email: "bo@csquared.com" } },
+    ]),
+  },
   user: { findUnique: vi.fn().mockResolvedValue({ id: "actor-db" }) },
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 }
@@ -38,6 +44,7 @@ import {
   addTeamMember,
   removeTeamMember,
   setTeamMemberRole,
+  listOpCoMembers,
 } from "@/server/actions/teams"
 import { getAppSession } from "@/lib/session"
 
@@ -154,5 +161,25 @@ describe("setTeamMemberRole", () => {
       data: { role: "lead" },
     })
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("listOpCoMembers", () => {
+  it("rejects a non-admin", async () => {
+    await expect(listOpCoMembers("ghana")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("returns the OpCo's active-assignment users for an admin", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    const members = await listOpCoMembers("ghana")
+    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
+      where: { opco: { slug: "ghana" }, isActive: true },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      distinct: ["userId"],
+    })
+    expect(members).toEqual([
+      { id: "u1", name: "Ada", email: "ada@csquared.com" },
+      { id: "u2", name: "Bo", email: "bo@csquared.com" },
+    ])
   })
 })

@@ -148,3 +148,15 @@ export async function setTeamMemberRole(teamId: string, userId: string, role: Te
     return member
   })
 }
+
+export async function listOpCoMembers(opcoSlug: string) {
+  const session = await getAppSession()
+  assertCanManageTeams(session, opcoSlug)
+  const db = getPrisma()
+  const rows = await db.userOpCoAssignment.findMany({
+    where: { opco: { slug: opcoSlug }, isActive: true },
+    select: { user: { select: { id: true, name: true, email: true } } },
+    distinct: ["userId"],
+  })
+  return rows.map((r) => r.user)
+}
