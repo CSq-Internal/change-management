@@ -5,7 +5,6 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
-import { finalizeChangeFolderName } from "@/server/documents"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
@@ -182,7 +181,9 @@ export async function submitChange(id: string) {
   })
 
   // Sync the Drive folder name to the final title at submit. Cosmetic — never block submission.
+  // Imported dynamically so the heavy googleapis dependency stays off every change-read render path.
   try {
+    const { finalizeChangeFolderName } = await import("@/server/documents")
     await finalizeChangeFolderName(id)
   } catch {
     // folder rename failed (e.g. Drive unavailable); the change is already submitted

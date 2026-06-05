@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
-import DocumentUpload from "@/components/document-upload"
+import DocumentSection from "@/components/document-section"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import type { AttachmentKind } from "@prisma/client"
 
@@ -104,8 +104,15 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
   const [backoutPlan, setBackoutPlan] = useState(initial?.backoutPlan ?? "")
   const [isSaving, setIsSaving] = useState(false)
 
-  const changeId = mode === "edit" && initial ? initial.id : null
-  const slotByKind = new Map(attachments.map((a) => [a.kind, a]))
+  // The change id, once persisted. Set on first save so retries update rather than re-create.
+  const [persistedId, setPersistedId] = useState<string | null>(initial?.id ?? null)
+  // Files chosen this session but not yet uploaded (uploaded on save).
+  const [stagedFiles, setStagedFiles] = useState<Partial<Record<AttachmentKind, File>>>({})
+  // Filenames already uploaded for each slot (seeded from props, updated after each upload).
+  const [uploadedByKind, setUploadedByKind] = useState<Partial<Record<AttachmentKind, string>>>(
+    () => Object.fromEntries(attachments.map((a) => [a.kind, a.filename]))
+  )
+
   const DOC_LABEL_KEY: Record<AttachmentKind, string> = {
     impact_scope: "requests.impactScope",
     implementation_plan: "requests.implementationPlan",
@@ -113,12 +120,13 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
     backout_plan: "requests.backoutPlan",
     solution_document: "requests.solutionDocument",
   }
-  const DOC_SLOTS = REQUIRED_DOC_KINDS.map((kind) => ({ kind, labelKey: DOC_LABEL_KEY[kind] }))
-  // Live set of uploaded kinds — seeded from props, updated as widgets upload in-session
-  // so the Submit gate doesn't go stale against the static `attachments` prop.
-  const [uploadedKinds, setUploadedKinds] = useState<Set<string>>(
-    () => new Set(attachments.map((a) => a.kind))
-  )
+  // Per-kind optional summary binding; solution_document has no summary.
+  const summaryFor: Partial<Record<AttachmentKind, { value: string; set: (v: string) => void; placeholder?: string }>> = {
+    impact_scope: { value: impactScope, set: setImpactScope, placeholder: t(language, "requests.impactPlaceholder") },
+    implementation_plan: { value: implementationPlan, set: setImplementationPlan },
+    testing_plan: { value: testingPlan, set: setTestingPlan },
+    backout_plan: { value: backoutPlan, set: setBackoutPlan },
+  }
 
   const isEmergency = riskLevel === "emergency"
 
@@ -130,6 +138,17 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         variant: "error",
       })
       return
+    }
+    if (submit) {
+      const missingDocs = REQUIRED_DOC_KINDS.filter((k) => !stagedFiles[k] && !uploadedByKind[k])
+      if (missingDocs.length > 0 || !plannedStart || !plannedEnd) {
+        toast({
+          title: t(language, "requests.toast.docMissing"),
+          description: t(language, "requests.toast.docMissingDesc"),
+          variant: "error",
+        })
+        return
+      }
     }
     setIsSaving(true)
     const payload = {
@@ -148,24 +167,41 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
       isEmergency,
     }
     try {
-      let id: string
-      if (mode === "edit" && initial) {
-        await updateChange(initial.id, payload)
-        id = initial.id
+      // Persist the change first so uploads have an id to attach to.
+      let id = persistedId
+      if (id) {
+        await updateChange(id, payload)
       } else {
         const created = await createChange(opcoSlug, payload)
         id = created.id
+        setPersistedId(id)
       }
+
+      // Upload any staged files; clear each from staging as it succeeds (idempotent on retry).
+      for (const [kind, file] of Object.entries(stagedFiles) as [AttachmentKind, File][]) {
+        const form = new FormData()
+        form.set("kind", kind)
+        form.set("file", file)
+        const res = await fetch(`/api/changes/${id}/documents`, { method: "POST", body: form })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? "Upload failed")
+        }
+        const att = await res.json()
+        setUploadedByKind((prev) => ({ ...prev, [kind]: att.filename }))
+        setStagedFiles((prev) => {
+          const next = { ...prev }
+          delete next[kind]
+          return next
+        })
+      }
+
       if (submit) await submitChange(id)
       toast({
         title: submit ? t(language, "requests.toast.submitted") : t(language, "requests.toast.savedDraft"),
         variant: "success",
       })
-      if (!submit && mode === "create") {
-        router.push(`/changes/${id}/edit`)
-      } else {
-        router.push(`/changes/${id}`)
-      }
+      router.push(`/changes/${id}`)
       router.refresh()
     } catch (err) {
       toast({
@@ -334,66 +370,32 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           </Card>
         </div>
 
-        <Card className="border-border/80 bg-card/95">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.impactScope")} — {t(language, "requests.summaryOptional")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder={t(language, "requests.impactPlaceholder")}
-              value={impactScope}
-              onChange={(e) => setImpactScope(e.target.value)}
-            />
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-card/95">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.implementationPlan")} — {t(language, "requests.summaryOptional")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea value={implementationPlan} onChange={(e) => setImplementationPlan(e.target.value)} />
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-card/95">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.testingPlan")} — {t(language, "requests.summaryOptional")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea value={testingPlan} onChange={(e) => setTestingPlan(e.target.value)} />
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-card/95">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.backoutPlan")} — {t(language, "requests.summaryOptional")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea value={backoutPlan} onChange={(e) => setBackoutPlan(e.target.value)} />
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-card/95">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "detail.field.documents")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            {DOC_SLOTS.map((slot) => {
-              const cur = slotByKind.get(slot.kind)
-              return (
-                <DocumentUpload
-                  key={slot.kind}
-                  changeId={changeId}
-                  kind={slot.kind}
-                  label={t(language, slot.labelKey)}
-                  current={cur ? { id: cur.id, filename: cur.filename } : undefined}
-                  onUploaded={() => setUploadedKinds((prev) => new Set(prev).add(slot.kind))}
-                />
-              )
-            })}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {REQUIRED_DOC_KINDS.map((kind) => {
+            const summary = summaryFor[kind]
+            return (
+              <DocumentSection
+                key={kind}
+                kind={kind}
+                label={t(language, DOC_LABEL_KEY[kind])}
+                hasSummary={Boolean(summary)}
+                summaryValue={summary?.value}
+                summaryPlaceholder={summary?.placeholder}
+                onSummaryChange={summary?.set}
+                existingFilename={uploadedByKind[kind]}
+                stagedFile={stagedFiles[kind] ?? null}
+                onFileChange={(file) =>
+                  setStagedFiles((prev) => {
+                    const next = { ...prev }
+                    if (file) next[kind] = file
+                    else delete next[kind]
+                    return next
+                  })
+                }
+              />
+            )
+          })}
+        </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <Button
@@ -402,28 +404,15 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
             disabled={isSaving}
             className="w-full sm:w-auto"
           >
-            {mode === "create" ? t(language, "requests.saveAndContinue") : t(language, "requests.saveDraft")}
+            {t(language, "requests.saveDraft")}
           </Button>
-          {mode === "edit" && (
-            <Button
-              onClick={() => {
-                const allDocs = REQUIRED_DOC_KINDS.every((k) => uploadedKinds.has(k))
-                if (!allDocs) {
-                  toast({
-                    title: t(language, "requests.toast.docMissing"),
-                    description: t(language, "requests.toast.docMissingDesc"),
-                    variant: "error",
-                  })
-                  return
-                }
-                void save({ submit: true })
-              }}
-              disabled={isSaving}
-              className="w-full sm:w-auto"
-            >
-              {t(language, "requests.submitForApproval")}
-            </Button>
-          )}
+          <Button
+            onClick={() => void save({ submit: true })}
+            disabled={isSaving}
+            className="w-full sm:w-auto"
+          >
+            {t(language, "requests.submitForApproval")}
+          </Button>
           <p className="text-xs text-muted-foreground sm:text-center sm:ml-2">{t(language, "requests.submitHint")}</p>
         </div>
       </div>

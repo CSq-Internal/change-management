@@ -7,9 +7,8 @@ import {
   ensureChangeFolder, uploadDocument, getDownloadBuffer, renameChangeFolder,
   scanFile, changeFolderName,
 } from "@/server/drive"
+import { MAX_FILE_BYTES } from "@/lib/upload-constraints"
 import type { AttachmentKind } from "@prisma/client"
-
-export const MAX_FILE_BYTES = 25 * 1024 * 1024 // 25 MB
 
 export const ALLOWED_MIME_TYPES = new Set<string>([
   "application/pdf",
