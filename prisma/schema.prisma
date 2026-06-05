@@ -44,6 +44,14 @@ enum TeamRole {
   member
 }
 
+enum AttachmentKind {
+  impact_scope
+  implementation_plan
+  testing_plan
+  backout_plan
+  solution_document
+}
+
 model User {
   id           String   @id @default(cuid())
   keycloakId   String   @unique
@@ -59,8 +67,9 @@ model User {
   auditEntries    AuditLog[]
   delegationsFrom ApproverDelegation[] @relation("DelegatedBy")
   delegationsTo   ApproverDelegation[] @relation("DelegatedTo")
-  cabMemberships  CABMembership[]
-  adminActions    AdminAuditLog[]      @relation("AdminActor")
+  cabMemberships       CABMembership[]
+  adminActions         AdminAuditLog[]      @relation("AdminActor")
+  uploadedAttachments  Attachment[]         @relation("UploadedAttachments")
 }
 
 model OpCo {
@@ -122,6 +131,7 @@ model TeamMember {
 
 model ChangeRequest {
   id                 String         @id @default(cuid())
+  reference          Int            @unique @default(autoincrement())
   opcoId             String
   opco               OpCo           @relation(fields: [opcoId], references: [id])
   title              String
@@ -144,6 +154,7 @@ model ChangeRequest {
   plannedStart       DateTime?
   plannedEnd         DateTime?
   slaDeadline        DateTime?
+  driveFolderId      String?
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -214,14 +225,20 @@ model AuditLog {
 }
 
 model Attachment {
-  id         String        @id @default(cuid())
-  changeId   String
-  change     ChangeRequest @relation(fields: [changeId], references: [id])
-  filename   String
-  storageKey String
-  mimeType   String?
-  sizeBytes  Int?
-  uploadedAt DateTime      @default(now())
+  id           String         @id @default(cuid())
+  changeId     String
+  change       ChangeRequest  @relation(fields: [changeId], references: [id])
+  kind         AttachmentKind
+  filename     String
+  storageKey   String         // Google Drive file ID
+  mimeType     String?
+  sizeBytes    Int?
+  uploadedById String
+  uploadedBy   User           @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+  uploadedAt   DateTime       @default(now())
+
+  @@unique([changeId, kind])
+  @@index([changeId])
 }
 
 model BlackoutPeriod {
