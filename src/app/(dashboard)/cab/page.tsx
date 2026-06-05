@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { manageableOpCoSlugs, isGroupLevel } from "@/lib/permissions"
+import { isGroupLevel } from "@/lib/permissions"
+import { activeOpCoSlugFilter } from "@/server/opco-scope"
 import CabClient from "./cab-client"
 import type { CabMember } from "./types"
 
@@ -10,14 +10,7 @@ export default async function CabPage() {
   const session = await auth()
   if (!session) redirect("/login")
 
-  const scope = manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
-  const active = (await cookies()).get("csq-active-opco")?.value
-
-  let slugFilter: { in: string[] } | undefined
-  if (scope !== "all") slugFilter = { in: scope }
-  if (active && active !== "all" && (scope === "all" || scope.includes(active))) {
-    slugFilter = { in: [active] }
-  }
+  const slugFilter = await activeOpCoSlugFilter(session.user)
 
   const db = getPrisma()
   const perOpcoRows = await db.cABMembership.findMany({
