@@ -43,12 +43,15 @@ type Initial = {
   opcoSlug: string
 }
 
+type AttachmentSlot = { id: string; kind: string; filename: string }
+
 interface Props {
   opcoOptions: string[]
   myRequests?: MyRequest[]
   mode?: "create" | "edit"
   initial?: Initial
   defaultEmail?: string
+  attachments?: AttachmentSlot[]
 }
 
 function formatRelativeDate(iso: string): string {
@@ -72,7 +75,7 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-gray-100 text-gray-500",
 }
 
-export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail }: Props) {
+export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail, attachments = [] }: Props) {
   const { language } = useStore()
   const router = useRouter()
   const { toast } = useToast()
@@ -205,18 +208,21 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
             </CardTitle>
             <CardDescription>{t(language, "requests.oneOption")}</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2">
-            {infraTypes.map((infra) => (
-              <label key={infra} className="flex items-center gap-3 text-sm text-foreground">
-                <input
-                  type="radio"
-                  name="infra"
-                  checked={infrastructureType === infra}
-                  onChange={() => setInfrastructureType(infra)}
-                />
-                {infra}
-              </label>
-            ))}
+          <CardContent>
+            <select
+              className="h-10 sm:h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
+              value={infrastructureType}
+              onChange={(e) => setInfrastructureType(e.target.value as (typeof infraTypes)[number])}
+            >
+              <option value="" disabled>
+                {t(language, "requests.oneOption")}
+              </option>
+              {infraTypes.map((infra) => (
+                <option key={infra} value={infra}>
+                  {infra}
+                </option>
+              ))}
+            </select>
           </CardContent>
         </Card>
 
@@ -307,7 +313,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
 
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.impactScope")}</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.impactScope")} — {t(language, "requests.summaryOptional")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -320,7 +326,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
 
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.implementationPlan")}</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.implementationPlan")} — {t(language, "requests.summaryOptional")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea value={implementationPlan} onChange={(e) => setImplementationPlan(e.target.value)} />
@@ -329,7 +335,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
 
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.testingPlan")}</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.testingPlan")} — {t(language, "requests.summaryOptional")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea value={testingPlan} onChange={(e) => setTestingPlan(e.target.value)} />
@@ -338,7 +344,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
 
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.backoutPlan")}</CardTitle>
+            <CardTitle className="text-base">{t(language, "requests.backoutPlan")} — {t(language, "requests.summaryOptional")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea value={backoutPlan} onChange={(e) => setBackoutPlan(e.target.value)} />
