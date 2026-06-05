@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@googleapis/drive':
+        specifier: ^20.2.0
+        version: 20.2.0
       '@headlessui/react':
         specifier: ^2.2.10
         version: 2.2.10(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -35,9 +38,6 @@ importers:
       google-auth-library:
         specifier: ^10.6.2
         version: 10.6.2
-      googleapis:
-        specifier: ^173.0.0
-        version: 173.0.0
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.6)
@@ -616,6 +616,10 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@googleapis/drive@20.2.0':
+    resolution: {integrity: sha512-6xPjqqLl34jBXWYMO34ywLVQsT8FgH948x8YI9o6Tdqs7+n4QRyvkC+BcvVQaAPNc+pyqsvZAXcbdMEcGgDUGw==}
+    engines: {node: '>=12.0.0'}
 
   '@grpc/grpc-js@1.14.4':
     resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
@@ -2936,10 +2940,6 @@ packages:
   googleapis-common@8.0.1:
     resolution: {integrity: sha512-eCzNACUXPb1PW5l0ULTzMHaL/ltPRADoPgjBlT8jWsTbxkCp6siv+qKJ/1ldaybCthGwsYFYallF7u9AkU4L+A==}
     engines: {node: '>=18.0.0'}
-
-  googleapis@173.0.0:
-    resolution: {integrity: sha512-xEJJYLZ4qeenVyfzispNfRjCe9bsv7CzBv5zYFLvScOze9snJ8S9W6hjQ729CWPQt5mvn/JrcRaCHzQiukt0ng==}
-    engines: {node: '>=18'}
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -5342,6 +5342,12 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
+  '@googleapis/drive@20.2.0':
+    dependencies:
+      googleapis-common: 8.0.1
+    transitivePeerDependencies:
+      - supports-color
+
   '@grpc/grpc-js@1.14.4':
     dependencies:
       '@grpc/proto-loader': 0.8.1
@@ -7743,13 +7749,6 @@ snapshots:
       google-auth-library: 10.6.2
       qs: 6.15.2
       url-template: 2.0.8
-    transitivePeerDependencies:
-      - supports-color
-
-  googleapis@173.0.0:
-    dependencies:
-      google-auth-library: 10.6.2
-      googleapis-common: 8.0.1
     transitivePeerDependencies:
       - supports-color
 

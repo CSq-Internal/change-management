@@ -1,5 +1,6 @@
 import type { AttachmentKind } from "@prisma/client"
-import { google } from "googleapis"
+import { drive as driveApi, type drive_v3 } from "@googleapis/drive"
+import { GoogleAuth } from "google-auth-library"
 import { Readable } from "node:stream"
 
 export const SUBFOLDER_FOR_KIND: Record<AttachmentKind, string> = {
@@ -23,15 +24,15 @@ export function changeFolderName(reference: number, title: string): string {
   return `CHG-${padded} — ${sanitizeSegment(title)}`
 }
 
-function getDrive() {
+function getDrive(): drive_v3.Drive {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set")
   const credentials = JSON.parse(raw)
-  const auth = new google.auth.GoogleAuth({
+  const auth = new GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/drive"],
   })
-  return google.drive({ version: "v3", auth })
+  return driveApi({ version: "v3", auth })
 }
 
 function driveId(): string {
