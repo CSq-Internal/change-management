@@ -23,10 +23,6 @@ export const ALLOWED_MIME_TYPES = new Set<string>([
   "image/jpeg",
 ])
 
-export const REQUIRED_DOC_KINDS: AttachmentKind[] = [
-  "impact_scope", "implementation_plan", "testing_plan", "backout_plan", "solution_document",
-]
-
 type AttachInput = {
   changeId: string
   kind: AttachmentKind

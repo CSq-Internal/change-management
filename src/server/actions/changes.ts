@@ -5,6 +5,8 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
+import { finalizeChangeFolderName } from "@/server/documents"
+import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
@@ -146,11 +148,8 @@ export async function submitChange(id: string) {
     throw new Error("Forbidden: only the requester or an admin can submit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be submitted")
 
-  const REQUIRED_KINDS = [
-    "impact_scope", "implementation_plan", "testing_plan", "backout_plan", "solution_document",
-  ] as const
   const present = new Set(change.attachments.map((a) => a.kind))
-  const missing = REQUIRED_KINDS.filter((k) => !present.has(k))
+  const missing = REQUIRED_DOC_KINDS.filter((k) => !present.has(k))
   if (missing.length > 0) {
     throw new Error(`Cannot submit: required document(s) missing: ${missing.join(", ")}`)
   }
@@ -181,6 +180,13 @@ export async function submitChange(id: string) {
   await db.auditLog.create({
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })
+
+  // Sync the Drive folder name to the final title at submit. Cosmetic — never block submission.
+  try {
+    await finalizeChangeFolderName(id)
+  } catch {
+    // folder rename failed (e.g. Drive unavailable); the change is already submitted
+  }
 
   // notify OpCo approvers (moved here from createChange)
   const approvers = await db.userOpCoAssignment.findMany({

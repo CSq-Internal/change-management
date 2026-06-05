@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server"
 import { attachDocument } from "@/server/documents"
+import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import type { AttachmentKind } from "@prisma/client"
-
-const VALID_KINDS: AttachmentKind[] = [
-  "impact_scope", "implementation_plan", "testing_plan", "backout_plan", "solution_document",
-]
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -12,7 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const kind = form.get("kind")
   const file = form.get("file")
 
-  if (typeof kind !== "string" || !VALID_KINDS.includes(kind as AttachmentKind)) {
+  if (typeof kind !== "string" || !REQUIRED_DOC_KINDS.includes(kind as AttachmentKind)) {
     return NextResponse.json({ error: "Invalid or missing document kind" }, { status: 400 })
   }
   if (!(file instanceof File)) {

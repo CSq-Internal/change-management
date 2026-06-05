@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentUpload from "@/components/document-upload"
+import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import type { AttachmentKind } from "@prisma/client"
 
 const infraTypes = [
@@ -105,13 +106,14 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
 
   const changeId = mode === "edit" && initial ? initial.id : null
   const slotByKind = new Map(attachments.map((a) => [a.kind, a]))
-  const DOC_SLOTS: { kind: AttachmentKind; labelKey: string }[] = [
-    { kind: "impact_scope", labelKey: "requests.impactScope" },
-    { kind: "implementation_plan", labelKey: "requests.implementationPlan" },
-    { kind: "testing_plan", labelKey: "requests.testingPlan" },
-    { kind: "backout_plan", labelKey: "requests.backoutPlan" },
-    { kind: "solution_document", labelKey: "requests.solutionDocument" },
-  ]
+  const DOC_LABEL_KEY: Record<AttachmentKind, string> = {
+    impact_scope: "requests.impactScope",
+    implementation_plan: "requests.implementationPlan",
+    testing_plan: "requests.testingPlan",
+    backout_plan: "requests.backoutPlan",
+    solution_document: "requests.solutionDocument",
+  }
+  const DOC_SLOTS = REQUIRED_DOC_KINDS.map((kind) => ({ kind, labelKey: DOC_LABEL_KEY[kind] }))
   // Live set of uploaded kinds — seeded from props, updated as widgets upload in-session
   // so the Submit gate doesn't go stale against the static `attachments` prop.
   const [uploadedKinds, setUploadedKinds] = useState<Set<string>>(
@@ -405,8 +407,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           {mode === "edit" && (
             <Button
               onClick={() => {
-                const allDocs = ["impact_scope", "implementation_plan", "testing_plan", "backout_plan", "solution_document"]
-                  .every((k) => uploadedKinds.has(k))
+                const allDocs = REQUIRED_DOC_KINDS.every((k) => uploadedKinds.has(k))
                 if (!allDocs) {
                   toast({
                     title: t(language, "requests.toast.docMissing"),
