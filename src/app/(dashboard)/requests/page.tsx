@@ -21,11 +21,30 @@ export default async function RequestsPage() {
     select: { id: true, title: true, status: true, updatedAt: true },
   })
 
+  // Approver-routing data for the live preview: Group CTO(s) + resident approver(s) per selectable OpCo.
+  const groupCtos = await db.user.findMany({
+    where: { isGroupCto: true, isActive: true },
+    select: { name: true, email: true },
+  })
+  const opcoRecords = await db.opCo.findMany({
+    where: { slug: { in: opcoOptions } },
+    select: { id: true, slug: true },
+  })
+  const assignments = await db.userOpCoAssignment.findMany({
+    where: { opcoId: { in: opcoRecords.map((o) => o.id) }, role: "approver", isActive: true },
+    include: { user: { select: { name: true, email: true } }, opco: { select: { slug: true } } },
+  })
+  const approversByOpco: Record<string, { name: string | null; email: string }[]> = {}
+  for (const o of opcoRecords) approversByOpco[o.slug] = []
+  for (const a of assignments) approversByOpco[a.opco.slug]?.push({ name: a.user.name, email: a.user.email })
+
   return (
     <RequestForm
       opcoOptions={opcoOptions}
       myRequests={mine.map((m) => ({ ...m, updatedAt: m.updatedAt.toISOString() }))}
       defaultEmail={session.user.email ?? ""}
+      groupCtos={groupCtos}
+      approversByOpco={approversByOpco}
     />
   )
 }

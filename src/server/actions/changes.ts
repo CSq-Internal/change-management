@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
+import { isGroupLevelInfra } from "@/lib/approver-routing"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
@@ -43,7 +44,11 @@ export async function getChange(id: string) {
   })
   if (!change) return null
   if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
-    return null
+    const user = await db.user.findUnique({
+      where: { keycloakId: session.keycloakId },
+      select: { isGroupCto: true },
+    })
+    if (!user?.isGroupCto) return null
   }
   return change
 }
@@ -180,19 +185,46 @@ export async function submitChange(id: string) {
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })
 
-  // notify OpCo approvers (moved here from createChange)
-  const approvers = await db.userOpCoAssignment.findMany({
-    where: { opcoId: change.opcoId, role: "approver", isActive: true },
-    include: { user: true },
-  })
-  await Promise.allSettled(approvers.map((a) =>
+  // Notify approvers resolved by infrastructure type (Equiano → Group CTO only;
+  // others → resident OpCo approver(s) + Group CTO as secondee).
+  const recipients = await resolveApproverUsers(change.opcoId, change.infrastructureType)
+  await Promise.allSettled(recipients.map((u) =>
     sendApprovalRequestEmail({
-      to: a.user.email, approverName: a.user.name ?? a.user.email,
+      to: u.email, approverName: u.name ?? u.email,
       changeTitle: change.title, requesterName: user.name ?? user.email,
       riskLevel: change.riskLevel, changeId: change.id,
     })
   ))
   return updated
+}
+
+/**
+ * Resolve the approver users for a change, by infrastructure type.
+ * - Equiano (group-level) infra → the Group CTO(s) only.
+ * - All other infra → the resident OpCo approver(s) + Group CTO(s) as secondee.
+ * Deduplicated by user id.
+ */
+export async function resolveApproverUsers(opcoId: string, infrastructureType: string) {
+  const db = getPrisma()
+  const groupCtos = await db.user.findMany({ where: { isGroupCto: true, isActive: true } })
+
+  if (isGroupLevelInfra(infrastructureType)) {
+    return groupCtos
+  }
+
+  const residents = await db.userOpCoAssignment.findMany({
+    where: { opcoId, role: "approver", isActive: true },
+    include: { user: true },
+  })
+  const seen = new Set<string>()
+  const out: { id: string; name: string | null; email: string }[] = []
+  for (const u of [...residents.map((r) => r.user), ...groupCtos]) {
+    if (!seen.has(u.id)) {
+      seen.add(u.id)
+      out.push({ id: u.id, name: u.name, email: u.email })
+    }
+  }
+  return out
 }
 
 const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {

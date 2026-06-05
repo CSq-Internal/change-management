@@ -10,8 +10,12 @@ export default async function Approvals() {
   if (!session) redirect("/login")
 
   const db = getPrisma()
+  const currentUser = await db.user.findUnique({
+    where: { keycloakId: session.user.keycloakId },
+    select: { isGroupCto: true },
+  })
   const groupLevel = isGroupAdmin(session.user.realmRoles)
-  const seeAll = isGroupLevel(session.user.realmRoles)
+  const seeAll = isGroupLevel(session.user.realmRoles) || currentUser?.isGroupCto === true
   const opcoSlugs = session.user.organizations.map((o) => o.alias)
 
   const where = {
@@ -42,6 +46,7 @@ export default async function Approvals() {
 
   const canApprove =
     groupLevel ||
+    currentUser?.isGroupCto === true ||
     session.user.organizations.some((o) => o.roles.includes("approver") || o.roles.includes("admin"))
 
   if (!canApprove) {

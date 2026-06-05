@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canApprove } from "@/lib/permissions"
 import { checkCabQuorum } from "@/lib/cab-quorum"
 import { sendStatusChangeEmail } from "@/server/email"
+import { isGroupLevelInfra } from "@/lib/approver-routing"
 
 export async function submitApproval(
   changeId: string,
@@ -30,7 +31,12 @@ export async function submitApproval(
   if (!change) throw new Error("Change not found")
   if (change.status !== "pending") throw new Error("Change is not pending")
 
-  if (!isGroupAdmin(session.realmRoles) && !canApprove(session.organizations, change.opco.slug)) {
+  const isGroupCto = user.isGroupCto === true
+  const isAllowedApprover = isGroupLevelInfra(change.infrastructureType)
+    ? isGroupAdmin(session.realmRoles) || isGroupCto
+    : isGroupAdmin(session.realmRoles) || isGroupCto || canApprove(session.organizations, change.opco.slug)
+
+  if (!isAllowedApprover) {
     throw new Error("Forbidden: not authorized to approve in this OpCo")
   }
 

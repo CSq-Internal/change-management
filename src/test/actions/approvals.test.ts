@@ -40,6 +40,10 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
+vi.mock('@/server/email', () => ({
+  sendStatusChangeEmail: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { checkCabQuorum } from '@/lib/cab-quorum'
 import { submitApproval } from '@/server/actions/approvals'
 import { getAppSession } from '@/lib/session'
@@ -98,6 +102,35 @@ describe('TC-CONTRACT-SOD-001: submitApproval — self-approval rejected (SoD)',
 // ── Authorization: cross-OpCo approval blocked ───────────────────────────────
 
 describe('submitApproval — OpCo authorization', () => {
+  it('allows the Group CTO to approve an Equiano change without an OpCo approver role', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce({
+      keycloakId: 'kc-samuel',
+      email: 'samuel.yeboah@csquared.com',
+      name: 'Samuel Yeboah',
+      organizations: [],
+      realmRoles: [],
+    })
+    mockDb.user.findUnique
+      .mockResolvedValueOnce({ id: 'user-samuel', keycloakId: 'kc-samuel', isGroupCto: true })
+      .mockResolvedValueOnce({ id: 'user-requester', email: 'requester@csquared.com', name: 'Requester' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-equiano',
+      status: 'pending',
+      riskLevel: 'low',
+      infrastructureType: 'Equiano IP',
+      requesterId: 'user-requester',
+      title: 'Equiano IP update',
+      opco: { slug: 'ghana' },
+      approvals: [],
+    })
+
+    await expect(submitApproval('cr-equiano', 'approve', undefined, false)).resolves.toEqual({ id: 'appr-1' })
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-equiano' },
+      data: { status: 'approved' },
+    })
+  })
+
   it('rejects an approver from another OpCo (uganda) approving a ghana change', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce({
       keycloakId: 'kc-ug',

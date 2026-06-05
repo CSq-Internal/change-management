@@ -43,13 +43,24 @@ async function main() {
     })
     console.log('Seeded devops -> ghana (admin) OpCo assignment')
 
+    const requester = await prisma.user.upsert({
+      where: { email: 'requester@csquared.com' },
+      update: { name: 'Demo Requester' },
+      create: { keycloakId: 'seed-demo-requester', email: 'requester@csquared.com', name: 'Demo Requester' },
+    })
+
     await prisma.changeRequest.upsert({
       where: { id: 'seed-cr-001' },
-      update: {},
+      update: {
+        requesterId: requester.id,
+        status: 'pending',
+        riskLevel: 'medium',
+        infrastructureType: 'Backbone IP Network',
+      },
       create: {
         id: 'seed-cr-001',
         opcoId: ghana.id,
-        requesterId: admin.id,
+        requesterId: requester.id,
         title: 'Backbone IP route table update',
         description: 'Update BGP route table for new peering arrangement',
         category: 'config',
@@ -61,6 +72,35 @@ async function main() {
     })
     console.log('Seeded 1 sample change request')
   }
+
+  // Group CTO — approves Equiano (group-level) infra; secondee on all other infra.
+  await prisma.user.upsert({
+    where: { email: 'samuel.yeboah@csquared.com' },
+    update: { isGroupCto: true, name: 'Samuel Yeboah' },
+    create: { keycloakId: 'seed-samuel-yeboah', email: 'samuel.yeboah@csquared.com', name: 'Samuel Yeboah', isGroupCto: true },
+  })
+  console.log('Seeded Group CTO: Samuel Yeboah')
+
+  // Resident CTO (approver role) for each OpCo.
+  const residentCtoNames: Record<string, string> = {
+    ghana: 'Ama Owusu', uganda: 'David Okello', drc: 'Céline Mbiya',
+    togo: 'Kossi Adjavon', liberia: 'Joseph Kollie', mauritius: 'Priya Ramphul',
+  }
+  for (const o of opcos) {
+    const opco = await prisma.opCo.findUnique({ where: { slug: o.slug } })
+    if (!opco) continue
+    const cto = await prisma.user.upsert({
+      where: { email: `${o.slug}.cto@csquared.com` },
+      update: { name: residentCtoNames[o.slug] },
+      create: { keycloakId: `seed-${o.slug}-cto`, email: `${o.slug}.cto@csquared.com`, name: residentCtoNames[o.slug] },
+    })
+    await prisma.userOpCoAssignment.upsert({
+      where: { userId_opcoId: { userId: cto.id, opcoId: opco.id } },
+      update: { role: 'approver', isActive: true },
+      create: { userId: cto.id, opcoId: opco.id, role: 'approver', isActive: true },
+    })
+  }
+  console.log('Seeded resident CTOs (approver) for all OpCos')
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())
