@@ -54,6 +54,7 @@ export default async function EditChangePage({
       initial={initial}
       opcoOptions={[change.opco.slug]}
       defaultEmail={change.contactEmail}
+      attachments={change.attachments.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename }))}
     />
   )
 }

@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
+import DocumentUpload from "@/components/document-upload"
+import type { AttachmentKind } from "@prisma/client"
 
 const infraTypes = [
   "Equiano Optics",
@@ -101,6 +103,21 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
   const [backoutPlan, setBackoutPlan] = useState(initial?.backoutPlan ?? "")
   const [isSaving, setIsSaving] = useState(false)
 
+  const changeId = mode === "edit" && initial ? initial.id : null
+  const slotByKind = new Map(attachments.map((a) => [a.kind, a]))
+  const DOC_SLOTS: { kind: AttachmentKind; labelKey: string }[] = [
+    { kind: "impact_scope", labelKey: "requests.impactScope" },
+    { kind: "implementation_plan", labelKey: "requests.implementationPlan" },
+    { kind: "testing_plan", labelKey: "requests.testingPlan" },
+    { kind: "backout_plan", labelKey: "requests.backoutPlan" },
+    { kind: "solution_document", labelKey: "requests.solutionDocument" },
+  ]
+  // Live set of uploaded kinds — seeded from props, updated as widgets upload in-session
+  // so the Submit gate doesn't go stale against the static `attachments` prop.
+  const [uploadedKinds, setUploadedKinds] = useState<Set<string>>(
+    () => new Set(attachments.map((a) => a.kind))
+  )
+
   const isEmergency = riskLevel === "emergency"
 
   async function save({ submit }: { submit: boolean }) {
@@ -142,7 +159,11 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         title: submit ? t(language, "requests.toast.submitted") : t(language, "requests.toast.savedDraft"),
         variant: "success",
       })
-      router.push(`/changes/${id}`)
+      if (!submit && mode === "create") {
+        router.push(`/changes/${id}/edit`)
+      } else {
+        router.push(`/changes/${id}`)
+      }
       router.refresh()
     } catch (err) {
       toast({
@@ -351,6 +372,27 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           </CardContent>
         </Card>
 
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader>
+            <CardTitle className="text-base">{t(language, "detail.field.documents")}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            {DOC_SLOTS.map((slot) => {
+              const cur = slotByKind.get(slot.kind)
+              return (
+                <DocumentUpload
+                  key={slot.kind}
+                  changeId={changeId}
+                  kind={slot.kind}
+                  label={t(language, slot.labelKey)}
+                  current={cur ? { id: cur.id, filename: cur.filename } : undefined}
+                  onUploaded={() => setUploadedKinds((prev) => new Set(prev).add(slot.kind))}
+                />
+              )
+            })}
+          </CardContent>
+        </Card>
+
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <Button
             variant="outline"
@@ -358,15 +400,29 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
             disabled={isSaving}
             className="w-full sm:w-auto"
           >
-            {t(language, "requests.saveDraft")}
+            {mode === "create" ? t(language, "requests.saveAndContinue") : t(language, "requests.saveDraft")}
           </Button>
-          <Button
-            onClick={() => save({ submit: true })}
-            disabled={isSaving}
-            className="w-full sm:w-auto"
-          >
-            {t(language, "requests.submitForApproval")}
-          </Button>
+          {mode === "edit" && (
+            <Button
+              onClick={() => {
+                const allDocs = ["impact_scope", "implementation_plan", "testing_plan", "backout_plan", "solution_document"]
+                  .every((k) => uploadedKinds.has(k))
+                if (!allDocs) {
+                  toast({
+                    title: t(language, "requests.toast.docMissing"),
+                    description: t(language, "requests.toast.docMissingDesc"),
+                    variant: "error",
+                  })
+                  return
+                }
+                void save({ submit: true })
+              }}
+              disabled={isSaving}
+              className="w-full sm:w-auto"
+            >
+              {t(language, "requests.submitForApproval")}
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground sm:text-center sm:ml-2">{t(language, "requests.submitHint")}</p>
         </div>
       </div>
