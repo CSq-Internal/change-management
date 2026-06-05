@@ -20,11 +20,19 @@ const mockDb = {
     ),
     findUnique: vi.fn().mockResolvedValue({
       id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
-      opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
+      opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+      riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network',
+      plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+      attachments: [
+        { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
+        { kind: 'backout_plan' }, { kind: 'solution_document' },
+      ],
     }),
     update: vi.fn().mockResolvedValue({ id: 'cr-1', status: 'pending' }),
   },
   auditLog: { create: vi.fn().mockResolvedValue({}) },
+  attachment: { findMany: vi.fn().mockResolvedValue([]) },
   blackoutPeriod: { findMany: vi.fn().mockResolvedValue([]) },
   userOpCoAssignment: { findMany: vi.fn().mockResolvedValue([]) },
 }
@@ -271,12 +279,47 @@ describe('submitChange', () => {
   it('does NOT throw when submitting an emergency draft during an active blackout', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValueOnce({
       id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
-      opco: { slug: 'ghana' }, title: 'Emergency fix', riskLevel: 'emergency',
+      opco: { slug: 'ghana' }, title: 'Emergency fix', description: 'BGP config',
+      riskLevel: 'emergency', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network',
+      plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
       isEmergency: true,
+      attachments: [
+        { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
+        { kind: 'backout_plan' }, { kind: 'solution_document' },
+      ],
     })
     // blackoutPeriod.findMany should NOT be called, but even if it were it returns empty by default
     const result = await submitChange('cr-1')
     expect(result).toHaveProperty('status', 'pending')
+  })
+
+  it('rejects submit when a required document is missing', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+      riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network',
+      plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+      isEmergency: false,
+      attachments: [{ kind: 'impact_scope' }], // only 1 of 5
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/required document/i)
+  })
+
+  it('rejects submit when planned dates are missing', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+      riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network',
+      plannedStart: null, plannedEnd: null, isEmergency: false,
+      attachments: [
+        { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
+        { kind: 'backout_plan' }, { kind: 'solution_document' },
+      ],
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/required/i)
   })
 })
 

@@ -37,6 +37,7 @@ export async function getChange(id: string) {
       requester: true,
       approvals: { include: { approver: true }, orderBy: { decidedAt: "asc" } },
       auditTrail: { include: { actor: true }, orderBy: { at: "asc" } },
+      attachments: { orderBy: { kind: "asc" } },
     },
   })
   if (!change) return null
@@ -134,7 +135,9 @@ export async function submitChange(id: string) {
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
   if (!user) throw new Error("User not found")
 
-  const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
+  const change = await db.changeRequest.findUnique({
+    where: { id }, include: { opco: true, attachments: true },
+  })
   if (!change) throw new Error("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
@@ -142,6 +145,24 @@ export async function submitChange(id: string) {
   if (change.requesterId !== user.id && !isAdmin)
     throw new Error("Forbidden: only the requester or an admin can submit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be submitted")
+
+  const REQUIRED_KINDS = [
+    "impact_scope", "implementation_plan", "testing_plan", "backout_plan", "solution_document",
+  ] as const
+  const present = new Set(change.attachments.map((a) => a.kind))
+  const missing = REQUIRED_KINDS.filter((k) => !present.has(k))
+  if (missing.length > 0) {
+    throw new Error(`Cannot submit: required document(s) missing: ${missing.join(", ")}`)
+  }
+  const requiredFields: [string, unknown][] = [
+    ["title", change.title], ["description", change.description],
+    ["contactEmail", change.contactEmail], ["infrastructureType", change.infrastructureType],
+    ["plannedStart", change.plannedStart], ["plannedEnd", change.plannedEnd],
+  ]
+  const missingFields = requiredFields.filter(([, v]) => v === null || v === undefined || v === "").map(([k]) => k)
+  if (missingFields.length > 0) {
+    throw new Error(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
+  }
 
   if (!change.isEmergency) {
     const now = new Date()
