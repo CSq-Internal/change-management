@@ -6,7 +6,7 @@ import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo } from "@/lib/permissions"
+import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
@@ -44,6 +44,8 @@ import {
   Moon,
   Gavel,
   ArrowLeftRight,
+  Building2,
+  ScrollText,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -61,10 +63,12 @@ const navGroups = [
   {
     labelKey: "nav.userManagement",
     items: [
-      { href: "/users", labelKey: "nav.users", icon: Users },
-      { href: "/teams", labelKey: "nav.teams", icon: UsersRound },
-      { href: "/cab", labelKey: "nav.cab", icon: Gavel },
-      { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight },
+      { href: "/users", labelKey: "nav.users", icon: Users, gate: "admin" },
+      { href: "/teams", labelKey: "nav.teams", icon: UsersRound, gate: "admin" },
+      { href: "/cab", labelKey: "nav.cab", icon: Gavel, gate: "admin" },
+      { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight, gate: "admin" },
+      { href: "/opcos", labelKey: "nav.opcos", icon: Building2, gate: "groupAdmin" },
+      { href: "/admin-audit", labelKey: "nav.audit", icon: ScrollText, gate: "adminOrAudit" },
     ],
   },
   {
@@ -119,12 +123,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const myRequests: unknown[] = []
   // TODO: wire to server data (Phase 4)
   const pendingApprovals: unknown[] = []
-  const showAdminNav = session
-    ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
-    : false
+  const anyAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
+  const groupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
+  const groupLevel = session ? isGroupLevel(session.user.realmRoles) : false
+  const showAdminGroup = anyAdmin || groupLevel
+
+  const itemAllowed = (gate?: string) => {
+    if (gate === "groupAdmin") return groupAdmin
+    if (gate === "adminOrAudit") return anyAdmin || groupLevel
+    if (gate === "admin") return anyAdmin
+    return true
+  }
+
   const effectiveNavGroups = useMemo(
-    () => navGroups.filter((group) => group.labelKey !== "nav.userManagement" || showAdminNav),
-    [showAdminNav]
+    () =>
+      navGroups
+        .filter((group) => group.labelKey !== "nav.userManagement" || showAdminGroup)
+        .map((group) =>
+          group.labelKey === "nav.userManagement"
+            ? { ...group, items: group.items.filter((item) => itemAllowed((item as { gate?: string }).gate)) }
+            : group
+        ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showAdminGroup, anyAdmin, groupAdmin, groupLevel]
   )
   const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
   const currentNav = flatNavItems.find((item) => item.href === pathname)
