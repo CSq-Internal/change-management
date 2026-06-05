@@ -29,6 +29,7 @@ export type SerializedChange = {
   implementationPlan: string | null
   testingPlan: string | null
   backoutPlan: string | null
+  attachments: { id: string; kind: string; filename: string }[]
   changeWindow: string | null
   plannedStart: string | null
   plannedEnd: string | null
@@ -241,6 +242,25 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               <DetailRow label={t(language, "detail.field.testingPlan")} value={change.testingPlan} />
               <DetailRow label={t(language, "detail.field.backoutPlan")} value={change.backoutPlan} />
             </dl>
+              <div className="mt-4">
+                <p className="text-sm font-medium mb-2">{t(language, "detail.field.documents")}</p>
+                {change.attachments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t(language, "detail.documents.none")}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {change.attachments.map((a) => (
+                      <li key={a.id}>
+                        <a
+                          className="text-sm text-primary underline"
+                          href={`/api/changes/${change.id}/documents/${a.id}`}
+                        >
+                          {a.filename} — {t(language, "detail.documents.download")}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
           </CardContent>
         </Card>
 
