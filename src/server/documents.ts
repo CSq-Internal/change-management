@@ -4,8 +4,7 @@ import {
   isGroupAdmin, isGroupLevel, isMemberOfOpCo, hasRoleInOpCo,
 } from "@/lib/permissions"
 import {
-  ensureChangeFolder, uploadDocument, getDownloadBuffer, renameChangeFolder,
-  scanFile, changeFolderName,
+  ensureChangeFolder, uploadDocument, getDownloadBuffer, scanFile,
 } from "@/server/drive"
 import { MAX_FILE_BYTES } from "@/lib/upload-constraints"
 import type { AttachmentKind } from "@prisma/client"
@@ -124,12 +123,4 @@ export async function getDocumentForDownload(input: { changeId: string; attachme
   })
 
   return { buffer, filename: attachment.filename, mimeType: attachment.mimeType ?? "application/octet-stream" }
-}
-
-// Finalize the Drive folder name to the change's current title (called at submit).
-export async function finalizeChangeFolderName(changeId: string) {
-  const db = getPrisma()
-  const change = await db.changeRequest.findUnique({ where: { id: changeId } })
-  if (!change?.driveFolderId) return
-  await renameChangeFolder(change.driveFolderId, changeFolderName(change.reference, change.title))
 }

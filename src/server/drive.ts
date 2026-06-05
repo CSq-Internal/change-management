@@ -111,15 +111,6 @@ export async function getDownloadBuffer(fileId: string): Promise<Buffer> {
   return Buffer.from(res.data as ArrayBuffer)
 }
 
-export async function renameChangeFolder(folderId: string, finalName: string): Promise<void> {
-  const drive = getDrive()
-  await drive.files.update({
-    fileId: folderId,
-    requestBody: { name: finalName },
-    supportsAllDrives: true,
-  })
-}
-
 // ISO 27001 A.8.7 malware-scan seam. No-op in v1; throw to reject a file later.
 export async function scanFile(_buffer: Buffer, _filename: string): Promise<void> {
   return

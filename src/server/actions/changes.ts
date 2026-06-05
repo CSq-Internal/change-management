@@ -180,15 +180,6 @@ export async function submitChange(id: string) {
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })
 
-  // Sync the Drive folder name to the final title at submit. Cosmetic — never block submission.
-  // Imported dynamically so the heavy googleapis dependency stays off every change-read render path.
-  try {
-    const { finalizeChangeFolderName } = await import("@/server/documents")
-    await finalizeChangeFolderName(id)
-  } catch {
-    // folder rename failed (e.g. Drive unavailable); the change is already submitted
-  }
-
   // notify OpCo approvers (moved here from createChange)
   const approvers = await db.userOpCoAssignment.findMany({
     where: { opcoId: change.opcoId, role: "approver", isActive: true },

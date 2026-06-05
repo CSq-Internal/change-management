@@ -201,8 +201,9 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         title: submit ? t(language, "requests.toast.submitted") : t(language, "requests.toast.savedDraft"),
         variant: "success",
       })
+      // Navigate to the detail page. No router.refresh() here — it would supersede the
+      // push to a different route, and the destination fetches fresh data on its own.
       router.push(`/changes/${id}`)
-      router.refresh()
     } catch (err) {
       toast({
         title: t(language, "requests.toast.failed"),
