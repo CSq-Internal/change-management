@@ -1,4 +1,4 @@
-import { test, expect } from "vitest"
+import { test, it, expect } from "vitest"
 import { isOpen, slaState, durLabel, STATUS_ORDER, type DashboardChange } from "./dashboard-metrics"
 import { whenLabel } from "./dashboard-metrics"
 
@@ -33,6 +33,7 @@ export function fixture(): DashboardChange[] {
     id, title, opcoName, opcoSlug, status, riskLevel, isEmergency, ownerInitials,
     slaDeadline: slaH === null ? null : iso(slaH),
     plannedStart: planH === null ? null : iso(planH),
+    expedited: false, retroApprovalDueAt: null, retroApprovedAt: null,
   })
   return [
     mk("CHG-1042", "Backbone IP route table update", "Ghana", "ghana", "pending", "medium", 3.2, 50, "AM"),
@@ -103,4 +104,20 @@ test("buildDashboardData carries an explicit action per worklist item", () => {
   expect(d.triage.advance.map((w) => w.action)).toEqual([
     "verify", "verify", "start", "start", "advance",
   ])
+})
+
+it("counts overdue emergency retrospective reviews", () => {
+  const now = Date.parse("2026-06-06T12:00:00Z")
+  const mk = (over: { id: string; due: string | null; approved: string | null }): DashboardChange => ({
+    id: over.id, title: "e", status: "implemented", riskLevel: "emergency", isEmergency: true,
+    slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana", ownerInitials: "X",
+    expedited: true, retroApprovalDueAt: over.due, retroApprovedAt: over.approved,
+  })
+  const changes = [
+    mk({ id: "overdue", due: "2026-06-06T10:00:00Z", approved: null }),
+    mk({ id: "approved", due: "2026-06-06T10:00:00Z", approved: "2026-06-06T11:00:00Z" }),
+    mk({ id: "future", due: "2026-06-07T10:00:00Z", approved: null }),
+  ]
+  const data = buildDashboardData(changes, now)
+  expect(data.counts.overdueRetro).toBe(1)
 })

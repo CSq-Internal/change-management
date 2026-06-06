@@ -34,7 +34,7 @@ export default async function Home() {
       where: opcoFilter,
       select: {
         id: true, title: true, status: true, riskLevel: true, isEmergency: true,
-        slaDeadline: true, plannedStart: true,
+        slaDeadline: true, plannedStart: true, expedited: true, retroApprovalDueAt: true, retroApprovedAt: true,
         opco: { select: { name: true, slug: true } },
         requester: { select: { name: true, email: true } },
       },
@@ -57,6 +57,9 @@ export default async function Home() {
     plannedStart: r.plannedStart?.toISOString() ?? null,
     opcoName: r.opco.name, opcoSlug: r.opco.slug,
     ownerInitials: initials(r.requester.name, r.requester.email),
+    expedited: r.expedited,
+    retroApprovalDueAt: r.retroApprovalDueAt?.toISOString() ?? null,
+    retroApprovedAt: r.retroApprovedAt?.toISOString() ?? null,
   }))
 
   const data = buildDashboardData(changes, now)

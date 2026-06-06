@@ -26,6 +26,9 @@ export function StatusBar({
       {counts.emergency > 0 && (
         <Seg><b className="text-cyan-700 dark:text-cyan-300">{counts.emergency}</b> {t(language, "dashboard.status.emergency")}</Seg>
       )}
+      {counts.overdueRetro > 0 && (
+        <Seg><b className="text-rose-600 dark:text-rose-400">{counts.overdueRetro}</b> {t(language, "dashboard.status.overdueRetro")}</Seg>
+      )}
       <Seg><Lock className="h-3.5 w-3.5 text-rose-500" />{blackouts} {t(language, "dashboard.status.blackouts")}</Seg>
       {severity === "ok" && counts.breached === 0 && counts.atRisk === 0 && (
         <Seg><span className="font-semibold text-emerald-700 dark:text-emerald-400">✓ {t(language, "dashboard.status.allClear")}</span></Seg>

@@ -14,6 +14,9 @@ export interface DashboardChange {
   opcoName: string
   opcoSlug: string
   ownerInitials: string
+  expedited: boolean
+  retroApprovalDueAt: string | null
+  retroApprovedAt: string | null
 }
 
 export const STATUS_ORDER: ChangeStatusName[] =
@@ -80,7 +83,7 @@ export interface NamedCount { name: string; count: number }
 export interface DashboardData {
   counts: {
     open: number; pending: number; breached: number; atRisk: number
-    emergency: number; scheduledToday: number; readyToAdvance: number
+    emergency: number; scheduledToday: number; readyToAdvance: number; overdueRetro: number
   }
   triage: { overdue: WorklistItem[]; awaiting: WorklistItem[]; advance: WorklistItem[] }
   monitor: { tiles: StatusTile[] }
@@ -164,6 +167,11 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
     (c) => c.plannedStart && Date.parse(c.plannedStart) >= nowMs && Date.parse(c.plannedStart) - nowMs < ONE_DAY_MS,
   ).length
 
+  const overdueRetro = changes.filter(
+    (c) => c.expedited && c.status === "implemented" && c.retroApprovedAt == null &&
+      c.retroApprovalDueAt != null && Date.parse(c.retroApprovalDueAt) < nowMs,
+  ).length
+
   return {
     counts: {
       open: open.length,
@@ -173,6 +181,7 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
       emergency: open.filter((c) => c.isEmergency).length,
       scheduledToday,
       readyToAdvance: advanceChanges.length,
+      overdueRetro,
     },
     triage: { overdue, awaiting, advance },
     monitor: { tiles },
