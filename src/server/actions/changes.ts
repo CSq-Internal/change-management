@@ -10,6 +10,9 @@ import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-auth
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
+// Emergency changes implemented under expedited authority must obtain retrospective
+// approval within this window (ISO 27001 A.8.32).
+const RETRO_APPROVAL_WINDOW_HOURS = 48
 
 type CreateChangeInput = {
   title: string
@@ -282,7 +285,7 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
     data.implementedAt = new Date()
     if (isExpeditedImplement) {
       data.expedited = true
-      data.retroApprovalDueAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
+      data.retroApprovalDueAt = new Date(Date.now() + RETRO_APPROVAL_WINDOW_HOURS * 60 * 60 * 1000)
     }
   }
 
