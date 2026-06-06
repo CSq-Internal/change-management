@@ -28,7 +28,7 @@ export default async function DelegationsPage() {
   })
 
   const delegations: DbDelegation[] = rows.map((d) => {
-    const opco = opcoById.get(d.opcoId)
+    const opco = d.opcoId ? opcoById.get(d.opcoId) : undefined
     return {
       id: d.id,
       opco: { name: opco?.name ?? "", slug: opco?.slug ?? "" },

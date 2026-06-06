@@ -58,7 +58,6 @@ model User {
   email        String   @unique
   name         String?
   isActive     Boolean  @default(true)
-  isGroupCto   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -195,7 +194,7 @@ model Approval {
 
 model ApproverDelegation {
   id         String   @id @default(cuid())
-  opcoId     String
+  opcoId     String?
   fromUserId String
   fromUser   User     @relation("DelegatedBy", fields: [fromUserId], references: [id])
   toUserId   String
