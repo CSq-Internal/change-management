@@ -111,11 +111,15 @@ export default function ChangeDetailClient({ change, caps }: Props) {
   const [comment, setComment] = useState("")
 
   // ── Action gating ─────────────────────────────────────────────────────────
+  const awaitingRetro = change.status === "implemented" && change.expedited && !change.retroApprovedAt
+  const canDecide = change.status === "pending" || awaitingRetro
   const a = {
     submit: change.status === "draft" && (caps.isRequester || caps.isAdmin),
     edit: change.status === "draft" && (caps.isRequester || caps.isAdmin),
-    approve: change.status === "pending" && caps.canApprove && !caps.isRequester,
-    reject: change.status === "pending" && caps.canApprove && !caps.isRequester,
+    // pending → normal approval; an expedited emergency awaiting its retrospective
+    // approval (implemented, not yet retro-approved) reuses the same approve/reject path.
+    approve: canDecide && caps.canApprove && !caps.isRequester,
+    reject: canDecide && caps.canApprove && !caps.isRequester,
     implement: change.status === "approved" && (caps.canApprove || caps.isAdmin),
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
