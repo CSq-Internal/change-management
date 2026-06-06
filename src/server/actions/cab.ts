@@ -23,9 +23,9 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
       throw new Error("Forbidden: only a group_admin can manage the group CAB")
     }
     const eligible = await db.userOpCoAssignment.findFirst({
-      where: { userId, role: "approver", isActive: true },
+      where: { userId, role: { in: ["approver", "admin"] }, isActive: true },
     })
-    if (!eligible) throw new Error("Forbidden: user must be an approver in at least one OpCo")
+    if (!eligible) throw new Error("Forbidden: user must be an approver or admin in at least one OpCo")
 
     // Postgres treats NULL opcoId as distinct, so upsert can't dedupe group rows —
     // find-then-create/update guards against duplicates.
@@ -54,9 +54,9 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
   const opco = await resolveOpCo(db, opcoSlug)
 
   const eligible = await db.userOpCoAssignment.findFirst({
-    where: { userId, opcoId: opco.id, role: "approver", isActive: true },
+    where: { userId, opcoId: opco.id, role: { in: ["approver", "admin"] }, isActive: true },
   })
-  if (!eligible) throw new Error(`Forbidden: user must be an approver in ${opcoSlug}`)
+  if (!eligible) throw new Error(`Forbidden: user must be an approver or admin in ${opcoSlug}`)
 
   return db.$transaction(async (tx) => {
     const member = await tx.cABMembership.upsert({

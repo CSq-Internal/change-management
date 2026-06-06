@@ -61,6 +61,15 @@ describe("addCabMember — per-OpCo", () => {
     expect(mockDb.cABMembership.upsert).toHaveBeenCalledTimes(1)
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
   })
+
+  it("seats an OpCo admin (no separate approver role) on the OpCo CAB", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findFirst.mockResolvedValueOnce({ id: "asg", role: "admin" })
+    await expect(addCabMember("cto-user", "ghana")).resolves.toBeDefined()
+    expect(mockDb.userOpCoAssignment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ role: { in: ["approver", "admin"] } }) })
+    )
+  })
 })
 
 describe("addCabMember — group", () => {
