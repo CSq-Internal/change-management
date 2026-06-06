@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSquared CMS — ISO 27001:2022 Hardening Plan</title>
+<style>
+  :root{
+    --navy:#1f3864; --blue:#2e5496; --accent:#3a6ea5;
+    --p0:#9c0006; --p0bg:#ffc7ce; --p1:#7f4f00; --p1bg:#ffeb9c; --p2:#155e52; --p2bg:#c5e0dc;
+    --ink:#1d2330; --muted:#667085; --line:#e3e8ef; --card:#ffffff; --bg:#f5f7fb;
+    --done:#067647; --donebg:#e6f4ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 24px 80px;}
+  header.hero{background:linear-gradient(135deg,var(--navy),var(--accent));color:#fff;
+    border-radius:16px;padding:32px 36px;box-shadow:0 8px 30px rgba(31,56,100,.18);}
+  header.hero h1{margin:0 0 6px;font-size:26px;letter-spacing:-.3px}
+  header.hero p{margin:4px 0;opacity:.92;font-size:14px}
+  .meta{margin-top:14px;font-size:12.5px;opacity:.85}
+  .verdict{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 24px;margin:22px 0;box-shadow:0 2px 10px rgba(16,24,40,.04)}
+  .verdict h2{margin:0 0 8px;font-size:16px;color:var(--navy)}
+  .bar{height:12px;border-radius:8px;background:#eef1f6;overflow:hidden;margin:10px 0 4px}
+  .bar > span{display:block;height:100%;background:linear-gradient(90deg,#067647,#34c77b)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.2px}
+  .P0{background:var(--p0bg);color:var(--p0)} .P1{background:var(--p1bg);color:var(--p1)}
+  .P2{background:var(--p2bg);color:var(--p2)} .DONE{background:var(--donebg);color:var(--done)}
+  h2.section{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;color:var(--accent);
+    margin:34px 0 12px;border-bottom:2px solid var(--line);padding-bottom:6px}
+  .card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:12px;padding:18px 22px;margin:14px 0;box-shadow:0 2px 10px rgba(16,24,40,.04)}
+  .card.p0{border-left-color:var(--p0)} .card.p1{border-left-color:var(--p1)} .card.p2{border-left-color:var(--p2)}
+  .card h3{margin:0 0 4px;font-size:17px;color:var(--navy);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .num{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:700}
+  .tags{margin:6px 0 12px;display:flex;gap:8px;flex-wrap:wrap}
+  .tag{font-size:11.5px;background:#eef2f8;color:#3a4a63;border-radius:6px;padding:2px 9px}
+  .tag.iso{background:#e8eefc;color:#2a4b8d;font-weight:600}
+  .grid{display:grid;grid-template-columns:120px 1fr;gap:6px 16px;font-size:14px;margin-top:6px}
+  .grid dt{color:var(--muted);font-weight:600}
+  .grid dd{margin:0}
+  code{background:#f0f3f8;border:1px solid #e3e8ef;border-radius:5px;padding:1px 6px;font-size:12.5px;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  ul.ac{margin:6px 0 0;padding-left:18px} ul.ac li{margin:3px 0}
+  .timeline{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 8px;margin-top:10px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{background:#f0f3f8;color:var(--navy);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  tr:last-child td{border-bottom:none}
+  .note{font-size:13px;color:var(--muted)}
+  .callout{background:#fff8e6;border:1px solid #ffe7a3;border-radius:12px;padding:14px 18px;margin:16px 0;font-size:13.5px}
+  footer{margin-top:40px;color:var(--muted);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>CSquared Change Management — ISO 27001:2022 Hardening Plan</h1>
+  <p>Prioritised engineering punch-list to take the application from “strong A.8.32 workflow tool” to “closes the explicit ISO control gaps.”</p>
+  <p class="meta">Scope: software changes on the <code>dev</code> branch · Primary controls: Clause 6.3 · A.8.32 · A.5.3 · A.8.15 · A.8.9 · A.8.31 · Generated 2026-06-06</p>
+</header>
+
+<div class="verdict">
+  <h2>Where we stand</h2>
+  <p class="note">The spine of an ISO-aligned change system is already built and tested (238 tests): documented requests → mandatory plan/test/rollback artifacts → CAB-routed authorization with segregation of duties → controlled lifecycle → immutable, exportable audit trail. For the core control <strong>A.8.32</strong> we estimate ~<strong>75%</strong> coverage by feature.</p>
+  <div class="bar"><span style="width:75%"></span></div>
+  <div class="legend">
+    <span><span class="pill P0">P0</span> closest, most ISO-explicit wins</span>
+    <span><span class="pill P1">P1</span> important, larger</span>
+    <span><span class="pill P2">P2</span> breadth / coherence</span>
+    <span><span class="pill DONE">DONE</span> already shipped</span>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Out of scope for this engineering plan:</strong> ISO <em>certification</em> is an ISMS/process exercise (documented procedure, evidence of operation over time, management review). That is being clarified separately with the ISMS team — the app is the evidence-generating machinery, not the certification itself.
+</div>
+
+<h2 class="section">P0 — Do first (closest, most ISO-explicit)</h2>
+
+<div class="card p0">
+  <h3><span class="num">1.</span> Post-Implementation Review (PIR) <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag iso">A.8.32 — review after change</span><span class="tag">Effort: M (≈3–4 days)</span><span class="tag">Highest value</span></div>
+  <p>Today <code>verified</code> is just a status flip. ISO expects changes to be reviewed against intended outcome after implementation.</p>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Capture a structured review when a change moves <code>implemented → verified</code>: outcome (success/partial/failed), verification notes, whether backout was used, success-criteria met.</dd>
+    <dt>Approach</dt><dd>Add PIR fields to <code>ChangeRequest</code> (or a <code>PostImplementationReview</code> model); gate the <code>verified</code> transition in <code>updateChangeStatus</code> (<code>src/server/actions/changes.ts</code>) on a completed PIR; surface it on the change-detail page + timeline.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac">
+      <li>Cannot reach <code>verified</code> without a recorded PIR.</li>
+      <li>PIR is written to the immutable <code>AuditLog</code> and shows in the timeline + CSV export.</li>
+      <li>Unit tests for the gate + a Playwright smoke (implement → PIR → verified).</li>
+    </ul></dd>
+  </dl>
+</div>
+
+<div class="card p0">
+  <h3><span class="num">2.</span> Implementer Segregation of Duties <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag iso">A.5.3 — segregation of duties</span><span class="tag">Effort: S (≈1–2 days)</span><span class="tag">Quick win</span></div>
+  <p>We enforce requester ≠ approver, but the person who <em>approved</em> can also mark a change <code>implemented</code> with no record of who implemented it.</p>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Record the implementer and prevent the sole approver from also being the implementer (configurable per risk if needed).</dd>
+    <dt>Approach</dt><dd>Add <code>implementedById</code> to <code>ChangeRequest</code>; in <code>updateChangeStatus</code> for <code>approved → implemented</code>, set implementer and reject if the actor is the only approver on the change.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac">
+      <li>Implementer captured + shown on detail/timeline.</li>
+      <li>Sole-approver-as-implementer is blocked with a clear SoD error.</li>
+      <li>Unit tests covering the allow/deny cases.</li>
+    </ul></dd>
+  </dl>
+</div>
+
+<div class="card p0">
+  <h3><span class="num">3.</span> Emergency-Change Workflow <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag iso">A.8.32 — emergency changes</span><span class="tag">Effort: M (≈4–5 days)</span></div>
+  <p>Today the emergency flag only bypasses blackout; emergency changes still need full prior approval. ISO expects a defined expedited path with mandatory after-the-fact rigour.</p>
+  <dl class="grid">
+    <dt>Goal</dt><dd>An expedited route: implement under emergency authority, then <strong>mandatory retrospective approval + PIR within a defined window</strong>; optionally a smaller “emergency CAB.”</dd>
+    <dt>Approach</dt><dd>Branch the lifecycle for <code>isEmergency</code> in <code>changes.ts</code>/<code>approval-authority.ts</code>; track retrospective-approval deadline; dashboard surfaces overdue emergency reviews.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac">
+      <li>Emergency change can be actioned fast but is flagged until retrospective approval + PIR complete.</li>
+      <li>Overdue retrospective reviews are visible and escalable.</li>
+      <li>Tests for the emergency path + retrospective gate.</li>
+    </ul></dd>
+  </dl>
+</div>
+
+<h2 class="section">P1 — Next (important, larger)</h2>
+
+<div class="card p1">
+  <h3><span class="num">4.</span> Structured Risk &amp; Impact Assessment <span class="pill P1">P1</span></h3>
+  <div class="tags"><span class="tag iso">A.8.32 impact · A.8.8 vuln/asset</span><span class="tag">Effort: M (≈4–5 days)</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Replace the free-text <code>impactScope</code> + bare <code>riskLevel</code> enum with a small structured assessment: likelihood × impact matrix, affected services/users, derived risk score.</dd>
+    <dt>Approach</dt><dd>Add assessment fields; auto-suggest <code>riskLevel</code> from the matrix (still overridable); feed risk into quorum routing already in <code>cab-quorum.ts</code>.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac"><li>Risk level is justified by a recorded assessment, not a lone dropdown.</li><li>Assessment visible on detail + export; tested.</li></ul></dd>
+  </dl>
+</div>
+
+<div class="card p1">
+  <h3><span class="num">5.</span> Configuration Items / CMDB Linkage <span class="pill P1">P1</span></h3>
+  <div class="tags"><span class="tag iso">A.8.9 — configuration management</span><span class="tag">Effort: L (≈1–1.5 wks)</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Model the assets/services a change touches instead of a free-text <code>infrastructureType</code>, so you can answer “what changed on system X, and when.”</dd>
+    <dt>Approach</dt><dd>Introduce a <code>ConfigurationItem</code> model (per OpCo) + change↔CI join; keep <code>infrastructureType</code> as a category. Routing can later key off CI ownership.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac"><li>Changes link to one or more CIs; CI history view lists its changes.</li><li>Migration + seed + tests.</li></ul></dd>
+  </dl>
+</div>
+
+<h2 class="section">P2 — Breadth &amp; coherence</h2>
+
+<div class="card p2">
+  <h3><span class="num">6.</span> Activate the stub pages <span class="pill P2">P2</span></h3>
+  <div class="tags"><span class="tag iso">A.8.32 scheduling/comms</span><span class="tag">Effort: per-page S–M</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Turn the static placeholders into working features: <strong>change calendar / freeze view</strong> (windows + blackouts), <strong>in-app notifications + history</strong>, <strong>automation rules</strong>, <strong>risk register</strong>, and the remaining <code>/settings/*</code> pages.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac"><li>Each activated page reads live DB data (no Zustand placeholders) and has a render/smoke test.</li></ul></dd>
+  </dl>
+</div>
+
+<div class="card p2">
+  <h3><span class="num">7.</span> Dev/Test/Prod environment modelling <span class="pill P2">P2</span></h3>
+  <div class="tags"><span class="tag iso">A.8.31 — environment separation</span><span class="tag">Effort: S (≈2 days)</span></div>
+  <dl class="grid"><dt>Goal</dt><dd>Represent the target environment of a change so dev/test/prod separation is explicit on the record.</dd></dl>
+</div>
+
+<div class="card p2">
+  <h3><span class="num">8.</span> Tech-debt &amp; coherence <span class="pill P2">P2</span></h3>
+  <div class="tags"><span class="tag">Effort: M</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Retire the legacy Zustand store where DB-backed data exists (<code>src/lib/store.ts</code>); refresh <code>CLAUDE.md</code> (still claims client-side auth / no persistence — now false); define the <code>dev → prod</code> release path.</dd>
+  </dl>
+</div>
+
+<h2 class="section">Suggested sequencing</h2>
+<div class="timeline">
+<table>
+  <thead><tr><th>#</th><th>Workstream</th><th>Priority</th><th>Effort</th><th>Window (indicative)</th><th>Depends on</th></tr></thead>
+  <tbody>
+    <tr><td>2</td><td>Implementer SoD</td><td><span class="pill P0">P0</span></td><td>S</td><td>Jun 9–11</td><td>—</td></tr>
+    <tr><td>1</td><td>Post-Implementation Review</td><td><span class="pill P0">P0</span></td><td>M</td><td>Jun 9–13</td><td>—</td></tr>
+    <tr><td>3</td><td>Emergency-change workflow</td><td><span class="pill P0">P0</span></td><td>M</td><td>Jun 16–20</td><td>PIR (#1)</td></tr>
+    <tr><td>4</td><td>Structured risk/impact</td><td><span class="pill P1">P1</span></td><td>M</td><td>Jun 23–27</td><td>—</td></tr>
+    <tr><td>5</td><td>Configuration items / CMDB</td><td><span class="pill P1">P1</span></td><td>L</td><td>Jun 30–Jul 4</td><td>—</td></tr>
+    <tr><td>6</td><td>Activate stubs (calendar first)</td><td><span class="pill P2">P2</span></td><td>S–M</td><td>Jul 7–Aug 8</td><td>—</td></tr>
+    <tr><td>7</td><td>Dev/test/prod modelling</td><td><span class="pill P2">P2</span></td><td>S</td><td>Jul 7–9</td><td>#5 (optional)</td></tr>
+    <tr><td>8</td><td>Tech-debt &amp; coherence</td><td><span class="pill P2">P2</span></td><td>M</td><td>Aug 11–15</td><td>—</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note">Start #1 and #2 in parallel — both are small, independent, and the most ISO-explicit. #3 builds on the PIR record from #1. Dates mirror the project workplan (<code>docs/CSquared-CMS-Project-Workplan.xlsx</code>) and are indicative — adjust as the ISMS clarification lands.</p>
+
+<footer>CSquared Change Management System · ISO 27001:2022 hardening plan · living document — pairs with the Excel project workplan.</footer>
+
+</div>
+</body>
+</html>
