@@ -120,7 +120,11 @@ export default function ChangeDetailClient({ change, caps }: Props) {
     // approval (implemented, not yet retro-approved) reuses the same approve/reject path.
     approve: canDecide && caps.canApprove && !caps.isRequester,
     reject: canDecide && caps.canApprove && !caps.isRequester,
-    implement: change.status === "approved" && (caps.canApprove || caps.isAdmin),
+    // approved → normal implement; an emergency may be implemented straight from
+    // pending (expedited), obtaining its approval retrospectively.
+    implement:
+      (change.status === "approved" || (change.status === "pending" && change.isEmergency)) &&
+      (caps.canApprove || caps.isAdmin),
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
   }
