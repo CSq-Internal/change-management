@@ -48,13 +48,13 @@ export async function getChange(id: string) {
       where: { keycloakId: session.keycloakId },
       select: { id: true },
     })
-    const canApprove = user
+    const canApproveThis = user
       ? await canUserApproveChange({
           userId: user.id, realmRoles: session.realmRoles,
           change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
         })
       : false
-    if (!canApprove) return null
+    if (!canApproveThis) return null
   }
   return change
 }

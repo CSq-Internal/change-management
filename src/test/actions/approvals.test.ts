@@ -52,7 +52,6 @@ vi.mock('@/server/approval-authority', () => ({
 
 import { checkCabQuorum } from '@/lib/cab-quorum'
 import { submitApproval } from '@/server/actions/approvals'
-import { getAppSession } from '@/lib/session'
 import { canUserApproveChange } from '@/server/approval-authority'
 
 beforeEach(() => {
