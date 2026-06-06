@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
+import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-authority"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
@@ -43,7 +44,17 @@ export async function getChange(id: string) {
   })
   if (!change) return null
   if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
-    return null
+    const user = await db.user.findUnique({
+      where: { keycloakId: session.keycloakId },
+      select: { id: true },
+    })
+    const canApproveThis = user
+      ? await canUserApproveChange({
+          userId: user.id, realmRoles: session.realmRoles,
+          change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+        })
+      : false
+    if (!canApproveThis) return null
   }
   return change
 }
@@ -180,14 +191,11 @@ export async function submitChange(id: string) {
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })
 
-  // notify OpCo approvers (moved here from createChange)
-  const approvers = await db.userOpCoAssignment.findMany({
-    where: { opcoId: change.opcoId, role: "approver", isActive: true },
-    include: { user: true },
-  })
-  await Promise.allSettled(approvers.map((a) =>
+  // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates.
+  const recipients = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
+  await Promise.allSettled(recipients.map((u) =>
     sendApprovalRequestEmail({
-      to: a.user.email, approverName: a.user.name ?? a.user.email,
+      to: u.email, approverName: u.name ?? u.email,
       changeTitle: change.title, requesterName: user.name ?? user.email,
       riskLevel: change.riskLevel, changeId: change.id,
     })

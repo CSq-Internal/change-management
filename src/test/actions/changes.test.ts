@@ -10,9 +10,14 @@ vi.mock('@/lib/session', () => ({
   getOpCoSlugsFromSession: vi.fn().mockReturnValue(['ghana']),
 }))
 
+const mockGroupCtoUser = { id: 'user-cto', email: 'group.cto@csquared.com', name: 'Group CTO' }
+
 const mockDb = {
   opCo: { findUnique: vi.fn().mockResolvedValue({ id: 'opco-1', slug: 'ghana' }) },
-  user: { findUnique: vi.fn().mockResolvedValue({ id: 'user-1', keycloakId: 'kc-1' }) },
+  user: {
+    findUnique: vi.fn().mockResolvedValue({ id: 'user-1', keycloakId: 'kc-1' }),
+    findMany: vi.fn().mockResolvedValue([mockGroupCtoUser]),
+  },
   changeRequest: {
     findMany: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockImplementation(({ data }: { data: unknown }) =>
@@ -35,6 +40,8 @@ const mockDb = {
   attachment: { findMany: vi.fn().mockResolvedValue([]) },
   blackoutPeriod: { findMany: vi.fn().mockResolvedValue([]) },
   userOpCoAssignment: { findMany: vi.fn().mockResolvedValue([]) },
+  cABMembership: { findMany: vi.fn().mockResolvedValue([]) },
+  approverDelegation: { findMany: vi.fn().mockResolvedValue([]) },
 }
 
 vi.mock('@/server/db', () => ({
@@ -51,6 +58,14 @@ import { sendApprovalRequestEmail } from '@/server/email'
 
 beforeEach(() => {
   vi.mocked(sendApprovalRequestEmail).mockClear()
+  mockDb.user.findMany.mockReset()
+  mockDb.user.findMany.mockResolvedValue([mockGroupCtoUser])
+  mockDb.userOpCoAssignment.findMany.mockReset()
+  mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
+  mockDb.cABMembership.findMany.mockReset()
+  mockDb.cABMembership.findMany.mockResolvedValue([])
+  mockDb.approverDelegation.findMany.mockReset()
+  mockDb.approverDelegation.findMany.mockResolvedValue([])
 })
 
 const ugandaSession = {
@@ -239,18 +254,18 @@ describe('submitChange', () => {
     )
   })
 
-  it('calls sendApprovalRequestEmail for each approver', async () => {
-    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
-      { user: { email: 'approver1@csquared.com', name: 'Approver One' } },
-      { user: { email: 'approver2@csquared.com', name: 'Approver Two' } },
+  it('emails each routed CAB member on submit', async () => {
+    mockDb.cABMembership.findMany.mockResolvedValueOnce([
+      { userId: 'cto', user: { id: 'cto', email: 'cto@csquared.com', name: 'Resident CTO' } },
+      { userId: 'samuel', user: { id: 'samuel', email: 'samuel@csquared.com', name: 'Samuel' } },
     ])
     await submitChange('cr-1')
     expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledTimes(2)
     expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'approver1@csquared.com' })
+      expect.objectContaining({ to: 'cto@csquared.com' })
     )
     expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'approver2@csquared.com' })
+      expect.objectContaining({ to: 'samuel@csquared.com' })
     )
   })
 

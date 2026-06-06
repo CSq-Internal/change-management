@@ -74,7 +74,9 @@ export async function revokeDelegation(delegationId: string) {
   const delegation = await db.approverDelegation.findUnique({ where: { id: delegationId } })
   if (!delegation) throw new Error("Delegation not found")
 
-  const opco = await db.opCo.findUnique({ where: { id: delegation.opcoId } })
+  const opco = delegation.opcoId
+    ? await db.opCo.findUnique({ where: { id: delegation.opcoId } })
+    : null
   if (!opco) throw new Error("OpCo not found")
   if (!canManageUsers(session.organizations, session.realmRoles, opco.slug)) {
     throw new Error(`Forbidden: cannot manage delegations in ${opco.slug}`)

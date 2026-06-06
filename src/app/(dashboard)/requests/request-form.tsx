@@ -15,7 +15,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
+import { isGroupLevelInfra } from "@/lib/approver-routing"
 import type { AttachmentKind } from "@prisma/client"
+
+type Approver = { name: string | null; email: string }
 
 const infraTypes = [
   "Equiano Optics",
@@ -55,6 +58,8 @@ interface Props {
   initial?: Initial
   defaultEmail?: string
   attachments?: AttachmentSlot[]
+  groupCtos?: Approver[]
+  approversByOpco?: Record<string, Approver[]>
 }
 
 function formatRelativeDate(iso: string): string {
@@ -78,7 +83,7 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-gray-100 text-gray-500",
 }
 
-export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail, attachments = [] }: Props) {
+export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail, attachments = [], groupCtos = [], approversByOpco = {} }: Props) {
   const { language } = useStore()
   const router = useRouter()
   const { toast } = useToast()
@@ -127,6 +132,10 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
     testing_plan: { value: testingPlan, set: setTestingPlan },
     backout_plan: { value: backoutPlan, set: setBackoutPlan },
   }
+
+  // Live approver routing preview based on infra type + selected OpCo.
+  const groupCtoNames = groupCtos.map((c) => c.name ?? c.email)
+  const residentNames = (approversByOpco[opcoSlug] ?? []).map((a) => a.name ?? a.email)
 
   const isEmergency = riskLevel === "emergency"
 
@@ -285,6 +294,34 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
             </select>
           </CardContent>
         </Card>
+
+        {infrastructureType && (
+          <Card className="border-emerald-300/70 bg-emerald-50/60">
+            <CardHeader>
+              <CardTitle className="text-base">{t(language, "requests.approverRouting")}</CardTitle>
+              <CardDescription>{t(language, "requests.approverRoutingHint")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              {isGroupLevelInfra(infrastructureType) ? (
+                <p>
+                  <span className="font-medium">{t(language, "requests.groupCto")}:</span>{" "}
+                  {groupCtoNames.length > 0 ? groupCtoNames.join(", ") : t(language, "requests.noApprover")}
+                </p>
+              ) : (
+                <>
+                  <p>
+                    <span className="font-medium">{t(language, "requests.residentApprovers")}:</span>{" "}
+                    {residentNames.length > 0 ? residentNames.join(", ") : t(language, "requests.noApprover")}
+                  </p>
+                  <p className="text-muted-foreground">
+                    <span className="font-medium">{t(language, "requests.secondee")}:</span>{" "}
+                    {groupCtoNames.length > 0 ? groupCtoNames.join(", ") : "—"}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-border/80 bg-card/95">
           <CardHeader>

@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getChange } from "@/server/actions/changes"
-import { canApprove, isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
+import { getPrisma } from "@/server/db"
+import { isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
+import { canUserApproveChange } from "@/server/approval-authority"
 import ChangeDetailClient from "./change-detail-client"
 import type { SerializedChange, Caps } from "./change-detail-client"
 
@@ -71,9 +73,17 @@ export default async function ChangeDetailPage({
 
   const slug = change.opco.slug
   const me = session.user
+  const db = getPrisma()
+  const meUser = await db.user.findUnique({ where: { keycloakId: me.keycloakId }, select: { id: true } })
+  const canApproveThis = meUser
+    ? await canUserApproveChange({
+        userId: meUser.id, realmRoles: me.realmRoles,
+        change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+      })
+    : false
   const caps: Caps = {
     isRequester: change.requester.keycloakId === me.keycloakId,
-    canApprove: canApprove(me.organizations, slug) || isGroupAdmin(me.realmRoles),
+    canApprove: canApproveThis,
     isAdmin: isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
     isCabMember: isGroupAdmin(me.realmRoles),
   }
