@@ -53,3 +53,5 @@ CSquared Technical Change Request - Google Forms.pdf
 # playwright / local verification artifacts
 .playwright-mcp/
 login-success-dashboard.png
+
+.codex/
