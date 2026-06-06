@@ -3,10 +3,10 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { isGroupAdmin, canApprove } from "@/lib/permissions"
 import { checkCabQuorum } from "@/lib/cab-quorum"
 import { sendStatusChangeEmail } from "@/server/email"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { canUserApproveChange } from "@/server/approval-authority"
 
 export async function submitApproval(
   changeId: string,
@@ -31,13 +31,13 @@ export async function submitApproval(
   if (!change) throw new Error("Change not found")
   if (change.status !== "pending") throw new Error("Change is not pending")
 
-  const isGroupCto = user.isGroupCto === true
-  const isAllowedApprover = isGroupLevelInfra(change.infrastructureType)
-    ? isGroupAdmin(session.realmRoles) || isGroupCto
-    : isGroupAdmin(session.realmRoles) || isGroupCto || canApprove(session.organizations, change.opco.slug)
-
-  if (!isAllowedApprover) {
-    throw new Error("Forbidden: not authorized to approve in this OpCo")
+  const allowed = await canUserApproveChange({
+    userId: user.id,
+    realmRoles: session.realmRoles,
+    change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+  })
+  if (!allowed) {
+    throw new Error("Forbidden: not authorized to approve this change")
   }
 
   // ISO 27001 A.5.3 — Segregation of Duties: requesters cannot approve their own changes
@@ -46,11 +46,13 @@ export async function submitApproval(
   }
 
   const approval = await db.approval.create({
-    data: { changeId, approverId: user.id, decision, comment, isCab },
+    data: { changeId, approverId: user.id, decision, comment, isCab: true },
   })
 
-  const allApprovals = [...change.approvals, { isCab, decision, approverId: user.id }]
-  const needsCab = change.riskLevel === "high" || change.riskLevel === "emergency"
+  const allApprovals = [...change.approvals, { isCab: true, decision, approverId: user.id }]
+  const needsCab =
+    !isGroupLevelInfra(change.infrastructureType) &&
+    (change.riskLevel === "high" || change.riskLevel === "emergency")
   const quorumMet = needsCab ? checkCabQuorum(allApprovals) : decision === "approve"
 
   if (decision === "approve" && quorumMet) {

@@ -1,5 +1,5 @@
 // src/test/actions/approvals.test.ts
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Top-level mocks — hoisted by Vitest before imports
 vi.mock('@/lib/session', () => ({
@@ -22,6 +22,8 @@ const mockDb = {
       id: 'cr-1',
       status: 'pending',
       riskLevel: 'low',
+      infrastructureType: 'Wifi',
+      opcoId: 'opco-1',
       requesterId: 'user-requester', // same as user.id → triggers SoD
       opco: { slug: 'ghana' },
       approvals: [],
@@ -44,9 +46,18 @@ vi.mock('@/server/email', () => ({
   sendStatusChangeEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/server/approval-authority', () => ({
+  canUserApproveChange: vi.fn().mockResolvedValue(true),
+}))
+
 import { checkCabQuorum } from '@/lib/cab-quorum'
 import { submitApproval } from '@/server/actions/approvals'
 import { getAppSession } from '@/lib/session'
+import { canUserApproveChange } from '@/server/approval-authority'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 // ── checkCabQuorum (pure function, no mocks needed) ──────────────────────────
 
@@ -99,50 +110,51 @@ describe('TC-CONTRACT-SOD-001: submitApproval — self-approval rejected (SoD)',
   })
 })
 
-// ── Authorization: cross-OpCo approval blocked ───────────────────────────────
+// ── Authorization: CAB-membership authority + risk-based quorum ──────────────
 
-describe('submitApproval — OpCo authorization', () => {
-  it('allows the Group CTO to approve an Equiano change without an OpCo approver role', async () => {
-    vi.mocked(getAppSession).mockResolvedValueOnce({
-      keycloakId: 'kc-samuel',
-      email: 'samuel.yeboah@csquared.com',
-      name: 'Samuel Yeboah',
-      organizations: [],
-      realmRoles: [],
-    })
-    mockDb.user.findUnique
-      .mockResolvedValueOnce({ id: 'user-samuel', keycloakId: 'kc-samuel', isGroupCto: true })
-      .mockResolvedValueOnce({ id: 'user-requester', email: 'requester@csquared.com', name: 'Requester' })
-    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
-      id: 'cr-equiano',
-      status: 'pending',
-      riskLevel: 'low',
-      infrastructureType: 'Equiano IP',
-      requesterId: 'user-requester',
-      title: 'Equiano IP update',
-      opco: { slug: 'ghana' },
-      approvals: [],
-    })
-
-    await expect(submitApproval('cr-equiano', 'approve', undefined, false)).resolves.toEqual({ id: 'appr-1' })
-    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
-      where: { id: 'cr-equiano' },
-      data: { status: 'approved' },
-    })
-  })
-
-  it('rejects an approver from another OpCo (uganda) approving a ghana change', async () => {
-    vi.mocked(getAppSession).mockResolvedValueOnce({
-      keycloakId: 'kc-ug',
-      email: 'ug@csquared.com',
-      name: 'UG Approver',
-      organizations: [{ id: 'org-ug', name: 'Uganda', alias: 'uganda', roles: ['approver'] }],
-      realmRoles: [],
-    })
-    // a non-self user so authz (not SoD) is what blocks
-    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
+describe('submitApproval — CAB authority + quorum', () => {
+  it('forbids when the authority predicate denies', async () => {
+    vi.mocked(canUserApproveChange).mockResolvedValueOnce(false)
     await expect(
       submitApproval('cr-1', 'approve', undefined, false)
     ).rejects.toThrow(/Forbidden/)
+  })
+
+  it('single approval advances a low-risk change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'req',
+      opco: { slug: 'ghana' }, infrastructureType: 'Wifi',
+      riskLevel: 'low', title: 'x', approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined, false)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('Equiano is single-approval even at high risk', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'req',
+      opco: { slug: 'ghana' }, infrastructureType: 'Equiano Optics',
+      riskLevel: 'high', title: 'x', approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined, false)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('non-Equiano high risk needs 2 CAB approvals (quorum)', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'req',
+      opco: { slug: 'ghana' }, infrastructureType: 'Backbone IP Network',
+      riskLevel: 'high', title: 'x',
+      approvals: [], // first vote → no quorum yet
+    })
+    await submitApproval('cr-1', 'approve', undefined, false)
+    // only one CAB approve → not advanced to approved
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
   })
 })
