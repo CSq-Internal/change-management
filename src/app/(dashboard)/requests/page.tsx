@@ -21,22 +21,25 @@ export default async function RequestsPage() {
     select: { id: true, title: true, status: true, updatedAt: true },
   })
 
-  // Approver-routing data for the live preview: Group CTO(s) + resident approver(s) per selectable OpCo.
-  const groupCtos = await db.user.findMany({
-    where: { isGroupCto: true, isActive: true },
-    select: { name: true, email: true },
-  })
+  // Approver-routing data for the live preview: group CAB + per-OpCo CAB members per selectable OpCo.
   const opcoRecords = await db.opCo.findMany({
     where: { slug: { in: opcoOptions } },
     select: { id: true, slug: true },
   })
-  const assignments = await db.userOpCoAssignment.findMany({
-    where: { opcoId: { in: opcoRecords.map((o) => o.id) }, role: "approver", isActive: true },
+  const groupCtos = (await db.cABMembership.findMany({
+    where: { opcoId: null, isActive: true },
+    include: { user: { select: { name: true, email: true } } },
+  })).map((m) => m.user)
+
+  const opcoCab = await db.cABMembership.findMany({
+    where: { opcoId: { in: opcoRecords.map((o) => o.id) }, isActive: true },
     include: { user: { select: { name: true, email: true } }, opco: { select: { slug: true } } },
   })
   const approversByOpco: Record<string, { name: string | null; email: string }[]> = {}
   for (const o of opcoRecords) approversByOpco[o.slug] = []
-  for (const a of assignments) approversByOpco[a.opco.slug]?.push({ name: a.user.name, email: a.user.email })
+  for (const m of opcoCab) {
+    if (m.opco) approversByOpco[m.opco.slug]?.push({ name: m.user.name, email: m.user.email })
+  }
 
   return (
     <RequestForm

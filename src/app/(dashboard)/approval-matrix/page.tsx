@@ -21,26 +21,21 @@ export default async function ApprovalMatrixPage() {
   if (!session) redirect("/login")
   const db = getPrisma()
 
-  const groupCtos = await db.user.findMany({
-    where: { isGroupCto: true, isActive: true },
-    select: { name: true, email: true },
-  })
+  const groupCtos = (await db.cABMembership.findMany({
+    where: { opcoId: null, isActive: true },
+    include: { user: { select: { name: true, email: true } } },
+  })).map((m) => m.user)
   const groupCtoNames = groupCtos.map((c) => c.name ?? c.email)
   const groupCtoLabel = groupCtoNames.length > 0 ? groupCtoNames.join(", ") : "—"
 
-  const opcos = await db.opCo.findMany({
-    select: {
-      slug: true,
-      name: true,
-      users: {
-        where: { role: "approver", isActive: true },
-        select: { user: { select: { name: true, email: true } } },
-      },
-    },
+  const opcoCab = await db.cABMembership.findMany({
+    where: { opcoId: { not: null }, isActive: true },
+    include: { user: { select: { name: true, email: true } }, opco: { select: { slug: true } } },
   })
   const approversBySlug: Record<string, string[]> = {}
-  for (const o of opcos) {
-    approversBySlug[o.slug] = o.users.map((a) => a.user.name ?? a.user.email)
+  for (const m of opcoCab) {
+    if (!m.opco) continue
+    ;(approversBySlug[m.opco.slug] ??= []).push(m.user.name ?? m.user.email)
   }
 
   return (
