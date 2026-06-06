@@ -6,7 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { sendApprovalRequestEmail } from "@/server/email"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
-import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-authority"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
@@ -185,9 +185,8 @@ export async function submitChange(id: string) {
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })
 
-  // Notify approvers resolved by infrastructure type (Equiano → Group CTO only;
-  // others → resident OpCo approver(s) + Group CTO as secondee).
-  const recipients = await resolveApproverUsers(change.opcoId, change.infrastructureType)
+  // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates.
+  const recipients = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
   await Promise.allSettled(recipients.map((u) =>
     sendApprovalRequestEmail({
       to: u.email, approverName: u.name ?? u.email,
@@ -196,35 +195,6 @@ export async function submitChange(id: string) {
     })
   ))
   return updated
-}
-
-/**
- * Resolve the approver users for a change, by infrastructure type.
- * - Equiano (group-level) infra → the Group CTO(s) only.
- * - All other infra → the resident OpCo approver(s) + Group CTO(s) as secondee.
- * Deduplicated by user id.
- */
-export async function resolveApproverUsers(opcoId: string, infrastructureType: string) {
-  const db = getPrisma()
-  const groupCtos = await db.user.findMany({ where: { isGroupCto: true, isActive: true } })
-
-  if (isGroupLevelInfra(infrastructureType)) {
-    return groupCtos
-  }
-
-  const residents = await db.userOpCoAssignment.findMany({
-    where: { opcoId, role: "approver", isActive: true },
-    include: { user: true },
-  })
-  const seen = new Set<string>()
-  const out: { id: string; name: string | null; email: string }[] = []
-  for (const u of [...residents.map((r) => r.user), ...groupCtos]) {
-    if (!seen.has(u.id)) {
-      seen.add(u.id)
-      out.push({ id: u.id, name: u.name, email: u.email })
-    }
-  }
-  return out
 }
 
 const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {

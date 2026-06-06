@@ -40,6 +40,8 @@ const mockDb = {
   attachment: { findMany: vi.fn().mockResolvedValue([]) },
   blackoutPeriod: { findMany: vi.fn().mockResolvedValue([]) },
   userOpCoAssignment: { findMany: vi.fn().mockResolvedValue([]) },
+  cABMembership: { findMany: vi.fn().mockResolvedValue([]) },
+  approverDelegation: { findMany: vi.fn().mockResolvedValue([]) },
 }
 
 vi.mock('@/server/db', () => ({
@@ -60,6 +62,10 @@ beforeEach(() => {
   mockDb.user.findMany.mockResolvedValue([mockGroupCtoUser])
   mockDb.userOpCoAssignment.findMany.mockReset()
   mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
+  mockDb.cABMembership.findMany.mockReset()
+  mockDb.cABMembership.findMany.mockResolvedValue([])
+  mockDb.approverDelegation.findMany.mockReset()
+  mockDb.approverDelegation.findMany.mockResolvedValue([])
 })
 
 const ugandaSession = {
@@ -204,22 +210,6 @@ const changeWithRelations = {
   title: 'Router update', riskLevel: 'low',
 }
 
-const submittableChange = (infrastructureType: string) => ({
-  id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
-  opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
-  riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
-  infrastructureType,
-  plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
-  isEmergency: false,
-  attachments: [
-    { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
-    { kind: 'backout_plan' }, { kind: 'solution_document' },
-  ],
-})
-
-const approvalEmailRecipients = () =>
-  vi.mocked(sendApprovalRequestEmail).mock.calls.map(([opts]) => opts.to)
-
 describe('getChange', () => {
   it('returns the change for a member of its OpCo', async () => {
     // default session is ghana/requester — change.opco.slug === 'ghana'
@@ -264,49 +254,19 @@ describe('submitChange', () => {
     )
   })
 
-  it.each(['Equiano Optics', 'Equiano IP'])('notifies only Group CTOs for %s', async (infrastructureType) => {
-    mockDb.changeRequest.findUnique.mockResolvedValueOnce(submittableChange(infrastructureType))
-
+  it('emails each routed CAB member on submit', async () => {
+    mockDb.cABMembership.findMany.mockResolvedValueOnce([
+      { userId: 'cto', user: { id: 'cto', email: 'cto@csquared.com', name: 'Resident CTO' } },
+      { userId: 'samuel', user: { id: 'samuel', email: 'samuel@csquared.com', name: 'Samuel' } },
+    ])
     await submitChange('cr-1')
-
-    expect(mockDb.user.findMany).toHaveBeenCalledWith({ where: { isGroupCto: true, isActive: true } })
-    expect(mockDb.userOpCoAssignment.findMany).not.toHaveBeenCalled()
-    expect(approvalEmailRecipients()).toEqual(['group.cto@csquared.com'])
-  })
-
-  it('notifies resident OpCo approvers plus Group CTOs for Backbone IP Network', async () => {
-    mockDb.changeRequest.findUnique.mockResolvedValueOnce(submittableChange('Backbone IP Network'))
-    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
-      { user: { id: 'approver-1', email: 'approver1@csquared.com', name: 'Approver One' } },
-      { user: { id: 'approver-2', email: 'approver2@csquared.com', name: 'Approver Two' } },
-    ])
-
-    await submitChange('cr-1')
-
-    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
-      where: { opcoId: 'opco-1', role: 'approver', isActive: true },
-      include: { user: true },
-    })
-    expect(approvalEmailRecipients()).toEqual([
-      'approver1@csquared.com',
-      'approver2@csquared.com',
-      'group.cto@csquared.com',
-    ])
-  })
-
-  it('notifies Wifi resident approvers plus Group CTOs without duplicate recipients', async () => {
-    mockDb.changeRequest.findUnique.mockResolvedValueOnce(submittableChange('Wifi'))
-    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
-      { user: { id: 'approver-1', email: 'approver1@csquared.com', name: 'Approver One' } },
-      { user: mockGroupCtoUser },
-    ])
-
-    await submitChange('cr-1')
-
-    expect(approvalEmailRecipients()).toEqual([
-      'approver1@csquared.com',
-      'group.cto@csquared.com',
-    ])
+    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'cto@csquared.com' })
+    )
+    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'samuel@csquared.com' })
+    )
   })
 
   it('throws when the change is not a draft', async () => {
