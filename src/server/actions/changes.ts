@@ -46,9 +46,15 @@ export async function getChange(id: string) {
   if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
     const user = await db.user.findUnique({
       where: { keycloakId: session.keycloakId },
-      select: { isGroupCto: true },
+      select: { id: true },
     })
-    if (!user?.isGroupCto) return null
+    const canApprove = user
+      ? await canUserApproveChange({
+          userId: user.id, realmRoles: session.realmRoles,
+          change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+        })
+      : false
+    if (!canApprove) return null
   }
   return change
 }
