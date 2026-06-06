@@ -11,6 +11,7 @@ import { t } from "@/lib/i18n"
 import { submitChange, updateChangeStatus } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
 import { StatusPill, RiskPill } from "@/components/change-badges"
+import PirForm from "./pir-form"
 
 // ── Serialised types (Dates as ISO strings) ──────────────────────────────────
 
@@ -56,6 +57,12 @@ export type SerializedChange = {
     at: string
     actor: { name: string | null; email: string }
   }>
+  implementedAt: string | null
+  implementer: { name: string | null; email: string } | null
+  expedited: boolean
+  retroApprovalDueAt: string | null
+  retroApprovedAt: string | null
+  hasPir: boolean
 }
 
 export type Caps = {
@@ -104,13 +111,20 @@ export default function ChangeDetailClient({ change, caps }: Props) {
   const [comment, setComment] = useState("")
 
   // ── Action gating ─────────────────────────────────────────────────────────
+  const awaitingRetro = change.status === "implemented" && change.expedited && !change.retroApprovedAt
+  const canDecide = change.status === "pending" || awaitingRetro
   const a = {
     submit: change.status === "draft" && (caps.isRequester || caps.isAdmin),
     edit: change.status === "draft" && (caps.isRequester || caps.isAdmin),
-    approve: change.status === "pending" && caps.canApprove && !caps.isRequester,
-    reject: change.status === "pending" && caps.canApprove && !caps.isRequester,
-    implement: change.status === "approved" && (caps.canApprove || caps.isAdmin),
-    verify: change.status === "implemented" && (caps.canApprove || caps.isAdmin),
+    // pending → normal approval; an expedited emergency awaiting its retrospective
+    // approval (implemented, not yet retro-approved) reuses the same approve/reject path.
+    approve: canDecide && caps.canApprove && !caps.isRequester,
+    reject: canDecide && caps.canApprove && !caps.isRequester,
+    // approved → normal implement; an emergency may be implemented straight from
+    // pending (expedited), obtaining its approval retrospectively.
+    implement:
+      (change.status === "approved" || (change.status === "pending" && change.isEmergency)) &&
+      (caps.canApprove || caps.isAdmin),
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
   }
@@ -171,7 +185,7 @@ export default function ChangeDetailClient({ change, caps }: Props) {
     )
   }
 
-  function handleStatusChange(toStatus: "implemented" | "verified" | "closed" | "draft") {
+  function handleStatusChange(toStatus: "implemented" | "closed" | "draft") {
     const titleKey = `detail.toast.${toStatus}`
     const descKey = `detail.toast.${toStatus}Desc`
     handleAction(
@@ -228,6 +242,12 @@ export default function ChangeDetailClient({ change, caps }: Props) {
             <p className="text-sm leading-relaxed mb-4">{change.description}</p>
             <dl>
               <DetailRow label={t(language, "detail.field.requester")} value={requesterLabel} />
+              {change.implementer && (
+                <DetailRow
+                  label={t(language, "detail.implementedBy")}
+                  value={change.implementer.name ?? change.implementer.email}
+                />
+              )}
               <DetailRow label={t(language, "detail.field.contactEmail")} value={change.contactEmail} />
               <DetailRow label={t(language, "detail.field.infraType")} value={change.infrastructureType} />
               <DetailRow label={t(language, "detail.field.impactScope")} value={change.impactScope} />
@@ -314,6 +334,13 @@ export default function ChangeDetailClient({ change, caps }: Props) {
           </CardHeader>
           <CardContent className="pt-0">
             <StatusPill status={change.status} />
+            {change.expedited && !change.retroApprovedAt && change.retroApprovalDueAt && (
+              <div className="mt-2">
+                <span className="rounded-md bg-rose-100 px-2 py-1 text-xs text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                  {t(language, "detail.retroDue")}: {new Date(change.retroApprovalDueAt).toLocaleString()}
+                </span>
+              </div>
+            )}
             {needsCab && (
               <div className="mt-3 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{t(language, "detail.cabQuorum")}: </span>
@@ -437,15 +464,8 @@ export default function ChangeDetailClient({ change, caps }: Props) {
               </Button>
             )}
 
-            {a.verify && (
-              <Button
-                className="w-full"
-                variant="outline"
-                disabled={isPending || isActing}
-                onClick={() => handleStatusChange("verified")}
-              >
-                {t(language, "detail.verify")}
-              </Button>
+            {change.status === "implemented" && (caps.canApprove || caps.isAdmin) && !change.hasPir && (
+              <PirForm changeId={change.id} />
             )}
 
             {a.close && (

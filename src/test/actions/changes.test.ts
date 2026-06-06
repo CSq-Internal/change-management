@@ -176,6 +176,65 @@ describe('updateChangeStatus — OpCo authorization', () => {
     expect(result).toHaveProperty('status', 'pending') // mock always returns { status: 'pending' }
   })
 
+  it('blocks the sole approver from implementing their own approval (SoD)', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      ...approvedChange,
+      approvals: [{ decision: 'approve', approverId: 'user-ap' }],
+    })
+    await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/sole approver/i)
+  })
+
+  it('allows implementing when another approver also approved', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      ...approvedChange,
+      approvals: [
+        { decision: 'approve', approverId: 'user-ap' },
+        { decision: 'approve', approverId: 'user-other' },
+      ],
+    })
+    await updateChangeStatus('cr-1', 'implemented')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'implemented', implementedById: 'user-ap' }) })
+    )
+  })
+
+  it('lets an emergency change be implemented from pending (expedited) with a 48h retro deadline', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', isEmergency: true, opco: { slug: 'ghana' },
+      requesterId: 'user-1', approvals: [],
+    })
+    await updateChangeStatus('cr-1', 'implemented')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'implemented', expedited: true, retroApprovalDueAt: expect.any(Date) }) })
+    )
+  })
+
+  it('forbids implementing a non-emergency change straight from pending', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', isEmergency: false, opco: { slug: 'ghana' },
+      requesterId: 'user-1', approvals: [],
+    })
+    await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/emergency/i)
+  })
+
+  it('blocks direct verify (must go through a PIR)', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'implemented', isEmergency: false, opco: { slug: 'ghana' },
+      requesterId: 'user-1', approvals: [],
+    })
+    await expect(updateChangeStatus('cr-1', 'verified')).rejects.toThrow(/Post-Implementation Review/i)
+  })
+
   it('allows the original requester to reopen a rejected change', async () => {
     // default session: kc-1 → user-1 which matches requesterId
     mockDb.changeRequest.findUnique.mockResolvedValueOnce(rejectedChange)

@@ -70,6 +70,8 @@ model User {
   cabMemberships       CABMembership[]
   adminActions         AdminAuditLog[]      @relation("AdminActor")
   uploadedAttachments  Attachment[]         @relation("UploadedAttachments")
+  implementedChanges   ChangeRequest[]            @relation("Implementer")
+  pirReviews           PostImplementationReview[] @relation("PirAuthor")
 }
 
 model OpCo {
@@ -155,6 +157,13 @@ model ChangeRequest {
   plannedEnd         DateTime?
   slaDeadline        DateTime?
   driveFolderId      String?
+  implementedById    String?
+  implementedBy      User?     @relation("Implementer", fields: [implementedById], references: [id])
+  implementedAt      DateTime?
+  expedited          Boolean   @default(false)
+  retroApprovalDueAt DateTime?
+  retroApprovedAt    DateTime?
+  pir                PostImplementationReview?
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -284,4 +293,24 @@ model AdminAuditLog {
   @@index([actorId])
   @@index([targetUserId])
   @@index([at])
+}
+
+enum PirOutcome {
+  success
+  partial
+  failed
+}
+
+model PostImplementationReview {
+  id          String        @id @default(cuid())
+  changeId    String        @unique
+  change      ChangeRequest @relation(fields: [changeId], references: [id])
+  outcome     PirOutcome
+  summary     String
+  backoutUsed Boolean       @default(false)
+  authorId    String
+  author      User          @relation("PirAuthor", fields: [authorId], references: [id])
+  createdAt   DateTime      @default(now())
+
+  @@index([changeId])
 }
