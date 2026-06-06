@@ -29,7 +29,8 @@ export async function submitApproval(
     include: { approvals: true, opco: true },
   })
   if (!change) throw new Error("Change not found")
-  if (change.status !== "pending") throw new Error("Change is not pending")
+  const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
+  if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
 
   const allowed = await canUserApproveChange({
     userId: user.id,
@@ -48,6 +49,20 @@ export async function submitApproval(
   const approval = await db.approval.create({
     data: { changeId, approverId: user.id, decision, comment, isCab: true },
   })
+
+  if (isRetrospective) {
+    if (decision === "approve") {
+      await db.changeRequest.update({ where: { id: changeId }, data: { retroApprovedAt: new Date() } })
+    }
+    await db.auditLog.create({
+      data: {
+        changeId, actorId: user.id,
+        action: decision === "approve" ? "retro_approved" : "retro_rejected",
+        note: comment,
+      },
+    })
+    return approval
+  }
 
   const allApprovals = [...change.approvals, { isCab: true, decision, approverId: user.id }]
   const needsCab =

@@ -156,4 +156,19 @@ describe('submitApproval — CAB authority + quorum', () => {
       expect.objectContaining({ data: { status: 'approved' } })
     )
   })
+
+  it('records a retrospective approval on an expedited emergency without changing status', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'implemented', opcoId: 'opco-1', requesterId: 'req',
+      opco: { slug: 'ghana' }, infrastructureType: 'Wifi', riskLevel: 'emergency',
+      isEmergency: true, expedited: true, title: 'x', approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined, false)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ retroApprovedAt: expect.any(Date) }) })
+    )
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
 })
