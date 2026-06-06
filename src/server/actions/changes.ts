@@ -40,6 +40,8 @@ export async function getChange(id: string) {
       approvals: { include: { approver: true }, orderBy: { decidedAt: "asc" } },
       auditTrail: { include: { actor: true }, orderBy: { at: "asc" } },
       attachments: { orderBy: { kind: "asc" } },
+      implementedBy: true,
+      pir: true,
     },
   })
   if (!change) return null

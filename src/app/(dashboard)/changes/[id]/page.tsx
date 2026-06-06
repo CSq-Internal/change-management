@@ -56,6 +56,12 @@ function serialize(
       at: log.at.toISOString(),
       actor: { name: log.actor.name ?? null, email: log.actor.email },
     })),
+    implementedAt: change.implementedAt?.toISOString() ?? null,
+    implementer: change.implementedBy ? { name: change.implementedBy.name ?? null, email: change.implementedBy.email } : null,
+    expedited: change.expedited,
+    retroApprovalDueAt: change.retroApprovalDueAt?.toISOString() ?? null,
+    retroApprovedAt: change.retroApprovedAt?.toISOString() ?? null,
+    hasPir: change.pir != null,
   }
 }
 
