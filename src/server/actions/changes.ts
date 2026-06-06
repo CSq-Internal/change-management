@@ -218,14 +218,29 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
   if (!user) throw new Error("User not found")
 
-  const change = await db.changeRequest.findUnique({ where: { id: changeId }, include: { opco: true } })
+  const change = await db.changeRequest.findUnique({
+    where: { id: changeId },
+    include: { opco: true, approvals: true },
+  })
   if (!change) throw new Error("Change not found")
 
   if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
     throw new Error("Forbidden: change belongs to another OpCo")
   }
 
-  if (!VALID_TRANSITIONS[change.status]?.includes(toStatus)) {
+  // Verify is only reachable by recording a PIR (see submitPostImplementationReview).
+  if (toStatus === "verified") {
+    throw new Error("To verify a change, submit a Post-Implementation Review (PIR)")
+  }
+
+  // Emergency expedited: pending → implemented (skipping prior approval) is allowed
+  // ONLY for emergency changes; everything else must follow VALID_TRANSITIONS.
+  const isExpeditedImplement = toStatus === "implemented" && change.status === "pending"
+  if (isExpeditedImplement) {
+    if (!change.isEmergency) {
+      throw new Error("Invalid transition: only emergency changes can be implemented without approval")
+    }
+  } else if (!VALID_TRANSITIONS[change.status]?.includes(toStatus)) {
     throw new Error(`Invalid transition: ${change.status} → ${toStatus}`)
   }
 
@@ -239,13 +254,37 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
       throw new Error("Forbidden: only the requester or an admin can reopen this change")
     }
   } else {
-    // implemented / verified / closed: requires approver or admin rights
+    // implemented / closed: requires approver or admin rights
     if (!canApprove(session.organizations, change.opco.slug) && !isAdmin) {
       throw new Error("Forbidden: not authorized to advance this change")
     }
   }
 
-  const updated = await db.changeRequest.update({ where: { id: changeId }, data: { status: toStatus } })
+  const data: {
+    status: ChangeStatus
+    implementedById?: string
+    implementedAt?: Date
+    expedited?: boolean
+    retroApprovalDueAt?: Date
+  } = { status: toStatus }
+
+  if (toStatus === "implemented") {
+    // Implementer Segregation of Duties (lenient): the *sole* approver cannot also implement.
+    const approveVoters = [
+      ...new Set((change.approvals ?? []).filter((a) => a.decision === "approve").map((a) => a.approverId)),
+    ]
+    if (approveVoters.length === 1 && approveVoters[0] === user.id) {
+      throw new Error("Forbidden: the sole approver cannot also implement this change (SoD — ISO 27001 A.5.3)")
+    }
+    data.implementedById = user.id
+    data.implementedAt = new Date()
+    if (isExpeditedImplement) {
+      data.expedited = true
+      data.retroApprovalDueAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
+    }
+  }
+
+  const updated = await db.changeRequest.update({ where: { id: changeId }, data })
   await db.auditLog.create({
     data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
   })
