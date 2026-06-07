@@ -7,9 +7,9 @@ import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove }
 import { sendApprovalRequestEmail } from "@/server/email"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-authority"
+import { SLA_HOURS } from "@/lib/sla"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
-const SLA_HOURS: Record<RiskLevel, number> = { low: 48, medium: 24, high: 4, emergency: 1 }
 // Emergency changes implemented under expedited authority must obtain retrospective
 // approval within this window (ISO 27001 A.8.32).
 const RETRO_APPROVAL_WINDOW_HOURS = 48
