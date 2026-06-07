@@ -316,3 +316,56 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   })
   return updated
 }
+
+const RESCHEDULABLE_STATUSES = ["draft", "pending", "approved"]
+
+export async function rescheduleChange(id: string, newStartIso: string, newEndIso: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
+  if (!user) throw new Error("User not found")
+
+  const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
+  if (!change) throw new Error("Change not found")
+
+  const isAdmin = isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
+  if (change.requesterId !== user.id && !isAdmin)
+    throw new Error("Forbidden: only the requester or an admin can reschedule this change")
+
+  if (!RESCHEDULABLE_STATUSES.includes(change.status))
+    throw new Error("Only unimplemented changes (draft, pending, approved) can be rescheduled")
+
+  const newStart = new Date(newStartIso)
+  const newEnd = new Date(newEndIso)
+  if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime()) || newEnd <= newStart)
+    throw new Error("Invalid reschedule window")
+
+  // Blackout is a hard block (overlap is only a soft calendar warning), unless emergency.
+  if (!change.isEmergency) {
+    const blackouts = await db.blackoutPeriod.findMany({
+      where: {
+        OR: [{ opcoId: change.opcoId }, { opcoId: null }],
+        startsAt: { lt: newEnd },
+        endsAt: { gt: newStart },
+      },
+    })
+    if (blackouts.length > 0)
+      throw new Error(`Blocked by blackout: "${blackouts[0].label}". Emergencies may override.`)
+  }
+
+  const oldWindow = change.plannedStart && change.plannedEnd
+    ? `${change.plannedStart.toISOString()} – ${change.plannedEnd.toISOString()}`
+    : "unscheduled"
+  const updated = await db.changeRequest.update({
+    where: { id },
+    data: { plannedStart: newStart, plannedEnd: newEnd },
+  })
+  await db.auditLog.create({
+    data: {
+      changeId: id, actorId: user.id, action: "rescheduled",
+      note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
+    },
+  })
+  return updated
+}
