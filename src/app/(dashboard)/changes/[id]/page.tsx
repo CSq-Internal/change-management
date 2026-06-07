@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getChange } from "@/server/actions/changes"
 import { getPrisma } from "@/server/db"
-import { isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
+import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, canAudit } from "@/lib/permissions"
 import { canUserApproveChange } from "@/server/approval-authority"
 import ChangeDetailClient from "./change-detail-client"
 import type { SerializedChange, Caps } from "./change-detail-client"
@@ -92,6 +92,7 @@ export default async function ChangeDetailPage({
     canApprove: canApproveThis,
     isAdmin: isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
     isCabMember: isGroupAdmin(me.realmRoles),
+    canExportEvidence: isGroupLevel(me.realmRoles) || canAudit(me.organizations, me.realmRoles, slug),
   }
 
   return <ChangeDetailClient change={serialize(change)} caps={caps} />

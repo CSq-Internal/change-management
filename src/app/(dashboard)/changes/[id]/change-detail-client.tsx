@@ -70,6 +70,7 @@ export type Caps = {
   canApprove: boolean
   isAdmin: boolean
   isCabMember: boolean
+  canExportEvidence: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -221,6 +222,16 @@ export default function ChangeDetailClient({ change, caps }: Props) {
                   </span>
                 )}
                 <StatusPill status={change.status} />
+                {caps.canExportEvidence && (
+                  <a
+                    href={`/api/changes/${change.id}/evidence.pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center rounded-md border border-border px-2.5 py-0.5 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    {t(language, "detail.exportEvidence")}
+                  </a>
+                )}
               </div>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
