@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
+import { isGroupLevel } from "@/lib/permissions"
+import { runDueEscalations } from "@/server/sla"
 import { listApprovableChanges } from "@/server/approval-authority"
 import ApprovalsClient from "./approvals-client"
 
@@ -11,6 +13,10 @@ export default async function Approvals() {
   const db = getPrisma()
   const me = await db.user.findUnique({ where: { keycloakId: session.user.keycloakId }, select: { id: true } })
   if (!me) redirect("/login")
+
+  const groupLevel = isGroupLevel(session.user.realmRoles)
+  const opcoSlugs = session.user.organizations.map((o) => o.alias)
+  void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})
 
   const changes = await listApprovableChanges({ userId: me.id, realmRoles: session.user.realmRoles })
 
