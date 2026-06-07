@@ -4,7 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
-import { sendApprovalRequestEmail } from "@/server/email"
+import { sendApprovalRequestEmail, sendEmergencyAlertEmail } from "@/server/email"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
@@ -205,6 +205,27 @@ export async function submitChange(id: string) {
       riskLevel: change.riskLevel, changeId: change.id,
     })
   ))
+
+  if (change.isEmergency) {
+    const cab = await db.cABMembership.findMany({
+      where: { opcoId: null, isActive: true },
+      select: { user: { select: { email: true, isActive: true } } },
+    })
+    const requesterName = user.name ?? user.email
+    await Promise.allSettled(
+      cab
+        .filter((m) => m.user.isActive)
+        .map((m) =>
+          sendEmergencyAlertEmail({
+            to: m.user.email,
+            changeTitle: change.title,
+            changeId: change.id,
+            requesterName,
+          })
+        )
+    )
+  }
+
   return updated
 }
 

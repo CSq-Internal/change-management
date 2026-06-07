@@ -50,6 +50,7 @@ vi.mock('@/server/db', () => ({
 
 vi.mock('@/server/email', () => ({
   sendApprovalRequestEmail: vi.fn().mockResolvedValue(undefined),
+  sendEmergencyAlertEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
 import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange } from '@/server/actions/changes'
