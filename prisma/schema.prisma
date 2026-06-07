@@ -72,6 +72,7 @@ model User {
   uploadedAttachments  Attachment[]         @relation("UploadedAttachments")
   implementedChanges   ChangeRequest[]            @relation("Implementer")
   pirReviews           PostImplementationReview[] @relation("PirAuthor")
+  risksAuthored        RiskRegister[]             @relation("RiskAuthor")
 }
 
 model OpCo {
@@ -87,6 +88,7 @@ model OpCo {
   teams      Team[]
   blackouts  BlackoutPeriod[]
   cab        CABMembership[]
+  risks      RiskRegister[]
   archivedAt DateTime?
 }
 
@@ -315,4 +317,39 @@ model PostImplementationReview {
   createdAt   DateTime      @default(now())
 
   @@index([changeId])
+}
+
+enum RiskCategory {
+  operational
+  security
+  compliance
+  technical
+}
+
+enum RiskStatus {
+  open
+  mitigating
+  closed
+}
+
+model RiskRegister {
+  id             String       @id @default(cuid())
+  title          String
+  description    String
+  category       RiskCategory
+  likelihood     Int
+  impact         Int
+  owner          String
+  mitigationPlan String?
+  status         RiskStatus   @default(open)
+  reviewDate     DateTime?
+  opcoId         String?
+  opco           OpCo?        @relation(fields: [opcoId], references: [id])
+  createdById    String
+  createdBy      User         @relation("RiskAuthor", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([opcoId])
+  @@index([status])
 }
