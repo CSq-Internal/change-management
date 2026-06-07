@@ -1,42 +1,32 @@
-"use client"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { listRisks } from "@/server/actions/risk-register"
+import { canManageAnyOpCo, isGroupAdmin } from "@/lib/permissions"
+import RiskRegisterClient, { type RiskRow } from "./risk-register-client"
 
-import { useStore } from "@/lib/store"
-import { t } from "@/lib/i18n"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+export default async function RiskRegisterPage() {
+  const session = await auth()
+  if (!session) redirect("/login")
 
-const riskItems = [
-  { label: "Change collisions", level: "High", owner: "Change Advisory Board" },
-  { label: "Unplanned downtime", level: "Medium", owner: "Ops" },
-  { label: "Security drift", level: "High", owner: "Security" },
-  { label: "Rollback complexity", level: "Low", owner: "Engineering" },
-]
+  const risks = await listRisks()
+  const rows: RiskRow[] = risks.map((r) => ({
+    id: r.id, title: r.title, description: r.description, category: r.category,
+    likelihood: r.likelihood, impact: r.impact, owner: r.owner,
+    mitigationPlan: r.mitigationPlan ?? null, status: r.status,
+    reviewDate: r.reviewDate ? r.reviewDate.toISOString() : null,
+    opcoSlug: r.opco?.slug ?? null, opcoName: r.opco?.name ?? null,
+  }))
 
-export default function RiskRegisterPage() {
-  const { language } = useStore()
+  const manageableOpcos = session.user.organizations
+    .filter((o) => o.roles.includes("admin"))
+    .map((o) => ({ slug: o.alias, name: o.name }))
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{t(language, "nav.riskRegister")}</h1>
-        <p className="text-sm text-muted-foreground">Track systemic risks and mitigation plans.</p>
-      </div>
-
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader>
-          <CardTitle className="text-base">Open Risks</CardTitle>
-          <CardDescription>Review risk owners and mitigation progress.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          {riskItems.map((risk) => (
-            <div key={risk.label} className="rounded-xl border border-border/70 bg-muted/60 px-4 py-3">
-              <div className="text-sm font-medium text-foreground">{risk.label}</div>
-              <div className="text-xs text-muted-foreground">
-                Level: {risk.level} • Owner: {risk.owner}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
+    <RiskRegisterClient
+      rows={rows}
+      canManage={canManageAnyOpCo(session.user.organizations, session.user.realmRoles)}
+      canManageGroup={isGroupAdmin(session.user.realmRoles)}
+      manageableOpcos={manageableOpcos}
+    />
   )
 }
