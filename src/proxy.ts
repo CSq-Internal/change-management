@@ -10,6 +10,10 @@ export const proxy = NextAuth(authConfig).auth((req) => {
 
   if (pathname.startsWith("/api/auth")) return NextResponse.next()
 
+  // The SLA cron endpoint authenticates itself via the x-cron-secret header
+  // (no session), so it must bypass the session-redirect proxy.
+  if (pathname.startsWith("/api/cron")) return NextResponse.next()
+
   if (!session && pathname !== "/login") {
     return NextResponse.redirect(new URL("/login", req.url))
   }

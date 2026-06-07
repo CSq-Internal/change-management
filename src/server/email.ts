@@ -59,3 +59,26 @@ export async function sendStatusChangeEmail(opts: {
 <p><a href="${BASE}/changes">View Changes</a></p>`
   )
 }
+
+export async function sendSlaEscalationEmail(opts: {
+  to: string; changeTitle: string; changeId: string; level: number; riskLevel: string
+}) {
+  const tier = opts.level >= 2 ? "group" : "OpCo admin"
+  await dispatchEmail(
+    opts.to,
+    `SLA breach (level ${opts.level}): "${opts.changeTitle}"`,
+    `<p>The <strong>${opts.riskLevel} risk</strong> change <strong>${opts.changeTitle}</strong> has breached its approval SLA and was escalated to <strong>${tier}</strong> level.</p>
+<p><a href="${BASE}/changes/${opts.changeId}">Review the change</a></p>`
+  )
+}
+
+export async function sendEmergencyAlertEmail(opts: {
+  to: string; changeTitle: string; changeId: string; requesterName: string
+}) {
+  await dispatchEmail(
+    opts.to,
+    `Emergency change submitted: "${opts.changeTitle}"`,
+    `<p><strong>${opts.requesterName}</strong> submitted an <strong>emergency</strong> change: <strong>${opts.changeTitle}</strong>.</p>
+<p><a href="${BASE}/changes/${opts.changeId}">Review the change</a></p>`
+  )
+}

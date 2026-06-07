@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel } from "@/lib/permissions"
+import { runDueEscalations } from "@/server/sla"
 import { buildDashboardData, durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
 import type { FeedEvent } from "@/components/dashboard/monitor-view"
@@ -28,6 +29,9 @@ export default async function Home() {
   const groupLevel = isGroupLevel(session.user.realmRoles)
   const opcoSlugs = session.user.organizations.map((o) => o.alias)
   const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
+
+  // Fire-and-forget SLA escalation sweep — never block render.
+  void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})
 
   const [rows, blackoutRows, auditRows] = await Promise.all([
     db.changeRequest.findMany({

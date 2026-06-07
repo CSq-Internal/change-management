@@ -163,6 +163,8 @@ model ChangeRequest {
   expedited          Boolean   @default(false)
   retroApprovalDueAt DateTime?
   retroApprovedAt    DateTime?
+  escalationLevel    Int       @default(0)   // 0 none · 1 OpCo admin notified · 2 group notified
+  lastEscalatedAt    DateTime?
   pir                PostImplementationReview?
 
   createdAt          DateTime @default(now())
