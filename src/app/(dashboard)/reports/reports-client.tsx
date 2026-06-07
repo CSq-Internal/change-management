@@ -2,6 +2,7 @@
 
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import type { SlaReportCell } from "@/lib/sla-report"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -19,6 +20,7 @@ export type ReportsData = {
     createdAt: Date
     updatedAt: Date
   }[]
+  slaCompliance: SlaReportCell[]
 }
 
 const reportCards = [
@@ -169,6 +171,43 @@ export default function ReportsClient({ data }: ReportsClientProps) {
               <div className="text-xs text-muted-foreground">{t(language, report.descKey)}</div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 bg-card/95">
+        <CardHeader>
+          <CardTitle className="text-base">{t(language, "reports.slaComplianceTitle")}</CardTitle>
+          <CardDescription>{t(language, "reports.slaComplianceDesc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.slaCompliance.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t(language, "reports.slaCompliance.empty")}</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">{t(language, "reports.slaCol.opco")}</th>
+                  <th className="py-2 pr-4 font-medium">{t(language, "reports.slaCol.risk")}</th>
+                  <th className="py-2 pr-4 font-medium text-right">{t(language, "reports.slaCol.decided")}</th>
+                  <th className="py-2 pr-4 font-medium text-right">{t(language, "reports.slaCol.inSla")}</th>
+                  <th className="py-2 font-medium text-right">{t(language, "reports.slaCol.adherence")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.slaCompliance.map((cell) => (
+                  <tr key={`${cell.opcoSlug}-${cell.riskLevel}`} className="border-b border-border/40">
+                    <td className="py-2 pr-4">{cell.opcoName}</td>
+                    <td className="py-2 pr-4 capitalize">{cell.riskLevel}</td>
+                    <td className="py-2 pr-4 text-right">{cell.decided}</td>
+                    <td className="py-2 pr-4 text-right">{cell.inSla}</td>
+                    <td className="py-2 text-right font-medium">
+                      {cell.adherencePct == null ? "—" : `${cell.adherencePct}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
     </div>

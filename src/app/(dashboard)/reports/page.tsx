@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel } from "@/lib/permissions"
+import { computeSlaReport, type SlaReportRow } from "@/lib/sla-report"
 import ReportsClient from "./reports-client"
 
 export default async function ReportsPage() {
@@ -26,7 +27,17 @@ export default async function ReportsPage() {
     }),
     db.changeRequest.findMany({
       where: opcoFilter,
-      select: { id: true, title: true, status: true, riskLevel: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true, title: true, status: true, riskLevel: true, createdAt: true, updatedAt: true,
+        slaDeadline: true,
+        opco: { select: { slug: true, name: true } },
+        auditTrail: {
+          where: { action: { in: ["approved", "rejected"] } },
+          orderBy: { at: "asc" },
+          take: 1,
+          select: { at: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
   ])
@@ -44,5 +55,16 @@ export default async function ReportsPage() {
     })),
   }
 
-  return <ReportsClient data={data} />
+  // eslint-disable-next-line react-hooks/purity -- async server component, not a hook; Date.now() is safe here
+  const now = Date.now()
+  const slaRows: SlaReportRow[] = changesRaw.map((c) => ({
+    opcoSlug: c.opco.slug,
+    opcoName: c.opco.name,
+    riskLevel: c.riskLevel,
+    slaDeadline: c.slaDeadline ? c.slaDeadline.getTime() : null,
+    decidedAt: c.auditTrail[0] ? c.auditTrail[0].at.getTime() : null,
+  }))
+  const slaCompliance = computeSlaReport(slaRows, now)
+
+  return <ReportsClient data={{ ...data, slaCompliance }} />
 }
