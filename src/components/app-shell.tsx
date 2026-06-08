@@ -28,13 +28,10 @@ import {
   Bell,
   Lock,
   Plug,
-  SlidersHorizontal,
   CalendarDays,
-  FileText,
   LineChart,
   Shield,
   Sliders,
-  FileStack,
   Map,
   BellRing,
   PanelLeftClose,
@@ -75,10 +72,8 @@ const navGroups = [
   {
     labelKey: "nav.insights",
     items: [
-      { href: "/change-details", labelKey: "nav.changeDetails", icon: FileText },
       { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
       { href: "/risk-register", labelKey: "nav.riskRegister", icon: Shield },
-      { href: "/audit-exports", labelKey: "nav.auditExports", icon: FileStack },
       { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders },
       { href: "/reports", labelKey: "nav.reports", icon: LineChart },
       { href: "/notifications/history", labelKey: "nav.notificationHistory", icon: BellRing },
@@ -89,8 +84,6 @@ const navGroups = [
     labelKey: "nav.settings",
     items: [
       { href: "/settings/profile", labelKey: "nav.settingsProfile", icon: UserCircle2 },
-      { href: "/settings/preferences", labelKey: "nav.settingsPreferences", icon: SlidersHorizontal },
-      { href: "/settings/approvers", labelKey: "nav.settingsApprovers", icon: ShieldCheck },
       { href: "/settings/notifications", labelKey: "nav.settingsNotifications", icon: Bell },
       { href: "/settings/alerts", labelKey: "nav.settingsAlerts", icon: Bell },
       { href: "/settings/security", labelKey: "nav.settingsSecurity", icon: Lock },
