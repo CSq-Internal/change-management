@@ -16,6 +16,11 @@ vi.mock('@/server/keycloak', () => ({
   reactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/server/approver-reassign', () => ({
+  approverPendingFootprint: vi.fn(async () => []),
+  notifyRemainingAndDetectOrphans: vi.fn(async () => ({ orphaned: [] })),
+}))
+
 const mockDb = {
   $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   opCo: { findUnique: vi.fn().mockResolvedValue({ id: 'opco-gh', slug: 'ghana' }) },
@@ -36,6 +41,9 @@ const mockDb = {
     upsert: vi.fn().mockResolvedValue({}),
     update: vi.fn().mockResolvedValue({}),
   },
+  cABMembership: { updateMany: vi.fn(async () => ({})) },
+  approverAssignment: { updateMany: vi.fn(async () => ({})) },
+  changeRequest: { findMany: vi.fn().mockResolvedValue([]) },
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 }
 
@@ -105,12 +113,12 @@ describe('deactivateUser — authorization', () => {
 
   it('allows a group_admin to deactivate', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
-    await expect(deactivateUser('target')).resolves.toBeUndefined()
+    await expect(deactivateUser('target')).resolves.toEqual({ orphanedChanges: [] })
   })
 
   it('allows a ghana admin to deactivate a ghana-only user', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
-    await expect(deactivateUser('target')).resolves.toBeUndefined()
+    await expect(deactivateUser('target')).resolves.toEqual({ orphanedChanges: [] })
   })
 })
 
