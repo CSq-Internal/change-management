@@ -32,7 +32,6 @@ import {
   LineChart,
   Shield,
   Sliders,
-  Map,
   BellRing,
   PanelLeftClose,
   PanelLeftOpen,
@@ -77,7 +76,6 @@ const navGroups = [
       { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders },
       { href: "/reports", labelKey: "nav.reports", icon: LineChart },
       { href: "/notifications/history", labelKey: "nav.notificationHistory", icon: BellRing },
-      { href: "/automation", labelKey: "nav.automation", icon: Map },
     ],
   },
   {
@@ -85,7 +83,6 @@ const navGroups = [
     items: [
       { href: "/settings/profile", labelKey: "nav.settingsProfile", icon: UserCircle2 },
       { href: "/settings/notifications", labelKey: "nav.settingsNotifications", icon: Bell },
-      { href: "/settings/alerts", labelKey: "nav.settingsAlerts", icon: Bell },
       { href: "/settings/security", labelKey: "nav.settingsSecurity", icon: Lock },
       { href: "/settings/integrations", labelKey: "nav.settingsIntegrations", icon: Plug },
     ],
