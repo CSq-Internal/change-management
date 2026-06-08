@@ -1,24 +1,50 @@
 // src/server/keycloak.ts
-// Keycloak Admin API helpers (server-only)
+// Keycloak Admin API helpers (server-only).
+//
+// Admin auth uses a realm-scoped service account (client_credentials grant) —
+// NOT a master-realm admin login. The service account client needs the
+// `realm-management` roles `manage-users` and `manage-organizations` on the
+// target realm, and nothing more. The realm name is derived from
+// KEYCLOAK_ISSUER (or overridden with KEYCLOAK_REALM), so the app is not
+// hardwired to a realm named "csquared".
 
-const KC_BASE = process.env.KEYCLOAK_ISSUER!.replace("/realms/csquared", "")
-const ADMIN_USER = process.env.KEYCLOAK_ADMIN_USERNAME ?? "admin"
-const ADMIN_PASS = process.env.KEYCLOAK_ADMIN_PASSWORD ?? "admin"
+/** Derive the Keycloak base URL + realm from KEYCLOAK_ISSUER (+ optional KEYCLOAK_REALM override). */
+function kcEndpoints(): { tokenUrl: string; adminRealmUrl: string } {
+  const issuer = process.env.KEYCLOAK_ISSUER
+  if (!issuer) throw new Error("KEYCLOAK_ISSUER must be set")
+  const match = issuer.match(/^(.*)\/realms\/([^/]+)\/?$/)
+  if (!match) {
+    throw new Error(
+      `KEYCLOAK_ISSUER is not in the expected '<base>/realms/<realm>' form: ${issuer}`
+    )
+  }
+  const base = match[1]
+  const realm = process.env.KEYCLOAK_REALM ?? match[2]
+  return {
+    tokenUrl: `${base}/realms/${realm}/protocol/openid-connect/token`,
+    adminRealmUrl: `${base}/admin/realms/${realm}`,
+  }
+}
 
 export async function getAdminToken(): Promise<string> {
-  const res = await fetch(
-    `${KC_BASE}/realms/master/protocol/openid-connect/token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "password",
-        client_id: "admin-cli",
-        username: ADMIN_USER,
-        password: ADMIN_PASS,
-      }),
-    }
-  )
+  const clientId = process.env.KEYCLOAK_ADMIN_CLIENT_ID ?? "csquared-cms-admin"
+  const clientSecret = process.env.KEYCLOAK_ADMIN_CLIENT_SECRET
+  if (!clientSecret) {
+    throw new Error(
+      "KEYCLOAK_ADMIN_CLIENT_SECRET must be set for Keycloak admin operations"
+    )
+  }
+
+  const { tokenUrl } = kcEndpoints()
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  })
   if (!res.ok) {
     throw new Error(`Failed to obtain admin token: ${res.status} ${await res.text()}`)
   }
@@ -33,10 +59,11 @@ export async function createKeycloakUser(
   tempPassword: string
 ): Promise<string> {
   const token = await getAdminToken()
+  const { adminRealmUrl } = kcEndpoints()
   const [firstName, ...rest] = name.trim().split(" ")
   const lastName = rest.join(" ") || ""
 
-  const res = await fetch(`${KC_BASE}/admin/realms/csquared/users`, {
+  const res = await fetch(`${adminRealmUrl}/users`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -70,10 +97,11 @@ export async function assignToOrganization(
   orgAlias: string
 ): Promise<void> {
   const token = await getAdminToken()
+  const { adminRealmUrl } = kcEndpoints()
 
   // Look up the org by alias
   const searchRes = await fetch(
-    `${KC_BASE}/admin/realms/csquared/organizations?search=${encodeURIComponent(orgAlias)}`,
+    `${adminRealmUrl}/organizations?search=${encodeURIComponent(orgAlias)}`,
     { headers: { Authorization: `Bearer ${token}` } }
   )
   if (!searchRes.ok) {
@@ -84,7 +112,7 @@ export async function assignToOrganization(
   if (!org) throw new Error(`Org not found for alias: ${orgAlias}`)
 
   const addRes = await fetch(
-    `${KC_BASE}/admin/realms/csquared/organizations/${org.id}/members`,
+    `${adminRealmUrl}/organizations/${org.id}/members`,
     {
       method: "POST",
       headers: {
@@ -101,8 +129,9 @@ export async function assignToOrganization(
 
 export async function deactivateKeycloakUser(keycloakUserId: string): Promise<void> {
   const token = await getAdminToken()
+  const { adminRealmUrl } = kcEndpoints()
   const res = await fetch(
-    `${KC_BASE}/admin/realms/csquared/users/${keycloakUserId}`,
+    `${adminRealmUrl}/users/${keycloakUserId}`,
     {
       method: "PUT",
       headers: {
@@ -119,8 +148,9 @@ export async function deactivateKeycloakUser(keycloakUserId: string): Promise<vo
 
 export async function reactivateKeycloakUser(keycloakUserId: string): Promise<void> {
   const token = await getAdminToken()
+  const { adminRealmUrl } = kcEndpoints()
   const res = await fetch(
-    `${KC_BASE}/admin/realms/csquared/users/${keycloakUserId}`,
+    `${adminRealmUrl}/users/${keycloakUserId}`,
     {
       method: "PUT",
       headers: {
@@ -137,7 +167,8 @@ export async function reactivateKeycloakUser(keycloakUserId: string): Promise<vo
 
 export async function createKeycloakOrg(slug: string, name: string): Promise<string> {
   const token = await getAdminToken()
-  const res = await fetch(`${KC_BASE}/admin/realms/csquared/organizations`, {
+  const { adminRealmUrl } = kcEndpoints()
+  const res = await fetch(`${adminRealmUrl}/organizations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

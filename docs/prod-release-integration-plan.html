@@ -101,10 +101,11 @@
   <h3><span class="num">2.</span> Production Keycloak realm <span class="pill P0">P0</span></h3>
   <div class="tags"><span class="tag">Workplan: Phase 11</span><span class="tag">Effort: M</span></div>
   <dl class="grid">
-    <dt>Goal</dt><dd>A <code>csquared</code> realm with: an OIDC confidential client for the app; the realm-roles mapper that emits <code>realm_access.roles</code> in the token (consumed by <code>auth.config.ts</code>); and admin credentials for server-side org operations.</dd>
-    <dt>Output</dt><dd><code>KEYCLOAK_ISSUER</code>, <code>KEYCLOAK_CLIENT_ID</code>, <code>KEYCLOAK_CLIENT_SECRET</code>, plus admin creds (<code>KEYCLOAK_ADMIN_USERNAME</code> / <code>KEYCLOAK_ADMIN_PASSWORD</code> and/or <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code>) used by OpCo→Keycloak-org creation.</dd>
+    <dt>Goal</dt><dd>A realm (any name — the app derives it from <code>KEYCLOAK_ISSUER</code>, or override with <code>KEYCLOAK_REALM</code>) with: (1) an OIDC confidential <strong>login</strong> client; (2) the realm-roles mapper that emits <code>realm_access.roles</code> in the token (consumed by <code>auth.config.ts</code>); and (3) a separate <strong>admin service-account</strong> client for user/org operations.</dd>
+    <dt>Output</dt><dd><code>KEYCLOAK_ISSUER</code>, <code>KEYCLOAK_CLIENT_ID</code>, <code>KEYCLOAK_CLIENT_SECRET</code> (login) + <code>KEYCLOAK_ADMIN_CLIENT_ID</code>, <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code> (admin service account).</dd>
     <dt>Acceptance</dt><dd><ul class="ac">
-      <li>Set the client's valid redirect URI to <code>{prod-url}/api/auth/callback/keycloak</code>.</li>
+      <li>Login client: valid redirect URI <code>{prod-url}/api/auth/callback/keycloak</code>.</li>
+      <li>Admin client: a confidential client with <em>service accounts enabled</em>, granted the <code>realm-management</code> roles <code>manage-users</code> + <code>manage-organizations</code> on this realm — and <strong>nothing more</strong> (least privilege; no master-realm admin). The app authenticates via <code>client_credentials</code>, not a master admin login.</li>
       <li>The seeded admin (<code>devops@csquared.com</code>) can sign in and the session carries the expected realm roles + OpCo assignments.</li>
     </ul></dd>
   </dl>
@@ -142,7 +143,8 @@
       <tr><td><code>NEXTAUTH_SECRET</code></td><td>Strong random secret for session/JWT signing</td><td><span class="pill P0">P0</span></td></tr>
       <tr><td><code>KEYCLOAK_ISSUER</code></td><td>Realm issuer URL</td><td><span class="pill P0">P0</span></td></tr>
       <tr><td><code>KEYCLOAK_CLIENT_ID</code> / <code>KEYCLOAK_CLIENT_SECRET</code></td><td>App OIDC client</td><td><span class="pill P0">P0</span></td></tr>
-      <tr><td><code>KEYCLOAK_ADMIN_USERNAME</code> / <code>KEYCLOAK_ADMIN_PASSWORD</code> / <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code></td><td>Server-side admin for OpCo→org creation</td><td><span class="pill P1">P1</span></td></tr>
+      <tr><td><code>KEYCLOAK_ADMIN_CLIENT_ID</code> / <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code></td><td>Realm-scoped admin service account (user/org ops). Required for in-app user onboarding/deactivation.</td><td><span class="pill P1">P1</span></td></tr>
+      <tr><td><code>KEYCLOAK_REALM</code></td><td>Optional — realm name override (else derived from <code>KEYCLOAK_ISSUER</code>)</td><td><span class="pill P2">P2</span></td></tr>
       <tr><td><code>GOOGLE_SERVICE_ACCOUNT_KEY</code></td><td>Drive service-account JSON (single line)</td><td><span class="pill P0">P0</span></td></tr>
       <tr><td><code>GDRIVE_SHARED_DRIVE_ID</code> / <code>GDRIVE_ROOT_FOLDER_ID</code></td><td>Document storage location</td><td><span class="pill P0">P0</span></td></tr>
       <tr><td><code>RESEND_API_KEY</code> / <code>EMAIL_FROM</code></td><td>Primary email transport</td><td><span class="pill P1">P1</span></td></tr>
@@ -230,7 +232,7 @@ git push origin prod --tags</pre>
     <tbody>
       <tr><td>1</td><td>Hosting target chosen (app + Keycloak + Postgres + cron trigger)</td><td>☐</td></tr>
       <tr><td>2</td><td>Prod Postgres provisioned; <code>DATABASE_URL</code> reachable; backups on</td><td>☐</td></tr>
-      <tr><td>3</td><td>Prod Keycloak realm + client + roles mapper + redirect URI</td><td>☐</td></tr>
+      <tr><td>3</td><td>Prod Keycloak realm: login client + roles mapper + redirect URI, and admin service-account client (manage-users + manage-organizations)</td><td>☐</td></tr>
       <tr><td>4</td><td>Prod Shared Drive + service account + root folder</td><td>☐</td></tr>
       <tr><td>5</td><td>Full secret matrix set on host; <code>allowedDevOrigins</code> cleaned</td><td>☐</td></tr>
       <tr><td>6</td><td><code>dev</code>→<code>prod</code> fast-forward + release tag</td><td>☐</td></tr>

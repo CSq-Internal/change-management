@@ -65,6 +65,18 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "csquared-cms-admin",
+      "name": "CSquared CMS — Admin Service Account",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "csquared-admin-dev-secret"
     }
   ],
   "users": [
@@ -85,6 +97,14 @@
       "realmRoles": [
         "group_admin"
       ]
+    },
+    {
+      "username": "service-account-csquared-cms-admin",
+      "enabled": true,
+      "serviceAccountClientId": "csquared-cms-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "manage-organizations"]
+      }
     }
   ],
   "organizations": [

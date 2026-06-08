@@ -50,7 +50,10 @@ services:
       AUTH_TRUST_HOST: "true"
       KEYCLOAK_ISSUER: http://keycloak:8080/realms/csquared
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-csquared-cms}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-csquared-dev-secret}
+      # Admin ops via realm-scoped service account (defaults match the imported dev realm)
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-csquared-cms-admin}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-csquared-admin-dev-secret}
       # Optional integrations (leave unset to run without them locally):
       GOOGLE_SERVICE_ACCOUNT_KEY: ${GOOGLE_SERVICE_ACCOUNT_KEY:-}
       GDRIVE_SHARED_DRIVE_ID: ${GDRIVE_SHARED_DRIVE_ID:-}
