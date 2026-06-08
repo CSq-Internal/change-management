@@ -6,7 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { notifyEvent } from "@/server/notify"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
-import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-authority"
+import { getRoutedApprovers, getNamedApprovers, canUserApproveChange } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
@@ -196,11 +196,17 @@ export async function submitChange(id: string) {
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })
 
-  // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates.
-  const approvers = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
+  // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates,
+  // plus anyone explicitly named as an approver on this change. Deduplicated by id.
+  const routed = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
+  const named = await getNamedApprovers(change.id)
+  const seenA = new Set<string>()
+  const recipients = [...routed, ...named]
+    .filter((u) => { if (seenA.has(u.id)) return false; seenA.add(u.id); return true })
+    .map((u) => ({ userId: u.id, email: u.email, name: u.name }))
   await notifyEvent({
     type: "approval_requested",
-    recipients: approvers.map((u) => ({ userId: u.id, email: u.email, name: u.name })),
+    recipients,
     change: { id: change.id, title: change.title, opcoId: change.opcoId },
     context: { requesterName: user.name ?? user.email, riskLevel: change.riskLevel },
   }).catch(() => {})
