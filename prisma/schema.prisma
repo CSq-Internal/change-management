@@ -76,6 +76,8 @@ model User {
   notifications        Notification[]             @relation("UserNotifications")
   notifPrefs           NotificationPreference[]   @relation("UserNotifPrefs")
   chatWebhooks         ChatWebhook[]              @relation("ChatWebhookAuthor")
+  approverAssignments  ApproverAssignment[]       @relation("ApproverAssignments")
+  changeAssignments    ChangeAssignee[]           @relation("ChangeAssignments")
 }
 
 model OpCo {
@@ -94,6 +96,7 @@ model OpCo {
   risks      RiskRegister[]
   chatWebhooks ChatWebhook[]
   archivedAt DateTime?
+  approverAssignments ApproverAssignment[]
 }
 
 model UserOpCoAssignment {
@@ -191,8 +194,31 @@ model ChangeAssignee {
   changeId String
   change   ChangeRequest @relation(fields: [changeId], references: [id])
   userId   String
+  user     User          @relation("ChangeAssignments", fields: [userId], references: [id])
+  role     AssigneeRole  @default(implementer)
 
   @@unique([changeId, userId])
+}
+
+model ApproverAssignment {
+  id                 String   @id @default(cuid())
+  infrastructureType String
+  opcoId             String?
+  opco               OpCo?    @relation(fields: [opcoId], references: [id])
+  userId             String
+  user               User     @relation("ApproverAssignments", fields: [userId], references: [id])
+  isActive           Boolean  @default(true)
+  createdById        String
+  createdAt          DateTime @default(now())
+
+  @@unique([infrastructureType, opcoId, userId])
+  @@index([infrastructureType, opcoId])
+  @@index([userId])
+}
+
+enum AssigneeRole {
+  approver
+  implementer
 }
 
 model Approval {

@@ -42,6 +42,8 @@ const mockDb = {
   userOpCoAssignment: { findMany: vi.fn().mockResolvedValue([]) },
   cABMembership: { findMany: vi.fn().mockResolvedValue([]) },
   approverDelegation: { findMany: vi.fn().mockResolvedValue([]) },
+  approverAssignment: { findMany: vi.fn().mockResolvedValue([]) },
+  changeAssignee: { findMany: vi.fn().mockResolvedValue([]) },
 }
 
 vi.mock('@/server/db', () => ({
@@ -64,6 +66,10 @@ beforeEach(() => {
   mockDb.cABMembership.findMany.mockResolvedValue([])
   mockDb.approverDelegation.findMany.mockReset()
   mockDb.approverDelegation.findMany.mockResolvedValue([])
+  mockDb.approverAssignment.findMany.mockReset()
+  mockDb.approverAssignment.findMany.mockResolvedValue([])
+  mockDb.changeAssignee.findMany.mockReset()
+  mockDb.changeAssignee.findMany.mockResolvedValue([])
 })
 
 const ugandaSession = {

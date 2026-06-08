@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
+import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
 import type { Role, Prisma } from "@prisma/client"
 import type { SessionOrganization } from "@/types/next-auth"
 
@@ -120,12 +121,16 @@ export async function deactivateUser(userId: string) {
 
   await deactivateKeycloakUser(user.keycloakId)
 
+  const footprint = await approverPendingFootprint(userId)
+
   await db.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { isActive: false } })
     await tx.userOpCoAssignment.updateMany({
       where: { userId },
       data: { isActive: false, endedAt: new Date() },
     })
+    await tx.cABMembership.updateMany({ where: { userId, isActive: true }, data: { isActive: false, endedAt: new Date() } })
+    await tx.approverAssignment.updateMany({ where: { userId, isActive: true }, data: { isActive: false } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
       action: "user.deactivate",
@@ -133,6 +138,9 @@ export async function deactivateUser(userId: string) {
       summary: `Deactivated user ${userId}`,
     })
   })
+
+  const { orphaned } = await notifyRemainingAndDetectOrphans(footprint)
+  return { orphanedChanges: orphaned }
 }
 
 export async function reactivateUser(userId: string) {

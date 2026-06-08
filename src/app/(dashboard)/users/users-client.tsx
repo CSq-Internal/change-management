@@ -42,11 +42,14 @@ export default function UsersClient({ users }: UsersClientProps) {
     if (!confirmUser) return
     setPending(true)
     try {
-      await deactivateUser(confirmUser.id)
+      const res = await deactivateUser(confirmUser.id)
+      const orphans = (res as { orphanedChanges?: { reference: number }[] } | undefined)?.orphanedChanges ?? []
       toast({
         title: t(language, "users.toast.deactivated"),
-        description: confirmUser.email,
-        variant: "success",
+        description: orphans.length > 0
+          ? `⚠ ${orphans.length} pending change(s) now have no approver: ${orphans.map((o) => `#${o.reference}`).join(", ")}`
+          : confirmUser.email,
+        variant: orphans.length > 0 ? "error" : "success",
       })
       setConfirmUser(null)
       router.refresh()

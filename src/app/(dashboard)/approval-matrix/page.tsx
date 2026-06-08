@@ -4,7 +4,10 @@ import { getPrisma } from "@/server/db"
 import { OPCO_SLUGS, OPCO_NAMES } from "@/lib/opco"
 import type { OpCoSlug } from "@/lib/opco"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { canManageAnyOpCo, isGroupAdmin } from "@/lib/permissions"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { listApproverAssignments } from "@/server/actions/approval-matrix"
+import ApprovalMatrixClient from "./approval-matrix-client"
 
 const INFRA_TYPES = [
   "Equiano Optics",
@@ -37,6 +40,23 @@ export default async function ApprovalMatrixPage() {
     if (!m.opco) continue
     ;(approversBySlug[m.opco.slug] ??= []).push(m.user.name ?? m.user.email)
   }
+
+  const canManage = canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
+  const assignments = canManage ? await listApproverAssignments() : []
+  const overrideRows = assignments.map((a) => ({
+    id: a.id, infrastructureType: a.infrastructureType,
+    opcoSlug: a.opco?.slug ?? null, opcoName: a.opco?.name ?? null,
+    userLabel: a.user.name ?? a.user.email,
+  }))
+  const candidates = (await db.cABMembership.findMany({
+    where: { isActive: true },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })).map((m) => ({ id: m.user.id, label: m.user.name ?? m.user.email }))
+  const candidateUsers = Array.from(new Map(candidates.map((c) => [c.id, c])).values())
+  const scopes = [
+    ...(isGroupAdmin(session.user.realmRoles) ? [{ slug: "", name: "Group" }] : []),
+    ...session.user.organizations.filter((o) => o.roles.includes("admin")).map((o) => ({ slug: o.alias, name: o.name })),
+  ]
 
   return (
     <div className="space-y-6">
@@ -82,6 +102,8 @@ export default async function ApprovalMatrixPage() {
           ))}
         </CardContent>
       </Card>
+
+      <ApprovalMatrixClient canManage={canManage} infraTypes={INFRA_TYPES} scopes={scopes} candidates={candidateUsers} rows={overrideRows} />
     </div>
   )
 }

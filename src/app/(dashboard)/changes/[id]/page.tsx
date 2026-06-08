@@ -62,6 +62,7 @@ function serialize(
     retroApprovalDueAt: change.retroApprovalDueAt?.toISOString() ?? null,
     retroApprovedAt: change.retroApprovedAt?.toISOString() ?? null,
     hasPir: change.pir != null,
+    assignees: change.assignees.map((a) => ({ userId: a.userId, role: a.role, label: a.user.name ?? a.user.email })),
   }
 }
 
@@ -93,7 +94,15 @@ export default async function ChangeDetailPage({
     isAdmin: isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
     isCabMember: isGroupAdmin(me.realmRoles),
     canExportEvidence: isGroupLevel(me.realmRoles) || canAudit(me.organizations, me.realmRoles, slug),
+    canManageAssignees: (change.requester.keycloakId === me.keycloakId) || isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
   }
 
-  return <ChangeDetailClient change={serialize(change)} caps={caps} />
+  const assigneeCandidates = Array.from(new Map(
+    (await db.userOpCoAssignment.findMany({
+      where: { opco: { slug }, isActive: true },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    })).map((a) => [a.user.id, { id: a.user.id, label: a.user.name ?? a.user.email }])
+  ).values())
+
+  return <ChangeDetailClient change={serialize(change)} caps={caps} assigneeCandidates={assigneeCandidates} />
 }

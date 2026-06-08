@@ -36,6 +36,7 @@ export async function submitApproval(
     userId: user.id,
     realmRoles: session.realmRoles,
     change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+    changeId,
   })
   if (!allowed) {
     throw new Error("Forbidden: not authorized to approve this change")
