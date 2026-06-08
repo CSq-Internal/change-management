@@ -83,11 +83,23 @@ postgresql://$DB_USER:$DB_PASSWORD@localhost/$DB_NAME?host=/cloudsql/$SQL_CONN
 In your org's prod realm (note its name; the app derives the realm from
 `KEYCLOAK_ISSUER`, or set `KEYCLOAK_REALM` to override):
 
+> **You don't have the Cloud Run URL yet — that's fine.** Creating a client and
+> copying its secret does NOT need the URL; only the redirect URI / web origin do.
+> So: create both clients now with a placeholder redirect URI, grab the secrets,
+> and continue. After **step 7** prints the `*.run.app` URL, come back and set the
+> real redirect URI + web origin (and `NEXTAUTH_URL`). To set it up front instead,
+> predict the URL:
+> ```bash
+> PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+> echo "https://$SERVICE-$PROJECT_NUMBER.$REGION.run.app"   # verify after deploy
+> ```
+
 **3a. Login client** — `csquared-cms`
 - Client type: **OpenID Connect**, **confidential** (Client authentication ON).
 - Standard flow ON; Direct access / implicit OFF.
 - Valid redirect URI: `https://<CLOUD_RUN_URL>/api/auth/callback/keycloak`
-- Web origin: `https://<CLOUD_RUN_URL>`
+  (placeholder for now if you don't have the URL — set it after step 7)
+- Web origin: `https://<CLOUD_RUN_URL>` (same — set after step 7)
 - Add a **mapper**: type *User Realm Role* → token claim name `realm_access.roles`,
   multivalued, add to ID + access token. (Emits `realm_access.roles`, consumed by `auth.config.ts`.)
 - Copy the client secret → `KEYCLOAK_CLIENT_SECRET`.
