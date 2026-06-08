@@ -2,7 +2,7 @@
 // SLA escalation orchestration. Called lazily on page load and from the cron route.
 import { getPrisma } from "@/server/db"
 import { dueEscalationLevel, SLA_HOURS } from "@/lib/sla"
-import { sendSlaEscalationEmail } from "@/server/email"
+import { notifyEvent, type NotifyRecipient } from "@/server/notify"
 import type { RiskLevel } from "@prisma/client"
 
 type Db = ReturnType<typeof getPrisma>
@@ -18,20 +18,20 @@ async function systemActorId(db: Db): Promise<string> {
   return u.id
 }
 
-async function opcoAdminEmails(db: Db, opcoId: string): Promise<string[]> {
+async function opcoAdminRecipients(db: Db, opcoId: string): Promise<NotifyRecipient[]> {
   const rows = await db.userOpCoAssignment.findMany({
     where: { opcoId, role: "admin", isActive: true },
-    select: { user: { select: { email: true, isActive: true } } },
+    select: { user: { select: { id: true, email: true, name: true, isActive: true } } },
   })
-  return rows.filter((r) => r.user.isActive).map((r) => r.user.email)
+  return rows.filter((r) => r.user.isActive).map((r) => ({ userId: r.user.id, email: r.user.email, name: r.user.name }))
 }
 
-async function groupCabEmails(db: Db): Promise<string[]> {
+async function groupCabRecipients(db: Db): Promise<NotifyRecipient[]> {
   const rows = await db.cABMembership.findMany({
     where: { opcoId: null, isActive: true },
-    select: { user: { select: { email: true, isActive: true } } },
+    select: { user: { select: { id: true, email: true, name: true, isActive: true } } },
   })
-  return rows.filter((r) => r.user.isActive).map((r) => r.user.email)
+  return rows.filter((r) => r.user.isActive).map((r) => ({ userId: r.user.id, email: r.user.email, name: r.user.name }))
 }
 
 /**
@@ -65,12 +65,13 @@ export async function runDueEscalations(
     actorId ??= await systemActorId(db)
 
     for (let level = c.escalationLevel + 1; level <= target; level++) {
-      const recipients = level === 1 ? await opcoAdminEmails(db, c.opcoId) : await groupCabEmails(db)
-      await Promise.allSettled(
-        recipients.map((to) =>
-          sendSlaEscalationEmail({ to, changeTitle: c.title, changeId: c.id, level, riskLevel: c.riskLevel })
-        )
-      )
+      const recipients = level === 1 ? await opcoAdminRecipients(db, c.opcoId) : await groupCabRecipients(db)
+      await notifyEvent({
+        type: "sla_escalated",
+        recipients,
+        change: { id: c.id, title: c.title, opcoId: c.opcoId },
+        context: { level, riskLevel: c.riskLevel },
+      }).catch(() => {})
       await db.auditLog.create({
         data: { changeId: c.id, actorId, action: "sla_escalated", note: `Escalated to level ${level}` },
       })
