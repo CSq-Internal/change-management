@@ -8,7 +8,6 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./node_modules/.prisma/client/**/*", "./node_modules/@prisma/client/**/*"],
   },
-  allowedDevOrigins: ["https://thin-ants-write.loca.lt", "https://red-onions-lay.loca.lt"],
 };
 
 export default nextConfig;
