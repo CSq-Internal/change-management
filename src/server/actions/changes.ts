@@ -4,7 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
-import { sendApprovalRequestEmail, sendEmergencyAlertEmail } from "@/server/email"
+import { notifyEvent } from "@/server/notify"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import { getRoutedApprovers, canUserApproveChange } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
@@ -197,33 +197,25 @@ export async function submitChange(id: string) {
   })
 
   // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates.
-  const recipients = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
-  await Promise.allSettled(recipients.map((u) =>
-    sendApprovalRequestEmail({
-      to: u.email, approverName: u.name ?? u.email,
-      changeTitle: change.title, requesterName: user.name ?? user.email,
-      riskLevel: change.riskLevel, changeId: change.id,
-    })
-  ))
+  const approvers = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
+  await notifyEvent({
+    type: "approval_requested",
+    recipients: approvers.map((u) => ({ userId: u.id, email: u.email, name: u.name })),
+    change: { id: change.id, title: change.title, opcoId: change.opcoId },
+    context: { requesterName: user.name ?? user.email, riskLevel: change.riskLevel },
+  }).catch(() => {})
 
   if (change.isEmergency) {
     const cab = await db.cABMembership.findMany({
       where: { opcoId: null, isActive: true },
-      select: { user: { select: { email: true, isActive: true } } },
+      select: { user: { select: { id: true, name: true, email: true, isActive: true } } },
     })
-    const requesterName = user.name ?? user.email
-    await Promise.allSettled(
-      cab
-        .filter((m) => m.user.isActive)
-        .map((m) =>
-          sendEmergencyAlertEmail({
-            to: m.user.email,
-            changeTitle: change.title,
-            changeId: change.id,
-            requesterName,
-          })
-        )
-    )
+    await notifyEvent({
+      type: "emergency_submitted",
+      recipients: cab.filter((m) => m.user.isActive).map((m) => ({ userId: m.user.id, email: m.user.email, name: m.user.name })),
+      change: { id: change.id, title: change.title, opcoId: change.opcoId },
+      context: { requesterName: user.name ?? user.email },
+    }).catch(() => {})
   }
 
   return updated

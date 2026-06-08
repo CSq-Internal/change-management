@@ -73,6 +73,9 @@ model User {
   implementedChanges   ChangeRequest[]            @relation("Implementer")
   pirReviews           PostImplementationReview[] @relation("PirAuthor")
   risksAuthored        RiskRegister[]             @relation("RiskAuthor")
+  notifications        Notification[]             @relation("UserNotifications")
+  notifPrefs           NotificationPreference[]   @relation("UserNotifPrefs")
+  chatWebhooks         ChatWebhook[]              @relation("ChatWebhookAuthor")
 }
 
 model OpCo {
@@ -89,6 +92,7 @@ model OpCo {
   blackouts  BlackoutPeriod[]
   cab        CABMembership[]
   risks      RiskRegister[]
+  chatWebhooks ChatWebhook[]
   archivedAt DateTime?
 }
 
@@ -352,4 +356,49 @@ model RiskRegister {
 
   @@index([opcoId])
   @@index([status])
+}
+
+enum NotificationChannel {
+  email
+  in_app
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserNotifications", fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  changeId  String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation("UserNotifPrefs", fields: [userId], references: [id])
+  eventType String
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+
+  @@unique([userId, eventType, channel])
+  @@index([userId])
+}
+
+model ChatWebhook {
+  id          String   @id @default(cuid())
+  opcoId      String?
+  opco        OpCo?    @relation(fields: [opcoId], references: [id])
+  url         String
+  isActive    Boolean  @default(true)
+  createdById String
+  createdBy   User     @relation("ChatWebhookAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([opcoId])
 }

@@ -4,7 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { checkCabQuorum } from "@/lib/cab-quorum"
-import { sendStatusChangeEmail } from "@/server/email"
+import { notifyEvent } from "@/server/notify"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import { canUserApproveChange } from "@/server/approval-authority"
 
@@ -75,12 +75,14 @@ export async function submitApproval(
     await db.auditLog.create({
       data: { changeId, actorId: user.id, action: "approved", fromStatus: "pending", toStatus: "approved" },
     })
-    const requester = await db.user.findUnique({ where: { id: change.requesterId } })
+    const requester = await db.user.findUnique({ where: { id: change.requesterId }, select: { id: true, email: true, name: true } })
     if (requester) {
-      sendStatusChangeEmail({
-        to: requester.email, name: requester.name ?? requester.email,
-        changeTitle: change.title, newStatus: "approved",
-      }).catch(() => {})  // best-effort; never break the approval
+      await notifyEvent({
+        type: "change_approved",
+        recipients: [{ userId: requester.id, email: requester.email, name: requester.name }],
+        change: { id: changeId, title: change.title, opcoId: change.opcoId },
+        context: { newStatus: "approved" },
+      }).catch(() => {})
     }
   }
 
@@ -89,12 +91,14 @@ export async function submitApproval(
     await db.auditLog.create({
       data: { changeId, actorId: user.id, action: "rejected", fromStatus: "pending", toStatus: "rejected", note: comment },
     })
-    const requester = await db.user.findUnique({ where: { id: change.requesterId } })
+    const requester = await db.user.findUnique({ where: { id: change.requesterId }, select: { id: true, email: true, name: true } })
     if (requester) {
-      sendStatusChangeEmail({
-        to: requester.email, name: requester.name ?? requester.email,
-        changeTitle: change.title, newStatus: "rejected",
-      }).catch(() => {})  // best-effort; never break the approval
+      await notifyEvent({
+        type: "change_rejected",
+        recipients: [{ userId: requester.id, email: requester.email, name: requester.name }],
+        change: { id: changeId, title: change.title, opcoId: change.opcoId },
+        context: { newStatus: "rejected" },
+      }).catch(() => {})
     }
   }
 

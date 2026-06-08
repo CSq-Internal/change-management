@@ -10,12 +10,10 @@ const mockDb = {
 }
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
-vi.mock('@/server/email', () => ({
-  sendSlaEscalationEmail: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
 
 import { runDueEscalations } from '@/server/sla'
-import { sendSlaEscalationEmail } from '@/server/email'
+import { notifyEvent } from '@/server/notify'
 
 const HOUR = 3_600_000
 
@@ -28,20 +26,24 @@ beforeEach(() => {
 })
 
 describe('runDueEscalations', () => {
-  it('escalates a freshly-breached change to level 1 and emails OpCo admins', async () => {
+  it('escalates a freshly-breached change to level 1 and notifies OpCo admins', async () => {
     const deadline = Date.now() - 1
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(deadline), escalationLevel: 0 },
     ])
     mockDb.userOpCoAssignment.findMany.mockResolvedValue([
-      { user: { email: 'admin@ghana.com', isActive: true } },
+      { user: { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true } },
     ])
 
     const res = await runDueEscalations({})
 
     expect(res.escalated).toBe(1)
-    expect(sendSlaEscalationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'admin@ghana.com', level: 1 })
+    expect(vi.mocked(notifyEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'sla_escalated',
+        recipients: expect.arrayContaining([expect.objectContaining({ email: 'admin@ghana.com' })]),
+        context: expect.objectContaining({ level: 1 }),
+      })
     )
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ escalationLevel: 1 }) })
@@ -57,7 +59,7 @@ describe('runDueEscalations', () => {
     ])
     const res = await runDueEscalations({})
     expect(res.escalated).toBe(0)
-    expect(sendSlaEscalationEmail).not.toHaveBeenCalled()
+    expect(vi.mocked(notifyEvent)).not.toHaveBeenCalled()
     expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
   })
 
@@ -66,14 +68,26 @@ describe('runDueEscalations', () => {
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(deadline), escalationLevel: 0 },
     ])
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: { email: 'admin@ghana.com', isActive: true } }])
-    mockDb.cABMembership.findMany.mockResolvedValue([{ user: { email: 'cab@group.com', isActive: true } }])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true } }])
+    mockDb.cABMembership.findMany.mockResolvedValue([{ user: { id: 'cab-1', email: 'cab@group.com', name: 'CAB', isActive: true } }])
 
     const res = await runDueEscalations({})
 
     expect(res.escalated).toBe(1)
-    expect(sendSlaEscalationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin@ghana.com', level: 1 }))
-    expect(sendSlaEscalationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'cab@group.com', level: 2 }))
+    expect(vi.mocked(notifyEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'sla_escalated',
+        recipients: expect.arrayContaining([expect.objectContaining({ email: 'admin@ghana.com' })]),
+        context: expect.objectContaining({ level: 1 }),
+      })
+    )
+    expect(vi.mocked(notifyEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'sla_escalated',
+        recipients: expect.arrayContaining([expect.objectContaining({ email: 'cab@group.com' })]),
+        context: expect.objectContaining({ level: 2 }),
+      })
+    )
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ escalationLevel: 2 }) })
     )

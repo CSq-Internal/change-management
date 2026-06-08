@@ -15,7 +15,7 @@ vi.mock('@/lib/session', () => ({
 
 const mockDb = {
   user: {
-    findUnique: vi.fn().mockResolvedValue({ id: 'user-requester', keycloakId: 'kc-requester' }),
+    findUnique: vi.fn().mockResolvedValue({ id: 'user-requester', keycloakId: 'kc-requester', email: 'requester@csquared.com', name: 'Requester' }),
   },
   changeRequest: {
     findUnique: vi.fn().mockResolvedValue({
@@ -42,9 +42,7 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-vi.mock('@/server/email', () => ({
-  sendStatusChangeEmail: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
 
 vi.mock('@/server/approval-authority', () => ({
   canUserApproveChange: vi.fn().mockResolvedValue(true),
