@@ -14,8 +14,8 @@ const tx = {
 const mockDb = {
   user: { findUnique: vi.fn(async () => ({ id: 'user-req' })) },
   changeRequest: { findUnique: vi.fn(async () => ({ id: 'c1', requesterId: 'user-req', opcoId: 'opco-1', opco: { slug: 'ghana' }, infrastructureType: 'Wifi' })) },
-  userOpCoAssignment: { findFirst: vi.fn(async () => null) },
-  cABMembership: { findFirst: vi.fn(async () => null) },
+  userOpCoAssignment: { findFirst: vi.fn() },
+  cABMembership: { findFirst: vi.fn() },
   $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
 }
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
