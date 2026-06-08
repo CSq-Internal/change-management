@@ -48,17 +48,14 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-vi.mock('@/server/email', () => ({
-  sendApprovalRequestEmail: vi.fn().mockResolvedValue(undefined),
-  sendEmergencyAlertEmail: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
 
 import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
-import { sendApprovalRequestEmail } from '@/server/email'
+import { notifyEvent } from '@/server/notify'
 
 beforeEach(() => {
-  vi.mocked(sendApprovalRequestEmail).mockClear()
+  vi.mocked(notifyEvent).mockClear()
   mockDb.user.findMany.mockReset()
   mockDb.user.findMany.mockResolvedValue([mockGroupCtoUser])
   mockDb.userOpCoAssignment.findMany.mockReset()
@@ -120,13 +117,13 @@ describe('createChange', () => {
     })).rejects.toThrow(/Forbidden/)
   })
 
-  it('does NOT call sendApprovalRequestEmail on draft creation', async () => {
+  it('does NOT call notifyEvent on draft creation', async () => {
     await createChange('ghana', {
       title: 'Router update', description: 'BGP config',
       category: 'config', riskLevel: 'low',
       contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
     })
-    expect(vi.mocked(sendApprovalRequestEmail)).not.toHaveBeenCalled()
+    expect(vi.mocked(notifyEvent)).not.toHaveBeenCalled()
   })
 })
 
@@ -314,18 +311,20 @@ describe('submitChange', () => {
     )
   })
 
-  it('emails each routed CAB member on submit', async () => {
+  it('notifies the routed CAB members on submit', async () => {
     mockDb.cABMembership.findMany.mockResolvedValueOnce([
       { userId: 'cto', user: { id: 'cto', email: 'cto@csquared.com', name: 'Resident CTO' } },
       { userId: 'samuel', user: { id: 'samuel', email: 'samuel@csquared.com', name: 'Samuel' } },
     ])
     await submitChange('cr-1')
-    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'cto@csquared.com' })
-    )
-    expect(vi.mocked(sendApprovalRequestEmail)).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'samuel@csquared.com' })
+    expect(vi.mocked(notifyEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'approval_requested',
+        recipients: expect.arrayContaining([
+          expect.objectContaining({ email: 'cto@csquared.com' }),
+          expect.objectContaining({ email: 'samuel@csquared.com' }),
+        ]),
+      })
     )
   })
 
