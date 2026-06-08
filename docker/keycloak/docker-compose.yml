@@ -24,6 +24,55 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # The containerised CMS app (production image). Served on host port 3000.
+  #
+  # OIDC note: the browser AND this container must reach Keycloak at the SAME
+  # host so the token issuer matches KEYCLOAK_ISSUER. Add this line to your
+  # host's /etc/hosts so browser redirects to http://keycloak:8080 resolve:
+  #     127.0.0.1 keycloak
+  # Then open the app at http://localhost:3000. (On Cloud Run this is a non-issue:
+  # both sides use the real Keycloak DNS name.)
+  app:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+      - keycloak
+    ports:
+      - "3000:8080"
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-insecure-secret-change-me}
+      AUTH_TRUST_HOST: "true"
+      KEYCLOAK_ISSUER: http://keycloak:8080/realms/csquared
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-csquared-cms}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      # Optional integrations (leave unset to run without them locally):
+      GOOGLE_SERVICE_ACCOUNT_KEY: ${GOOGLE_SERVICE_ACCOUNT_KEY:-}
+      GDRIVE_SHARED_DRIVE_ID: ${GDRIVE_SHARED_DRIVE_ID:-}
+      GDRIVE_ROOT_FOLDER_ID: ${GDRIVE_ROOT_FOLDER_ID:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+
+  # One-shot DB migrator (separate step, not started by `up`).
+  # Run on demand:  docker compose -f docker/keycloak/docker-compose.yml run --rm migrate
+  migrate:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+      target: migrate
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    profiles:
+      - tools
+    restart: "no"
+
 volumes:
   keycloak_data:
   postgres_data:

@@ -1,0 +1,38 @@
+# Dependencies & build output (reinstalled / rebuilt inside the image)
+node_modules
+.next
+out
+coverage
+
+# Local env & secrets (provided at runtime, never baked into the image)
+.env
+.env.*
+!.env.example
+
+# VCS, history & editor
+.git
+.gitignore
+.history
+.vscode
+.idea
+
+# Docker & infra (build context is the repo root; these aren't needed in the image)
+Dockerfile
+.dockerignore
+docker
+
+# Docs, specs, design — not part of the runtime
+docs
+design
+README.md
+*.md
+
+# Tests & test config — not shipped
+src/test
+**/*.test.ts
+**/*.test.tsx
+vitest.config.ts
+
+# OS noise
+.DS_Store
+*.log
