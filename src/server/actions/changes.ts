@@ -45,6 +45,7 @@ export async function getChange(id: string) {
       attachments: { orderBy: { kind: "asc" } },
       implementedBy: true,
       pir: true,
+      assignees: { include: { user: { select: { name: true, email: true } } } },
     },
   })
   if (!change) return null

@@ -12,6 +12,7 @@ import { submitChange, updateChangeStatus } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
 import { StatusPill, RiskPill } from "@/components/change-badges"
 import PirForm from "./pir-form"
+import AssigneesDialog from "./assignees-dialog"
 
 // ── Serialised types (Dates as ISO strings) ──────────────────────────────────
 
@@ -63,6 +64,7 @@ export type SerializedChange = {
   retroApprovalDueAt: string | null
   retroApprovedAt: string | null
   hasPir: boolean
+  assignees: { userId: string; role: string; label: string }[]
 }
 
 export type Caps = {
@@ -71,6 +73,7 @@ export type Caps = {
   isAdmin: boolean
   isCabMember: boolean
   canExportEvidence: boolean
+  canManageAssignees: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -101,15 +104,17 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 interface Props {
   change: SerializedChange
   caps: Caps
+  assigneeCandidates: { id: string; label: string }[]
 }
 
-export default function ChangeDetailClient({ change, caps }: Props) {
+export default function ChangeDetailClient({ change, caps, assigneeCandidates }: Props) {
   const { language } = useStore()
   const { toast } = useToast()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isActing, setIsActing] = useState(false)
   const [comment, setComment] = useState("")
+  const [assigneesOpen, setAssigneesOpen] = useState(false)
 
   // ── Action gating ─────────────────────────────────────────────────────────
   const awaitingRetro = change.status === "implemented" && change.expedited && !change.retroApprovedAt
@@ -360,6 +365,37 @@ export default function ChangeDetailClient({ change, caps }: Props) {
             )}
           </CardContent>
         </Card>
+
+        {/* Assignees */}
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">{t(language, "assignees.implementers")}</CardTitle>
+              {caps.canManageAssignees && (
+                <button className="text-xs text-primary hover:underline" onClick={() => setAssigneesOpen(true)}>{t(language, "assignees.manage")}</button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="text-sm space-y-1">
+            {change.assignees.filter((a) => a.role === "implementer").map((a) => (<div key={a.userId}>{a.label}</div>))}
+            {change.assignees.filter((a) => a.role === "implementer").length === 0 && <span className="text-muted-foreground">{t(language, "assignees.none")}</span>}
+          </CardContent>
+        </Card>
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">{t(language, "assignees.approvers")}</CardTitle></CardHeader>
+          <CardContent className="text-sm space-y-1">
+            {change.assignees.filter((a) => a.role === "approver").map((a) => (<div key={a.userId}>{a.label}</div>))}
+            {change.assignees.filter((a) => a.role === "approver").length === 0 && <span className="text-muted-foreground">{t(language, "assignees.none")}</span>}
+          </CardContent>
+        </Card>
+        {assigneesOpen && (
+          <AssigneesDialog
+            changeId={change.id}
+            candidates={assigneeCandidates}
+            current={change.assignees.map((a) => ({ userId: a.userId, role: a.role as "approver" | "implementer" }))}
+            onClose={() => setAssigneesOpen(false)}
+          />
+        )}
 
         {/* Approvals */}
         {change.approvals.length > 0 && (
