@@ -6,6 +6,7 @@ import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
+import { getNavCounts } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
@@ -119,10 +120,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setTheme,
   } = useStore()
   const translate = (key: string) => t(language, key)
-  // TODO: wire to server data (Phase 4)
-  const myRequests: unknown[] = []
-  // TODO: wire to server data (Phase 4)
-  const pendingApprovals: unknown[] = []
+  const [navCounts, setNavCounts] = useState({ pendingApprovals: 0, myRequests: 0, unreadNotifications: 0 })
+  useEffect(() => {
+    if (!currentUser) return
+    getNavCounts().then(setNavCounts).catch(() => {})
+  }, [currentUser, pathname])
   const anyAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
   const groupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
   const groupLevel = session ? isGroupLevel(session.user.realmRoles) : false
@@ -279,7 +281,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                   active ? "bg-white/20" : "bg-muted"
                                 )}
                               >
-                                {myRequests.length}
+                                {navCounts.myRequests}
                               </span>
                             )}
                             {item.href === "/approvals" && (
@@ -289,7 +291,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                   active ? "bg-white/20" : "bg-muted"
                                 )}
                               >
-                                {pendingApprovals.length}
+                                {navCounts.pendingApprovals}
                               </span>
                             )}
                           </>
@@ -396,6 +398,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </div>
                   )}
                 </div>
+                {currentUser && (
+                  <Link
+                    href="/notifications/history"
+                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                    aria-label={translate("nav.notificationHistory")}
+                  >
+                    <Bell className="h-4 w-4" />
+                    {navCounts.unreadNotifications > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold text-white">
+                        {navCounts.unreadNotifications}
+                      </span>
+                    )}
+                  </Link>
+                )}
                 {currentUser && (
                   <button
                     className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
