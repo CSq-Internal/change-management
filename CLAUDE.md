@@ -20,31 +20,32 @@ pnpm tsc --noEmit
 
 Tests run on Vitest (jsdom + React Testing Library; config in `vitest.config.ts`, setup in
 `src/test/setup.ts`). Coverage spans auth/enrichment (`src/test/auth*.test.ts`), permissions
-(`src/test/lib/permissions.test.ts`), server actions
-(`src/test/actions/*` — changes, approvals, blackout, authz, audit immutability), and the
-dashboard (`src/lib/dashboard-metrics.test.ts` pure logic + `src/app/dashboard-client.test.tsx`
-render smoke test). `src/test/integration/isolation.test.ts` spins up a real Postgres via
+(`src/test/lib/permissions.test.ts`), the server actions (`src/test/actions/*` — ~20 suites:
+changes, approvals, CAB routing, approval-matrix, assignees, blackout/authz, delegations,
+notifications + prefs, chat webhooks, opcos, teams, users-authz, risk register, reschedule,
+and audit immutability), and the dashboard (`src/lib/dashboard-metrics.test.ts` pure logic +
+`src/app/dashboard-client.test.tsx` render smoke test). `src/test/integration/isolation.test.ts` spins up a real Postgres via
 Testcontainers and therefore needs Docker running — it fails (rather than skips) without it.
 
 Use `pnpm` — `package-lock.json` has been deleted and the project uses `pnpm-lock.yaml`.
 
 ## Architecture
 
-**State layer (`src/lib/store.ts`)** — All application state (users, teams, change requests) lives in a single Zustand store. There is no real persistence; everything resets on page refresh. The store is the source of truth for every page.
+**State layer (`src/lib/store.ts`)** — A small Zustand store holds **UI-only** preferences (language, font scale, theme), persisted to `localStorage`. Toasts use a separate `useToastStore` in `src/components/ui/toaster.tsx`. All domain data (users, teams, change requests, CAB, approvals, attachments, notifications, etc.) is persisted in Postgres via Prisma, fetched in server components, and passed to client components as props — there is no domain state in Zustand.
 
-**Auth** is entirely client-side. On login, the user's ID is written to `localStorage` under the key `csq-session-user`. Two render-only components in `app-shell.tsx` handle hydration (`AuthHydrate`) and redirect-on-unauthenticated (`AuthGuard`). The seeded admin account is `devops@csquared.com` / `Admin2025$`.
+**Auth** is server-side via NextAuth v5 (Auth.js) with a Keycloak OIDC provider. `src/auth.config.ts` is the edge-safe config (providers + token extraction only; it is imported by middleware and must NOT import the DB/pg layer). `src/auth.ts` composes that with DB-backed callbacks from `src/lib/auth-callbacks.ts` (`enrichedJwt` / `sessionFromToken`) which attach the user's OpCo assignments and realm roles to the session. The NextAuth route handler is `src/app/api/auth/[...nextauth]/route.ts`. The root `layout.tsx` provides `SessionProvider`; client code reads the user via `useSession()`, server code via `auth()`. The seeded admin account is `devops@csquared.com` / `Admin2025$`.
 
 **Routing** uses Next.js App Router. All feature pages sit inside the `(dashboard)` route group, which applies no extra layout — the group exists purely to separate the login page from authenticated pages. The root `layout.tsx` wraps everything in `AppShell`.
 
-**AppShell (`src/components/app-shell.tsx`)** owns the sidebar, top header, breadcrumbs, mobile nav drawer, password-change modal, and preferences modal. It reads `currentUser` and `changes` from the store to compute badge counts. The sidebar nav is filtered by `canManageUsers` (admin permission) so the User Management group is hidden from non-admins.
+**AppShell (`src/components/app-shell.tsx`)** owns the sidebar, top header, breadcrumbs, mobile nav drawer, password-change modal, and preferences modal. It reads the user from the NextAuth session and `language`/`theme`/`fontScale` from the Zustand UI store; badge counts (pending approvals, my requests, unread notifications) come from the `getNavCounts()` server action. The sidebar nav is filtered by `canManageUsers` (admin permission) so the User Management group is hidden from non-admins.
 
 **i18n (`src/lib/i18n.ts`)** — A flat key→string map for English and French. All user-visible strings go through `t(language, key)`. Language and font scale are persisted to `localStorage`.
 
-**Database layer (`src/server/db.ts` + `prisma/schema.prisma`)** — Prisma v7 with the `@prisma/adapter-pg` driver adapter. A singleton `getPrisma()` function initialises the client from `PRISMA_ACCELERATE_URL` (preferred) or `DATABASE_URL`. Neither env var is set in development, so the only wired API route (`GET /api/changes`) returns a 500 with an explanatory message. Run `pnpm prisma migrate dev` once a database URL is available.
+**Database layer (`src/server/db.ts` + `prisma/schema.prisma`)** — Prisma v7 with the `@prisma/adapter-pg` driver adapter. A singleton `getPrisma()` function initialises the client from `PRISMA_ACCELERATE_URL` (preferred) or `DATABASE_URL`. The primary data path is the server actions in `src/server/actions/*` (backed by services in `src/server/*`: `drive`, `email`, `notify`, `sla`, `pdf`, `approval-authority`, etc.). The app needs a running database to function; local development uses a Postgres + Keycloak docker-compose stack (migrate + seed, then `pnpm dev`). Without a database URL, DB-backed routes/actions return errors (e.g. `GET /api/changes` responds 500). Run `pnpm prisma migrate dev` against a database URL.
 
-**Domain types (`src/lib/types.ts`)** — `AppUser`, `ChangeRequest`, and `Team` are the three core interfaces. `ChangeRequest.details` is a nested object holding telecom-specific fields (country, infrastructure type, impact scope, etc.) that correspond to the CSquared paper change-request form.
+**Domain types (`src/lib/types.ts`)** — `AppUser`, `ChangeRequest`, and `Team` are the core TypeScript interfaces, but `prisma/schema.prisma` is the source of truth and additionally models CAB membership, approver delegations/overrides, change assignees, approvals, attachments, notifications + preferences, PIR records, blackout periods, and the systemic risk register. `ChangeRequest.details` holds telecom-specific fields (country, infrastructure type, impact scope, etc.) from the CSquared paper change-request form.
 
-**Stub pages** — The following pages render static placeholder data and have no real logic yet: `/risk-register`, `/calendar`, `/audit-exports`, `/approval-matrix`, `/automation`, `/change-details`, `/notifications/history`, and all `/settings/*` sub-pages.
+**Stub pages** — The following pages still render static placeholder data with no real logic: `/audit-exports`, `/automation`, `/change-details`, and the `/settings/{profile,security,alerts,preferences,approvers}` sub-pages. Some likely duplicate real pages and are pending a stub/duplicate review (`/change-details` vs the live `/changes/[id]` detail hub; `/audit-exports` vs `/audits`; `/settings/approvers` vs `/approval-matrix`).
 
 ## Key conventions
 

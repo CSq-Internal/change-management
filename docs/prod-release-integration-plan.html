@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSquared CMS — Production Release &amp; Integration Plan</title>
+<style>
+  :root{
+    --navy:#1f3864; --blue:#2e5496; --accent:#3a6ea5;
+    --p0:#9c0006; --p0bg:#ffc7ce; --p1:#7f4f00; --p1bg:#ffeb9c; --p2:#155e52; --p2bg:#c5e0dc;
+    --ink:#1d2330; --muted:#667085; --line:#e3e8ef; --card:#ffffff; --bg:#f5f7fb;
+    --done:#067647; --donebg:#e6f4ea;
+    --v2:#5b3a8e; --v2bg:#ece2f8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 24px 80px;}
+  header.hero{background:linear-gradient(135deg,var(--navy),var(--accent));color:#fff;
+    border-radius:16px;padding:32px 36px;box-shadow:0 8px 30px rgba(31,56,100,.18);}
+  header.hero h1{margin:0 0 6px;font-size:26px;letter-spacing:-.3px}
+  header.hero p{margin:4px 0;opacity:.92;font-size:14px}
+  .meta{margin-top:14px;font-size:12.5px;opacity:.85}
+  .verdict{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 24px;margin:22px 0;box-shadow:0 2px 10px rgba(16,24,40,.04)}
+  .verdict h2{margin:0 0 8px;font-size:16px;color:var(--navy)}
+  .bar{height:12px;border-radius:8px;background:#eef1f6;overflow:hidden;margin:10px 0 4px}
+  .bar > span{display:block;height:100%;background:linear-gradient(90deg,#067647,#34c77b)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.2px}
+  .P0{background:var(--p0bg);color:var(--p0)} .P1{background:var(--p1bg);color:var(--p1)}
+  .P2{background:var(--p2bg);color:var(--p2)} .DONE{background:var(--donebg);color:var(--done)}
+  .V2{background:var(--v2bg);color:var(--v2)}
+  h2.section{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;color:var(--accent);
+    margin:34px 0 12px;border-bottom:2px solid var(--line);padding-bottom:6px}
+  .card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--accent);
+    border-radius:12px;padding:18px 22px;margin:14px 0;box-shadow:0 2px 10px rgba(16,24,40,.04)}
+  .card.p0{border-left-color:var(--p0)} .card.p1{border-left-color:var(--p1)} .card.p2{border-left-color:var(--p2)}
+  .card.v2{border-left-color:var(--v2)}
+  .card h3{margin:0 0 4px;font-size:17px;color:var(--navy);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .num{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:700}
+  .tags{margin:6px 0 12px;display:flex;gap:8px;flex-wrap:wrap}
+  .tag{font-size:11.5px;background:#eef2f8;color:#3a4a63;border-radius:6px;padding:2px 9px}
+  .tag.iso{background:#e8eefc;color:#2a4b8d;font-weight:600}
+  .grid{display:grid;grid-template-columns:120px 1fr;gap:6px 16px;font-size:14px;margin-top:6px}
+  .grid dt{color:var(--muted);font-weight:600}
+  .grid dd{margin:0}
+  code{background:#f0f3f8;border:1px solid #e3e8ef;border-radius:5px;padding:1px 6px;font-size:12.5px;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  pre{background:#0f1729;color:#e6edf7;border-radius:10px;padding:14px 16px;overflow:auto;font-size:12.5px;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;line-height:1.5}
+  pre .c{color:#7d8db5}
+  ul.ac{margin:6px 0 0;padding-left:18px} ul.ac li{margin:3px 0}
+  ol.steps{margin:6px 0 0;padding-left:20px} ol.steps li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f0f3f8;color:var(--navy);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  tr:last-child td{border-bottom:none}
+  .note{font-size:13px;color:var(--muted)}
+  .callout{background:#fff8e6;border:1px solid #ffe7a3;border-radius:12px;padding:14px 18px;margin:16px 0;font-size:13.5px}
+  footer{margin-top:40px;color:var(--muted);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>CSquared Change Management — Production Release &amp; Integration Plan</h1>
+  <p>How to take the feature-complete <code>dev</code> branch to a running production deployment: branch integration, infrastructure provisioning, configuration, cutover, and verification.</p>
+  <p class="meta">Status: Draft — For Review · Branch model: <code>dev</code> = integration, <code>prod</code> = release · Generated 2026-06-08</p>
+</header>
+
+<div class="verdict">
+  <h2>Where we stand</h2>
+  <p class="note">The application is feature-complete for v1.0 on <code>dev</code> (all four v1.0 PRD-gap bundles + ISO P0 hardening, 325 tests green). <code>prod</code> is a bare baseline and a <strong>clean ancestor</strong> of <code>dev</code> — it is <strong>247 commits behind with zero divergence</strong>, so the code integration is a fast-forward, not a merge with conflicts. What is <em>not</em> yet done is everything <em>around</em> the code: a production database, a production Keycloak realm, a production Google Drive, the secret set, a hosting target, and a verification pass.</p>
+  <div class="bar"><span style="width:80%"></span></div>
+  <div class="legend">
+    <span><span class="pill P0">P0</span> blocking — must exist before deploy</span>
+    <span><span class="pill P1">P1</span> required for full function</span>
+    <span><span class="pill P2">P2</span> post-launch / operational</span>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Open decision (needs review before execution):</strong> the <strong>hosting target</strong> is not yet chosen. Everything below assumes a Node-capable host that can run <code>next start</code> (managed container/VM, or Vercel). The two material differences are: (a) whether Keycloak + Postgres are self-hosted alongside the app or managed services, and (b) how the SLA cron (<code>POST /api/cron/sla</code>) is triggered on a schedule. Pick the host first; the rest of this plan is host-agnostic.
+</div>
+
+<h2 class="section">Stage 1 — Provision infrastructure (P0, parallelisable)</h2>
+
+<div class="card p0">
+  <h3><span class="num">1.</span> Production PostgreSQL <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag">Workplan: Phase 11</span><span class="tag">Effort: S</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>A managed Postgres instance (or Accelerate URL) reachable from the app host, with automated backups and TLS.</dd>
+    <dt>Output</dt><dd><code>DATABASE_URL</code> (or <code>PRISMA_ACCELERATE_URL</code>, which <code>getPrisma()</code> prefers).</dd>
+    <dt>Notes</dt><dd>Schema is applied by migration in Stage 3 — do <strong>not</strong> hand-create tables. The audit-log immutability trigger ships as migration <code>20260531120424_audit_log_immutability_trigger</code> and requires the migration to run with sufficient privileges.</dd>
+  </dl>
+</div>
+
+<div class="card p0">
+  <h3><span class="num">2.</span> Production Keycloak realm <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag">Workplan: Phase 11</span><span class="tag">Effort: M</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>A <code>csquared</code> realm with: an OIDC confidential client for the app; the realm-roles mapper that emits <code>realm_access.roles</code> in the token (consumed by <code>auth.config.ts</code>); and admin credentials for server-side org operations.</dd>
+    <dt>Output</dt><dd><code>KEYCLOAK_ISSUER</code>, <code>KEYCLOAK_CLIENT_ID</code>, <code>KEYCLOAK_CLIENT_SECRET</code>, plus admin creds (<code>KEYCLOAK_ADMIN_USERNAME</code> / <code>KEYCLOAK_ADMIN_PASSWORD</code> and/or <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code>) used by OpCo→Keycloak-org creation.</dd>
+    <dt>Acceptance</dt><dd><ul class="ac">
+      <li>Set the client's valid redirect URI to <code>{prod-url}/api/auth/callback/keycloak</code>.</li>
+      <li>The seeded admin (<code>devops@csquared.com</code>) can sign in and the session carries the expected realm roles + OpCo assignments.</li>
+    </ul></dd>
+  </dl>
+</div>
+
+<div class="card p0">
+  <h3><span class="num">3.</span> Production Google Drive (service account) <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag">Workplan: Phase 11</span><span class="tag">Effort: S–M</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>A private "Change Management" <strong>Shared Drive</strong> with a service account granted Content-Manager access, and a root folder for per-change document folders.</dd>
+    <dt>Output</dt><dd><code>GOOGLE_SERVICE_ACCOUNT_KEY</code> (full JSON, single line), <code>GDRIVE_SHARED_DRIVE_ID</code>, <code>GDRIVE_ROOT_FOLDER_ID</code>.</dd>
+    <dt>Notes</dt><dd>Mandatory document uploads (impact / implementation / testing / backout / solution) gate submission, so this must be live before real changes are submitted. See <code>docs/google-drive-setup.md</code>.</dd>
+  </dl>
+</div>
+
+<div class="card p1">
+  <h3><span class="num">4.</span> Email transport <span class="pill P1">P1</span></h3>
+  <div class="tags"><span class="tag">Effort: S</span></div>
+  <dl class="grid">
+    <dt>Goal</dt><dd>Outbound notification email. Resend is primary; a Gmail/Workspace app-password SMTP path is the fallback.</dd>
+    <dt>Output</dt><dd><code>RESEND_API_KEY</code> + <code>EMAIL_FROM</code> (preferred), or <code>SMTP_USER</code> + <code>APP_PASSWORD</code>. Leave <code>TEST_EMAIL_RECIPIENT</code> <strong>unset</strong> in prod (it is a dev-only redirect).</dd>
+  </dl>
+</div>
+
+<h2 class="section">Stage 2 — Configuration &amp; secrets</h2>
+
+<div class="card">
+  <h3><span class="num">5.</span> Production environment matrix</h3>
+  <p class="note">Set on the host's secret store — never commit. Source of truth: <code>.env.example</code> + <code>process.env</code> references in <code>src/</code>.</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Purpose</th><th>Pri</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASE_URL</code> / <code>PRISMA_ACCELERATE_URL</code></td><td>Postgres connection (Accelerate preferred by <code>getPrisma()</code>)</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>NEXTAUTH_URL</code></td><td>Canonical prod URL (used for OIDC redirect)</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>NEXTAUTH_SECRET</code></td><td>Strong random secret for session/JWT signing</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>KEYCLOAK_ISSUER</code></td><td>Realm issuer URL</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>KEYCLOAK_CLIENT_ID</code> / <code>KEYCLOAK_CLIENT_SECRET</code></td><td>App OIDC client</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>KEYCLOAK_ADMIN_USERNAME</code> / <code>KEYCLOAK_ADMIN_PASSWORD</code> / <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code></td><td>Server-side admin for OpCo→org creation</td><td><span class="pill P1">P1</span></td></tr>
+      <tr><td><code>GOOGLE_SERVICE_ACCOUNT_KEY</code></td><td>Drive service-account JSON (single line)</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>GDRIVE_SHARED_DRIVE_ID</code> / <code>GDRIVE_ROOT_FOLDER_ID</code></td><td>Document storage location</td><td><span class="pill P0">P0</span></td></tr>
+      <tr><td><code>RESEND_API_KEY</code> / <code>EMAIL_FROM</code></td><td>Primary email transport</td><td><span class="pill P1">P1</span></td></tr>
+      <tr><td><code>SMTP_USER</code> / <code>APP_PASSWORD</code></td><td>Email fallback (Gmail app password)</td><td><span class="pill P2">P2</span></td></tr>
+      <tr><td><code>CRON_SECRET</code></td><td>Shared secret for <code>POST /api/cron/sla</code> (<code>x-cron-secret</code> header)</td><td><span class="pill P1">P1</span></td></tr>
+      <tr><td><code>NODE_ENV</code></td><td><code>production</code></td><td><span class="pill P0">P0</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin-top:10px"><strong>Also:</strong> review <code>next.config.ts</code> <code>allowedDevOrigins</code> — it whitelists localtunnel dev origins that should be removed/replaced for production.</p>
+</div>
+
+<h2 class="section">Stage 3 — Integrate &amp; deploy</h2>
+
+<div class="card p0">
+  <h3><span class="num">6.</span> Branch integration: <code>dev</code> → <code>prod</code> <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag">Workplan: Phase 10 (release plan) + Phase 11 (deploy)</span><span class="tag">Effort: S</span></div>
+  <p class="note"><code>prod</code> is a clean ancestor of <code>dev</code>, so this is a fast-forward. Tag the release so there is an immutable reference for rollback.</p>
+  <pre><span class="c"># verify still a clean fast-forward (no divergence)</span>
+git merge-base --is-ancestor prod dev && echo "fast-forward OK"
+
+<span class="c"># integrate and tag</span>
+git checkout prod
+git merge --ff-only dev
+git tag -a v1.0.0 -m "CSquared CMS v1.0.0"
+git push origin prod --tags</pre>
+  <p class="note" style="margin-top:8px">Optional: open a <code>dev</code>→<code>prod</code> PR instead of a direct push if branch protection / review is desired for the release commit.</p>
+</div>
+
+<div class="card p0">
+  <h3><span class="num">7.</span> Build, migrate, seed <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag">Effort: S</span></div>
+  <ol class="steps">
+    <li>Install with the frozen lockfile: <code>pnpm install --frozen-lockfile</code> (project uses <code>pnpm-lock.yaml</code>).</li>
+    <li>Build: <code>pnpm build</code> (runs <code>prisma generate</code> + <code>next build</code>).</li>
+    <li>Apply schema: <code>pnpm prisma migrate deploy</code> — applies all 11 migrations, including the audit-immutability trigger. Use <code>migrate deploy</code>, never <code>migrate dev</code>, in production.</li>
+    <li>Seed baseline data (6 OpCos + admin) <strong>once</strong>: run the seed against the prod <code>DATABASE_URL</code>. Confirm the seed is idempotent / safe to skip on re-deploys.</li>
+    <li>Start: <code>pnpm start</code> (<code>next start</code>).</li>
+  </ol>
+</div>
+
+<div class="card p1">
+  <h3><span class="num">8.</span> Schedule the SLA escalation cron <span class="pill P1">P1</span></h3>
+  <div class="tags"><span class="tag">Effort: S</span></div>
+  <dl class="grid">
+    <dt>What</dt><dd>SLA breach escalation runs via <code>POST /api/cron/sla</code>, authorised by the <code>x-cron-secret</code> header matching <code>CRON_SECRET</code>.</dd>
+    <dt>How</dt><dd>Wire a scheduler (host cron, Vercel Cron, or external pinger) to call it on a regular cadence (e.g. hourly). Without this, SLA escalation/notifications never fire.</dd>
+  </dl>
+</div>
+
+<h2 class="section">Stage 4 — Verify &amp; cut over (P0)</h2>
+
+<div class="card p0">
+  <h3><span class="num">9.</span> Production smoke + UAT <span class="pill P0">P0</span></h3>
+  <div class="tags"><span class="tag">Workplan: Phase 11</span><span class="tag">Effort: M</span></div>
+  <dl class="grid">
+    <dt>Smoke (gating)</dt><dd><ul class="ac">
+      <li>Keycloak login as <code>devops@csquared.com</code>; session has expected roles + OpCos.</li>
+      <li>Create a change in one OpCo, upload all 5 documents to Drive, submit (gating enforced).</li>
+      <li>Approve through the CAB route; SoD blocks requester=approver; audit entries written and are immutable.</li>
+      <li>Tenant isolation: a user from OpCo A cannot read OpCo B's change.</li>
+      <li>Notifications: in-app feed + email fire; trigger the SLA cron once and confirm escalation.</li>
+      <li>Audit CSV / PDF evidence export works for an auditor.</li>
+    </ul></dd>
+    <dt>UAT</dt><dd>Business sign-off across the requester / approver / auditor / admin personas on a representative change.</dd>
+  </dl>
+</div>
+
+<div class="card p2">
+  <h3><span class="num">10.</span> Rollback &amp; operational follow-ups <span class="pill P2">P2</span></h3>
+  <div class="tags"><span class="tag">Effort: ongoing</span></div>
+  <dl class="grid">
+    <dt>Rollback</dt><dd>Redeploy the previous release tag. Schema migrations are forward-only — avoid destructive migrations; prefer additive changes so a code rollback does not require a DB rollback. Take a DB snapshot immediately before <code>migrate deploy</code>.</dd>
+    <dt>Follow-ups</dt><dd><ul class="ac">
+      <li>Confirm DB backup cadence + restore drill.</li>
+      <li>Decide the ongoing <code>dev</code>→<code>prod</code> release cadence and whether <code>prod</code> gets branch protection.</li>
+      <li>Hand the running system to the ISMS team as evidence-generating machinery (Phase 9, separate track).</li>
+    </ul></dd>
+  </dl>
+</div>
+
+<h2 class="section">Pre-flight checklist</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>#</th><th>Gate</th><th>Done?</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Hosting target chosen (app + Keycloak + Postgres + cron trigger)</td><td>☐</td></tr>
+      <tr><td>2</td><td>Prod Postgres provisioned; <code>DATABASE_URL</code> reachable; backups on</td><td>☐</td></tr>
+      <tr><td>3</td><td>Prod Keycloak realm + client + roles mapper + redirect URI</td><td>☐</td></tr>
+      <tr><td>4</td><td>Prod Shared Drive + service account + root folder</td><td>☐</td></tr>
+      <tr><td>5</td><td>Full secret matrix set on host; <code>allowedDevOrigins</code> cleaned</td><td>☐</td></tr>
+      <tr><td>6</td><td><code>dev</code>→<code>prod</code> fast-forward + release tag</td><td>☐</td></tr>
+      <tr><td>7</td><td><code>migrate deploy</code> applied; baseline seeded once</td><td>☐</td></tr>
+      <tr><td>8</td><td>SLA cron scheduled</td><td>☐</td></tr>
+      <tr><td>9</td><td>Smoke pass + UAT sign-off</td><td>☐</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>CSquared Change Management System · Production Release &amp; Integration Plan · Draft for review · 2026-06-08</footer>
+
+</div>
+</body>
+</html>
