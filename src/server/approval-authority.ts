@@ -14,17 +14,30 @@ export async function getRoutedApprovers(change: ChangeForAuth): Promise<Approve
   const db = getPrisma()
   const cabOpcoId = routedCabOpcoId(change.infrastructureType, change.opcoId)
 
-  const members = await db.cABMembership.findMany({
-    where: { opcoId: cabOpcoId, isActive: true },
-    include: { user: { select: { id: true, name: true, email: true } } },
+  const overrides = await db.approverAssignment.findMany({
+    where: { infrastructureType: change.infrastructureType, opcoId: cabOpcoId, isActive: true },
+    include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
   })
-  const memberIds = members.map((m) => m.userId)
 
+  let routedUsers: ApproverUser[]
+  if (overrides.length > 0) {
+    routedUsers = overrides
+      .filter((o) => o.user.isActive)
+      .map((o) => ({ id: o.user.id, name: o.user.name, email: o.user.email }))
+  } else {
+    const members = await db.cABMembership.findMany({
+      where: { opcoId: cabOpcoId, isActive: true },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    })
+    routedUsers = members.map((m) => m.user)
+  }
+
+  const routedIds = routedUsers.map((u) => u.id)
   const now = new Date()
-  const delegations = memberIds.length === 0 ? [] : await db.approverDelegation.findMany({
+  const delegations = routedIds.length === 0 ? [] : await db.approverDelegation.findMany({
     where: {
       opcoId: cabOpcoId, isActive: true,
-      fromUserId: { in: memberIds },
+      fromUserId: { in: routedIds },
       validFrom: { lte: now }, validUntil: { gte: now },
     },
     include: { toUser: { select: { id: true, name: true, email: true } } },
@@ -32,20 +45,36 @@ export async function getRoutedApprovers(change: ChangeForAuth): Promise<Approve
 
   const seen = new Set<string>()
   const out: ApproverUser[] = []
-  for (const u of [...members.map((m) => m.user), ...delegations.map((d) => d.toUser)]) {
+  for (const u of [...routedUsers, ...delegations.map((d) => d.toUser)]) {
     if (!seen.has(u.id)) { seen.add(u.id); out.push(u) }
   }
   return out
+}
+
+/** Users explicitly named as approvers on a specific change (via ChangeAssignee.role). */
+export async function getNamedApprovers(changeId: string): Promise<ApproverUser[]> {
+  const db = getPrisma()
+  const rows = await db.changeAssignee.findMany({
+    where: { changeId, role: "approver" },
+    include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
+  })
+  return rows.filter((r) => r.user.isActive).map((r) => ({ id: r.user.id, name: r.user.name, email: r.user.email }))
 }
 
 export async function canUserApproveChange(args: {
   userId: string
   realmRoles: string[]
   change: ChangeForAuth
+  changeId?: string
 }): Promise<boolean> {
   if (isGroupAdmin(args.realmRoles)) return true
   const approvers = await getRoutedApprovers(args.change)
-  return approvers.some((u) => u.id === args.userId)
+  if (approvers.some((u) => u.id === args.userId)) return true
+  if (args.changeId) {
+    const named = await getNamedApprovers(args.changeId)
+    if (named.some((u) => u.id === args.userId)) return true
+  }
+  return false
 }
 
 /** Pending changes the user is authorized to approve (group_admin sees all). */
@@ -60,7 +89,7 @@ export async function listApprovableChanges(args: { userId: string; realmRoles: 
 
   const visible = []
   for (const c of pending) {
-    if (await canUserApproveChange({ userId: args.userId, realmRoles: args.realmRoles, change: c })) {
+    if (await canUserApproveChange({ userId: args.userId, realmRoles: args.realmRoles, change: c, changeId: c.id })) {
       visible.push(c)
     }
   }
