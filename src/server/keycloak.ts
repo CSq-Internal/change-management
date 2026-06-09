@@ -83,6 +83,10 @@ export async function createKeycloakUser(
   })
 
   if (!res.ok) {
+    if (res.status === 409) {
+      const existingId = await findKeycloakUserByEmailWithToken(email, token, adminRealmUrl)
+      if (existingId) return existingId
+    }
     throw new Error(`Failed to create Keycloak user: ${res.status} ${await res.text()}`)
   }
 
@@ -92,6 +96,45 @@ export async function createKeycloakUser(
   const id = location.split("/").at(-1)
   if (!id) throw new Error(`Could not parse user id from Location: ${location}`)
   return id
+}
+
+type KeycloakUserSearchResult = {
+  id?: string
+  email?: string
+  username?: string
+}
+
+async function findKeycloakUserByEmailWithToken(
+  email: string,
+  token: string,
+  adminRealmUrl: string
+): Promise<string | null> {
+  const res = await fetch(
+    `${adminRealmUrl}/users?email=${encodeURIComponent(email)}&exact=true`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) {
+    throw new Error(`Failed to find Keycloak user by email: ${res.status} ${await res.text()}`)
+  }
+
+  const users = await res.json()
+  if (!Array.isArray(users)) return null
+
+  const normalized = email.toLowerCase()
+  const user = users.find((u: KeycloakUserSearchResult) => {
+    return (
+      u.id &&
+      (u.email?.toLowerCase() === normalized || u.username?.toLowerCase() === normalized)
+    )
+  })
+
+  return user?.id ?? null
+}
+
+export async function findKeycloakUserByEmail(email: string): Promise<string | null> {
+  const token = await getAdminToken()
+  const { adminRealmUrl } = kcEndpoints()
+  return findKeycloakUserByEmailWithToken(email, token, adminRealmUrl)
 }
 
 export async function assignToOrganization(

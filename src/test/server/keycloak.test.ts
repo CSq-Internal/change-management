@@ -1,6 +1,6 @@
 // src/test/server/keycloak.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { getAdminToken, createKeycloakUser } from '@/server/keycloak'
+import { getAdminToken, createKeycloakUser, findKeycloakUserByEmail } from '@/server/keycloak'
 
 const ENV: Record<string, string> = {
   KEYCLOAK_ISSUER: 'https://kc.example.com/realms/csquared',
@@ -93,5 +93,39 @@ describe('realm is parameterised, not hardcoded (C)', () => {
     const [url, opts] = fetchMock.mock.calls[1]
     expect(url).toBe('https://kc.example.com/admin/realms/acme/users')
     expect((opts as RequestInit & { headers: Record<string, string> }).headers.Authorization).toBe('Bearer tok')
+  })
+
+  it('createKeycloakUser links an existing Keycloak user when create returns 409', async () => {
+    process.env.KEYCLOAK_ISSUER = 'https://kc.example.com/realms/acme'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(tokenResponse()) // admin token
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: async () => '{"errorMessage":"User exists with same email"}',
+      }) // create user
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ id: 'uid-existing', email: 'a@x.com' }],
+      }) // exact email lookup
+    vi.stubGlobal('fetch', fetchMock)
+
+    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace', 'temp-pw')
+
+    expect(id).toBe('uid-existing')
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      'https://kc.example.com/admin/realms/acme/users?email=a%40x.com&exact=true'
+    )
+  })
+
+  it('findKeycloakUserByEmail returns null when no exact user matches', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(findKeycloakUserByEmail('missing@x.com')).resolves.toBeNull()
   })
 })
