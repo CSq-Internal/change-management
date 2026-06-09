@@ -41,7 +41,7 @@ export async function upsertChatWebhook(input: { opcoSlug: string | null; url: s
       ? await tx.chatWebhook.update({ where: { id: existing.id }, data: { url: input.url, isActive: true } })
       : await tx.chatWebhook.create({ data: { opcoId, url: input.url, createdById: actor.id } })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: "chat_webhook_set",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: "chat_webhook_set",
       opcoId, summary: `Set Google Chat webhook for ${input.opcoSlug ?? "group"}`,
     })
     return hook
@@ -64,7 +64,7 @@ export async function deleteChatWebhook(id: string) {
   await db.$transaction(async (tx) => {
     await tx.chatWebhook.delete({ where: { id } })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: "chat_webhook_removed",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: "chat_webhook_removed",
       opcoId: hook.opcoId, summary: `Removed Google Chat webhook for ${hook.opco?.slug ?? "group"}`,
     })
   })

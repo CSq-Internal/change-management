@@ -50,6 +50,8 @@ export async function createTeam(input: { opcoSlug: string; name: string; descri
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "team.create",
       opcoId: opco.id,
       summary: `Created team "${input.name}" in ${input.opcoSlug}`,
@@ -65,6 +67,8 @@ export async function updateTeam(teamId: string, data: { name?: string; descript
     const team = await tx.team.update({ where: { id: teamId }, data })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "team.update",
       opcoId,
       summary: `Updated team ${teamId}`,
@@ -82,6 +86,8 @@ export async function deleteTeam(teamId: string) {
     await tx.team.delete({ where: { id: teamId } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "team.delete",
       opcoId,
       summary: `Deleted team ${teamId}`,
@@ -106,6 +112,8 @@ export async function addTeamMember(teamId: string, userId: string, role: TeamRo
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "team.member.add",
       opcoId,
       targetUserId: userId,
@@ -122,6 +130,8 @@ export async function removeTeamMember(teamId: string, userId: string) {
     await tx.teamMember.delete({ where: { teamId_userId: { teamId, userId } } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "team.member.remove",
       opcoId,
       targetUserId: userId,
@@ -140,6 +150,8 @@ export async function setTeamMemberRole(teamId: string, userId: string, role: Te
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "team.member.role",
       opcoId,
       targetUserId: userId,

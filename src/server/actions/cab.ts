@@ -39,6 +39,8 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
         : await tx.cABMembership.create({ data: { userId, opcoId: null } })
       await recordAdminAction(tx, {
         actorKeycloakId: session.keycloakId,
+        actorEmail: session.email,
+        actorName: session.name,
         action: "cab.add",
         targetUserId: userId,
         summary: `Added user ${userId} to the group CAB`,
@@ -66,6 +68,8 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "cab.add",
       opcoId: opco.id,
       targetUserId: userId,
@@ -94,6 +98,8 @@ export async function removeCabMember(userId: string, opcoSlug: string | null) {
       })
       await recordAdminAction(tx, {
         actorKeycloakId: session.keycloakId,
+        actorEmail: session.email,
+        actorName: session.name,
         action: "cab.remove",
         targetUserId: userId,
         summary: `Removed user ${userId} from the group CAB`,
@@ -114,6 +120,8 @@ export async function removeCabMember(userId: string, opcoSlug: string | null) {
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "cab.remove",
       opcoId: opco.id,
       targetUserId: userId,

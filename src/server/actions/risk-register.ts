@@ -67,7 +67,7 @@ export async function createRisk(input: RiskInput) {
       },
     })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: "risk_created",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: "risk_created",
       opcoId: opco?.id ?? null, summary: `Created risk "${input.title}"`,
     })
     return risk
@@ -96,7 +96,7 @@ export async function updateRisk(id: string, input: RiskInput) {
       },
     })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: "risk_updated",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: "risk_updated",
       opcoId: opco?.id ?? null, summary: `Updated risk "${input.title}"`,
     })
     return risk
@@ -111,7 +111,7 @@ export async function setRiskStatus(id: string, status: RiskStatus) {
   return db.$transaction(async (tx) => {
     const risk = await tx.riskRegister.update({ where: { id }, data: { status } })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: status === "closed" ? "risk_closed" : "risk_updated",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: status === "closed" ? "risk_closed" : "risk_updated",
       opcoId: existing.opcoId, summary: `Set risk "${existing.title}" to ${status}`,
     })
     return risk

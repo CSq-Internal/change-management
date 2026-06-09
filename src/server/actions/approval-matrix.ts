@@ -52,7 +52,7 @@ export async function addApproverAssignment(input: { infrastructureType: string;
           data: { infrastructureType: input.infrastructureType, opcoId, userId: input.userId, createdById: actor.id },
         })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: "approver_assignment_added",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: "approver_assignment_added",
       opcoId, summary: `Added approver override (${input.infrastructureType} / ${input.opcoSlug ?? "group"})`,
     })
     return assignment
@@ -67,7 +67,7 @@ export async function removeApproverAssignment(id: string) {
   await db.$transaction(async (tx) => {
     await tx.approverAssignment.update({ where: { id }, data: { isActive: false } })
     await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, action: "approver_assignment_removed",
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: "approver_assignment_removed",
       opcoId: existing.opcoId, summary: `Removed approver override (${existing.infrastructureType} / ${existing.opco?.slug ?? "group"})`,
     })
   })

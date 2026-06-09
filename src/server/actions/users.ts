@@ -79,6 +79,8 @@ export async function onboardUser(input: {
 
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: existing ? "user.link" : "user.onboard",
       targetUserId: user.id,
       summary: `${existing ? "Linked" : "Onboarded"} ${input.email} (${input.assignments.map((a) => `${a.role}@${a.opcoSlug}`).join(", ")})`,
@@ -151,6 +153,8 @@ export async function deactivateUser(userId: string) {
     await tx.approverAssignment.updateMany({ where: { userId, isActive: true }, data: { isActive: false } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "user.deactivate",
       targetUserId: userId,
       summary: `Deactivated user ${userId}`,
@@ -183,6 +187,8 @@ export async function reactivateUser(userId: string) {
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "user.reactivate",
       targetUserId: userId,
       summary: `Reactivated user ${userId}`,
@@ -278,6 +284,8 @@ export async function setUserAssignments(
 
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "role.update",
       targetUserId: userId,
       summary: `Updated assignments for user ${userId}: ${[...changed].join(", ")}`,

@@ -57,6 +57,8 @@ export async function createDelegation(input: {
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "delegation.create",
       opcoId: opco.id,
       targetUserId: input.fromUserId,
@@ -86,6 +88,8 @@ export async function revokeDelegation(delegationId: string) {
     await tx.approverDelegation.update({ where: { id: delegationId }, data: { isActive: false } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "delegation.revoke",
       opcoId: opco.id,
       targetUserId: delegation.fromUserId,

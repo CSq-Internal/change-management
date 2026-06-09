@@ -53,6 +53,8 @@ export async function createOpCo(input: { slug: string; name: string; locale?: s
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "opco.create",
       opcoId: opco.id,
       summary: `Created OpCo ${input.slug} (${input.name})`,
@@ -68,6 +70,8 @@ export async function renameOpCo(opcoId: string, name: string) {
     const updated = await tx.opCo.update({ where: { id: opcoId }, data: { name } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: "opco.rename",
       opcoId,
       summary: `Renamed OpCo ${opco.slug} to "${name}"`,
@@ -85,6 +89,8 @@ async function setOpCoArchived(opcoId: string, archived: boolean) {
     await tx.opCo.update({ where: { id: opcoId }, data: { archivedAt: archived ? new Date() : null } })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
       action: archived ? "opco.archive" : "opco.unarchive",
       opcoId,
       summary: `${archived ? "Archived" : "Unarchived"} OpCo ${opco.slug}`,
