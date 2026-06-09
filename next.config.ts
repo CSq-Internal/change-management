@@ -1,13 +1,18 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  // Emit a minimal, self-contained server bundle (.next/standalone) for containers.
-  output: "standalone",
-  // Next's file tracer can miss Prisma's dynamically-loaded client/engine files;
-  // force-include them so the standalone image can reach the database.
-  outputFileTracingIncludes: {
-    "/**": ["./node_modules/.prisma/client/**/*", "./node_modules/@prisma/client/**/*"],
-  },
-};
+// `output: 'standalone'` + explicit Prisma file-tracing are for the self-hosted
+// CONTAINER image (Docker / Cloud Run). They must NOT be set on Vercel: Vercel
+// packages functions with its own pipeline and rejects the pnpm-symlinked
+// standalone output ("invalid deployment package ... files in symlinked directories").
+const isVercel = !!process.env.VERCEL;
+
+const nextConfig: NextConfig = isVercel
+  ? {}
+  : {
+      output: "standalone",
+      outputFileTracingIncludes: {
+        "/**": ["./node_modules/.prisma/client/**/*", "./node_modules/@prisma/client/**/*"],
+      },
+    };
 
 export default nextConfig;
