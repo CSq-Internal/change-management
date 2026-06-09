@@ -1,15 +1,6 @@
-import type { AttachmentKind } from "@prisma/client"
 import { drive as driveApi, type drive_v3 } from "@googleapis/drive"
 import { GoogleAuth } from "google-auth-library"
 import { Readable } from "node:stream"
-
-export const SUBFOLDER_FOR_KIND: Record<AttachmentKind, string> = {
-  impact_scope: "01_Impact-and-Scope",
-  implementation_plan: "02_Implementation-Plan",
-  testing_plan: "03_Testing-and-Validation",
-  backout_plan: "04_Backout-Plan",
-  solution_document: "05_Solution-Document",
-}
 
 export function sanitizeSegment(input: string): string {
   const cleaned = input
@@ -84,17 +75,17 @@ export async function ensureChangeFolder(input: {
   return ensureFolder(changeFolderName(input.reference, input.title), year)
 }
 
+// Files land directly in the change folder (Change Management / OpCo / Year / CHG-#### — Title);
+// no per-kind subfolders. The DB Attachment row tracks which file is which kind.
 export async function uploadDocument(input: {
   changeFolderId: string
-  kind: AttachmentKind
   filename: string
   mimeType: string
   buffer: Buffer
 }): Promise<string> {
-  const subfolderId = await ensureFolder(SUBFOLDER_FOR_KIND[input.kind], input.changeFolderId)
   const drive = getDrive()
   const created = await drive.files.create({
-    requestBody: { name: input.filename, parents: [subfolderId] },
+    requestBody: { name: input.filename, parents: [input.changeFolderId] },
     media: { mimeType: input.mimeType, body: Readable.from(input.buffer) },
     supportsAllDrives: true,
     fields: "id",

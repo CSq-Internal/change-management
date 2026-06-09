@@ -68,7 +68,7 @@ export async function attachDocument(input: AttachInput) {
   }
 
   const driveFileId = await uploadDocument({
-    changeFolderId: folderId, kind: input.kind,
+    changeFolderId: folderId,
     filename: input.filename, mimeType: input.mimeType, buffer: input.buffer,
   })
 
