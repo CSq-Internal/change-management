@@ -125,7 +125,11 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
     why: `SLA breached ${durLabel(Date.parse(c.slaDeadline!) - nowMs)} ago`,
   }))
   const awaiting: WorklistItem[] = awaitingChanges.map((c) => {
-    const remaining = Date.parse(c.slaDeadline!) - nowMs
+    // A pending change can have no SLA deadline (e.g. seeded without one); don't render "NaNm to SLA".
+    if (!c.slaDeadline) {
+      return { ...base(c), severity: "go" as const, action: "review" as const, why: "No SLA deadline" }
+    }
+    const remaining = Date.parse(c.slaDeadline) - nowMs
     return { ...base(c), severity: remaining < AT_RISK_WINDOW_MS ? "soon" : "go", action: "review" as const, why: `${durLabel(remaining)} to SLA` }
   })
   const advance: WorklistItem[] = advanceChanges.map((c) => {

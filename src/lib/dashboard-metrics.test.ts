@@ -121,3 +121,15 @@ it("counts overdue emergency retrospective reviews", () => {
   const data = buildDashboardData(changes, now)
   expect(data.counts.overdueRetro).toBe(1)
 })
+
+it("labels a pending change with no SLA deadline instead of rendering NaN", () => {
+  const now = Date.parse("2026-06-09T12:00:00Z")
+  const change: DashboardChange = {
+    id: "no-sla", title: "Backbone route update", status: "pending", riskLevel: "medium",
+    isEmergency: false, slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana",
+    ownerInitials: "DR", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null,
+  }
+  const item = buildDashboardData([change], now).triage.awaiting[0]
+  expect(item.why).toBe("No SLA deadline")
+  expect(item.why).not.toMatch(/NaN/)
+})
