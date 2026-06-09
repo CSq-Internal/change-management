@@ -11,9 +11,14 @@ vi.mock('@/lib/session', () => ({
 
 vi.mock('@/server/keycloak', () => ({
   createKeycloakUser: vi.fn().mockResolvedValue('kc-new'),
+  createOrFindKeycloakUser: vi.fn().mockResolvedValue({ id: 'kc-new', created: true }),
   assignToOrganization: vi.fn().mockResolvedValue(undefined),
   deactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
   reactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/server/email', () => ({
+  sendUserInvitationEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/server/approver-reassign', () => ({
@@ -51,6 +56,8 @@ vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
 import { onboardUser, deactivateUser, reactivateUser, setUserAssignments, listOpCoApprovers } from '@/server/actions/users'
 import { getAppSession } from '@/lib/session'
+import { createOrFindKeycloakUser } from '@/server/keycloak'
+import { sendUserInvitationEmail } from '@/server/email'
 
 const groupAdmin = {
   keycloakId: 'kc-ga', email: 'ga@csquared.com', name: 'GA',
@@ -92,6 +99,13 @@ describe("onboardUser — authorization & ceiling", () => {
     expect(result).toHaveProperty("id", "user-new")
     expect(mockDb.user.create).toHaveBeenCalledTimes(1)
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "new@csquared.com",
+        tempPassword: "p",
+        existingIdentity: false,
+      })
+    )
   })
 
   it("links an existing email instead of creating a new identity", async () => {
@@ -103,6 +117,30 @@ describe("onboardUser — authorization & ceiling", () => {
     })
     expect(mockDb.user.create).not.toHaveBeenCalled()
     expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "exists@csquared.com",
+        existingIdentity: true,
+      })
+    )
+  })
+
+  it("links a Keycloak-only existing email and sends an existing-password invite", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    vi.mocked(createOrFindKeycloakUser).mockResolvedValueOnce({ id: "kc-existing", created: false })
+    await onboardUser({
+      name: "Keycloak Existing", email: "kc-exists@csquared.com", tempPassword: "p",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
+    })
+    expect(mockDb.user.create).toHaveBeenCalledWith({
+      data: { keycloakId: "kc-existing", email: "kc-exists@csquared.com", name: "Keycloak Existing" },
+    })
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "kc-exists@csquared.com",
+        existingIdentity: true,
+      })
+    )
   })
 })
 

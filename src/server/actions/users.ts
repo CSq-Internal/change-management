@@ -5,8 +5,9 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
-import { createKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
+import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
 import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
+import { sendUserInvitationEmail } from "@/server/email"
 import type { Role, Prisma } from "@prisma/client"
 import type { SessionOrganization } from "@/types/next-auth"
 
@@ -42,10 +43,13 @@ export async function onboardUser(input: {
 
   // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
   let keycloakId: string
+  let createdKeycloakIdentity = false
   if (existing) {
     keycloakId = existing.keycloakId
   } else {
-    keycloakId = await createKeycloakUser(input.email, input.name, input.tempPassword)
+    const identity = await createOrFindKeycloakUser(input.email, input.name, input.tempPassword)
+    keycloakId = identity.id
+    createdKeycloakIdentity = identity.created
   }
   for (const { opcoSlug } of input.assignments) {
     try {
@@ -55,7 +59,7 @@ export async function onboardUser(input: {
     }
   }
 
-  return db.$transaction(async (tx) => {
+  const user = await db.$transaction(async (tx) => {
     const user = existing
       ? existing
       : await tx.user.create({ data: { keycloakId, email: input.email, name: input.name } })
@@ -83,6 +87,20 @@ export async function onboardUser(input: {
 
     return user
   })
+
+  try {
+    await sendUserInvitationEmail({
+      to: input.email,
+      name: input.name,
+      tempPassword: input.tempPassword || "ChangeMe123!",
+      existingIdentity: !!existing || !createdKeycloakIdentity,
+      assignments: input.assignments,
+    })
+  } catch (err) {
+    console.warn(`[onboardUser] invitation email failed for ${input.email}:`, err)
+  }
+
+  return user
 }
 
 // Throws if ending `userId`'s admin role in `opcoId` would leave the OpCo with zero active admins.

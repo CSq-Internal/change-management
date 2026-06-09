@@ -35,6 +35,41 @@ async function dispatchEmail(to: string, subject: string, html: string) {
   }
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+export async function sendUserInvitationEmail(opts: {
+  to: string
+  name: string
+  tempPassword?: string
+  existingIdentity: boolean
+  assignments: Array<{ opcoSlug: string; role: string }>
+}) {
+  const assignmentList = opts.assignments
+    .map((a) => `<li>${escapeHtml(a.role)} in ${escapeHtml(a.opcoSlug)}</li>`)
+    .join("")
+  const passwordCopy = opts.existingIdentity
+    ? "<p>Use your existing Keycloak password. If you do not know it, ask an administrator to reset it in Keycloak.</p>"
+    : `<p>Your temporary password is: <strong>${escapeHtml(opts.tempPassword ?? "ChangeMe123!")}</strong></p><p>You may be asked to change it on first sign-in.</p>`
+
+  await dispatchEmail(
+    opts.to,
+    "You're invited to CSquared CMS",
+    `<p>Hi ${escapeHtml(opts.name)},</p>
+<p>You have been invited to CSquared CMS.</p>
+<p><a href="${BASE}/login">Sign in to CSquared CMS</a></p>
+${passwordCopy}
+<p>Your access:</p>
+<ul>${assignmentList}</ul>`
+  )
+}
+
 export async function sendApprovalRequestEmail(opts: {
   to: string; approverName: string; changeTitle: string
   requesterName: string; riskLevel: string; changeId: string

@@ -60,6 +60,15 @@ export async function createKeycloakUser(
   name: string,
   tempPassword: string
 ): Promise<string> {
+  const result = await createOrFindKeycloakUser(email, name, tempPassword)
+  return result.id
+}
+
+export async function createOrFindKeycloakUser(
+  email: string,
+  name: string,
+  tempPassword: string
+): Promise<{ id: string; created: boolean }> {
   const token = await getAdminToken()
   const { adminRealmUrl } = kcEndpoints()
   const [firstName, ...rest] = name.trim().split(" ")
@@ -85,7 +94,7 @@ export async function createKeycloakUser(
   if (!res.ok) {
     if (res.status === 409) {
       const existingId = await findKeycloakUserByEmailWithToken(email, token, adminRealmUrl)
-      if (existingId) return existingId
+      if (existingId) return { id: existingId, created: false }
     }
     throw new Error(`Failed to create Keycloak user: ${res.status} ${await res.text()}`)
   }
@@ -95,7 +104,7 @@ export async function createKeycloakUser(
   if (!location) throw new Error("No Location header in Keycloak create-user response")
   const id = location.split("/").at(-1)
   if (!id) throw new Error(`Could not parse user id from Location: ${location}`)
-  return id
+  return { id, created: true }
 }
 
 type KeycloakUserSearchResult = {
