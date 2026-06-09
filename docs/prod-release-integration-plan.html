@@ -105,7 +105,7 @@
     <dt>Output</dt><dd><code>KEYCLOAK_ISSUER</code>, <code>KEYCLOAK_CLIENT_ID</code>, <code>KEYCLOAK_CLIENT_SECRET</code> (login) + <code>KEYCLOAK_ADMIN_CLIENT_ID</code>, <code>KEYCLOAK_ADMIN_CLIENT_SECRET</code> (admin service account).</dd>
     <dt>Acceptance</dt><dd><ul class="ac">
       <li>Login client: valid redirect URI <code>{prod-url}/api/auth/callback/keycloak</code>.</li>
-      <li>Admin client: a confidential client with <em>service accounts enabled</em>, granted the <code>realm-management</code> roles <code>manage-users</code> + <code>manage-organizations</code> on this realm — and <strong>nothing more</strong> (least privilege; no master-realm admin). The app authenticates via <code>client_credentials</code>, not a master admin login.</li>
+      <li>Admin client: a confidential client with <em>service accounts enabled</em>, granted the <code>realm-management</code> role <code>manage-users</code> on this realm — and <strong>nothing more</strong> (least privilege; no master-realm admin). The app authenticates via <code>client_credentials</code>, not a master admin login. (OpCo→Keycloak-org mirroring is best-effort and needs no extra role — see the deploy runbook 3b for the verified Keycloak 26.6 behaviour.)</li>
       <li>The seeded admin (<code>devops@csquared.com</code>) can sign in and the session carries the expected realm roles + OpCo assignments.</li>
     </ul></dd>
   </dl>
@@ -232,7 +232,7 @@ git push origin prod --tags</pre>
     <tbody>
       <tr><td>1</td><td>Hosting target chosen (app + Keycloak + Postgres + cron trigger)</td><td>☐</td></tr>
       <tr><td>2</td><td>Prod Postgres provisioned; <code>DATABASE_URL</code> reachable; backups on</td><td>☐</td></tr>
-      <tr><td>3</td><td>Prod Keycloak realm: login client + roles mapper + redirect URI, and admin service-account client (manage-users + manage-organizations)</td><td>☐</td></tr>
+      <tr><td>3</td><td>Prod Keycloak realm: login client + roles mapper + redirect URI, and admin service-account client (manage-users)</td><td>☐</td></tr>
       <tr><td>4</td><td>Prod Shared Drive + service account + root folder</td><td>☐</td></tr>
       <tr><td>5</td><td>Full secret matrix set on host; <code>allowedDevOrigins</code> cleaned</td><td>☐</td></tr>
       <tr><td>6</td><td><code>dev</code>→<code>prod</code> fast-forward + release tag</td><td>☐</td></tr>

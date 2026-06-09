@@ -106,9 +106,20 @@ In your org's prod realm (note its name; the app derives the realm from
 
 **3b. Admin service-account client** — `csquared-cms-admin`
 - Confidential; **Service accounts roles ON**; Standard flow OFF.
-- Service account → **Assign roles** → client `realm-management`:
-  **`manage-users`** + **`manage-organizations`** (and nothing else — least privilege).
+- Service account → **Assign roles** → filter **by clients** → `realm-management` →
+  assign **`manage-users`** (and nothing else — least privilege).
 - Copy the client secret → `KEYCLOAK_ADMIN_CLIENT_SECRET`.
+
+> **About `manage-organizations` (verified on Keycloak 26.6):** don't bother — the
+> `realm-management` `manage-organizations` role is **not seeded** when you enable
+> Organizations (confirmed: neither realm import nor native realm creation adds it),
+> and hand-creating a role by that name does **not** authorize the org Admin API (403).
+> This is fine: the app's Keycloak **organization** sync (mirroring OpCos as KC orgs)
+> is **best-effort** — it logs and skips on failure. `manage-users` is the only hard
+> requirement (user onboarding/deactivation). So assign just `manage-users` and move on.
+> If KC org-mirroring becomes a real requirement later, it needs separate work on
+> Keycloak's admin permissions — it is **not** a deploy blocker, and do **not** grant
+> the broad `realm-admin` role just for it.
 
 > `KEYCLOAK_ISSUER` = `https://<your-keycloak>/realms/<your-realm>`.
 > The chicken/egg with the redirect URI in 3a: you can deploy once to learn the
@@ -232,6 +243,6 @@ gcloud scheduler jobs create http sla-escalation \
 - **Rollback:** redeploy the previous image tag. Migrations are forward-only — take
   a Cloud SQL backup immediately before the migrate job.
 - **Keycloak admin scope:** the app only ever touches your realm via the
-  `csquared-cms-admin` service account (manage-users + manage-organizations) — no
-  master access. User onboarding/deactivation require this client; OpCo/org-assign
-  are best-effort.
+  `csquared-cms-admin` service account with **`manage-users`** — no master access.
+  User onboarding/deactivation require this client; OpCo→KC-org mirroring is
+  best-effort (and currently no-ops on KC 26.6 — see 3b).

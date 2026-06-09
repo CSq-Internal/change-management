@@ -103,7 +103,7 @@
       "enabled": true,
       "serviceAccountClientId": "csquared-cms-admin",
       "clientRoles": {
-        "realm-management": ["manage-users", "manage-organizations"]
+        "realm-management": ["manage-users"]
       }
     }
   ],

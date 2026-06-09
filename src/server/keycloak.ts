@@ -3,10 +3,12 @@
 //
 // Admin auth uses a realm-scoped service account (client_credentials grant) —
 // NOT a master-realm admin login. The service account client needs the
-// `realm-management` roles `manage-users` and `manage-organizations` on the
-// target realm, and nothing more. The realm name is derived from
-// KEYCLOAK_ISSUER (or overridden with KEYCLOAK_REALM), so the app is not
-// hardwired to a realm named "csquared".
+// `realm-management` role `manage-users` on the target realm (the only hard
+// requirement). Organization sync (createKeycloakOrg / assignToOrganization) is
+// best-effort: it needs `manage-organizations`, which on Keycloak 26.6 is not
+// seeded by enabling Organizations and can't be hand-grafted — callers catch the
+// failure and continue. The realm name is derived from KEYCLOAK_ISSUER (or
+// overridden with KEYCLOAK_REALM), so the app is not hardwired to "csquared".
 
 /** Derive the Keycloak base URL + realm from KEYCLOAK_ISSUER (+ optional KEYCLOAK_REALM override). */
 function kcEndpoints(): { tokenUrl: string; adminRealmUrl: string } {
