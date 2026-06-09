@@ -39,7 +39,7 @@ pnpm db:seed                   # 6 OpCos + admin (devops@csquared.com)
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
 | `AUTH_TRUST_HOST` | `true` |
 | `NEXTAUTH_URL` | your Vercel URL (set after the first deploy — step 5) |
-| `KEYCLOAK_ISSUER` | `https://<org-keycloak>/realms/<your-realm>` |
+| `KEYCLOAK_ISSUER` | exact issuer from Keycloak discovery, e.g. `https://<org-keycloak>/auth/realms/<your-realm>` if Keycloak is mounted under `/auth` |
 | `KEYCLOAK_CLIENT_ID` | `csquared-cms` |
 | `KEYCLOAK_CLIENT_SECRET` | from 3a |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | `csquared-cms-admin` |
@@ -70,6 +70,13 @@ In your org realm, on the `csquared-cms` client, add:
 - **Post logout:** `https://<vercel-url>/*` (or `+`)
 
 (Leave any existing Cloud Run URIs in place — they can coexist.)
+
+Before redeploying, verify issuer discovery returns `200` JSON and that the JSON
+`issuer` field exactly matches `KEYCLOAK_ISSUER`:
+
+```bash
+curl -fsS "$KEYCLOAK_ISSUER/.well-known/openid-configuration" | jq -r .issuer
+```
 
 ## 7. Smoke test
 - Sign in via Keycloak as the admin → lands in the app with admin nav.

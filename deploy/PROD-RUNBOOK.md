@@ -121,7 +121,12 @@ In your org's prod realm (note its name; the app derives the realm from
 > Keycloak's admin permissions — it is **not** a deploy blocker, and do **not** grant
 > the broad `realm-admin` role just for it.
 
-> `KEYCLOAK_ISSUER` = `https://<your-keycloak>/realms/<your-realm>`.
+> `KEYCLOAK_ISSUER` must be the exact issuer from Keycloak discovery, e.g.
+> `https://<your-keycloak>/auth/realms/<your-realm>` if Keycloak is mounted under
+> `/auth`. Verify before deploy:
+> ```bash
+> curl -fsS "$KEYCLOAK_ISSUER/.well-known/openid-configuration" | jq -r .issuer
+> ```
 > The chicken/egg with the redirect URI in 3a: you can deploy once to learn the
 > Cloud Run URL (step 7), then set the redirect URI + `NEXTAUTH_URL`, or map a
 > custom domain first and use that.
@@ -191,7 +196,7 @@ gcloud run deploy "$SERVICE" \
   --image "$IMAGE:$TAG" --region "$REGION" --port 8080 \
   --add-cloudsql-instances "$SQL_CONN" \
   --set-env-vars "NODE_ENV=production,AUTH_TRUST_HOST=true,\
-KEYCLOAK_ISSUER=https://<your-keycloak>/realms/<your-realm>,\
+KEYCLOAK_ISSUER=https://<your-keycloak>/auth/realms/<your-realm>,\
 KEYCLOAK_CLIENT_ID=csquared-cms,KEYCLOAK_ADMIN_CLIENT_ID=csquared-cms-admin,\
 GDRIVE_SHARED_DRIVE_ID=<id>,GDRIVE_ROOT_FOLDER_ID=<id>,EMAIL_FROM=changes@yourdomain" \
   --set-secrets "DATABASE_URL=DATABASE_URL:latest,NEXTAUTH_SECRET=NEXTAUTH_SECRET:latest,\
