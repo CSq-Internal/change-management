@@ -10,6 +10,7 @@ import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { submitChange, updateChangeStatus } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
+import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import { StatusPill, RiskPill } from "@/components/change-badges"
 import PirForm from "./pir-form"
 import AssigneesDialog from "./assignees-dialog"
@@ -74,6 +75,16 @@ export type Caps = {
   isCabMember: boolean
   canExportEvidence: boolean
   canManageAssignees: boolean
+  soleApproverIsMe: boolean
+}
+
+// Friendly labels for the five required documents (matches the request form).
+const DOC_LABEL: Record<string, string> = {
+  impact_scope: "Impact & Scope",
+  implementation_plan: "Implementation Plan",
+  testing_plan: "Testing & Validation",
+  backout_plan: "Backout Plan",
+  solution_document: "Solution Document",
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -160,6 +171,26 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
   }
 
   function handleSubmit() {
+    // Pre-validate client-side so a missing-doc/field submit shows a clear reason
+    // instead of a masked server 500. The server submitChange remains the backstop.
+    const present = new Set(change.attachments.map((d) => d.kind))
+    const missingDocs = REQUIRED_DOC_KINDS.filter((k) => !present.has(k)).map((k) => DOC_LABEL[k] ?? k)
+    const missingFields = ([
+      ["Title", change.title], ["Description", change.description],
+      ["Contact email", change.contactEmail], ["Infrastructure type", change.infrastructureType],
+      ["Planned start", change.plannedStart], ["Planned end", change.plannedEnd],
+    ] as const).filter(([, v]) => v == null || v === "").map(([k]) => k)
+    if (missingDocs.length || missingFields.length) {
+      const parts: string[] = []
+      if (missingDocs.length) parts.push(`document(s): ${missingDocs.join(", ")}`)
+      if (missingFields.length) parts.push(`field(s): ${missingFields.join(", ")}`)
+      toast({
+        title: "Can't submit yet",
+        description: `Add the missing ${parts.join(" and ")} before submitting for approval.`,
+        variant: "error",
+      })
+      return
+    }
     handleAction(
       () => submitChange(change.id),
       t(language, "detail.toast.submitted"),
@@ -192,6 +223,16 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
   }
 
   function handleStatusChange(toStatus: "implemented" | "closed" | "draft") {
+    // Implementer SoD: the sole approver can't also implement. Warn before the server
+    // round-trip (which would otherwise surface as a masked 500). Server stays authoritative.
+    if (toStatus === "implemented" && caps.soleApproverIsMe) {
+      toast({
+        title: "Can't implement this change",
+        description: "You approved it, so a different approver or an admin must implement it (separation of duties).",
+        variant: "error",
+      })
+      return
+    }
     const titleKey = `detail.toast.${toStatus}`
     const descKey = `detail.toast.${toStatus}Desc`
     handleAction(

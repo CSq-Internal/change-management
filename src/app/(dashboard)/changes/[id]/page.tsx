@@ -88,6 +88,10 @@ export default async function ChangeDetailPage({
         change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
       })
     : false
+  // Mirrors the implement-time SoD guard in updateChangeStatus: the *sole* approve-voter
+  // cannot also implement. Surfaced so the client can warn before calling the server.
+  const approveVoters = [...new Set(change.approvals.filter((a) => a.decision === "approve").map((a) => a.approverId))]
+  const soleApproverIsMe = !!meUser && approveVoters.length === 1 && approveVoters[0] === meUser.id
   const caps: Caps = {
     isRequester: change.requester.keycloakId === me.keycloakId,
     canApprove: canApproveThis,
@@ -95,6 +99,7 @@ export default async function ChangeDetailPage({
     isCabMember: isGroupAdmin(me.realmRoles),
     canExportEvidence: isGroupLevel(me.realmRoles) || canAudit(me.organizations, me.realmRoles, slug),
     canManageAssignees: (change.requester.keycloakId === me.keycloakId) || isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
+    soleApproverIsMe,
   }
 
   const assigneeCandidates = Array.from(new Map(
