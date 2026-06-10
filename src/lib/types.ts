@@ -7,7 +7,8 @@ export type InfrastructureType =
   | 'Wifi'
   | 'Internal IT Infrastructure'
   | 'Equiano IP'
-  | 'Backbone IP Network';
+  | 'Backbone IP Network'
+  | 'Power';
 export type Country = 'Uganda' | 'DRC' | 'Ghana' | 'Togo' | 'Liberia' | 'Mauritius';
 export type Permission = 'admin' | 'read' | 'write' | 'approve' | 'audit';
 

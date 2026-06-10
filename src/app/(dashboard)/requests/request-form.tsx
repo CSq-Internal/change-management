@@ -28,6 +28,7 @@ const infraTypes = [
   "Internal IT Infrastructure",
   "Equiano IP",
   "Backbone IP Network",
+  "Power",
 ] as const
 
 type MyRequest = { id: string; title: string; status: string; updatedAt: string }
@@ -435,23 +436,25 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           })}
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => save({ submit: false })}
-            disabled={isSaving}
-            className="w-full sm:w-auto"
-          >
-            {t(language, "requests.saveDraft")}
-          </Button>
-          <Button
-            onClick={() => void save({ submit: true })}
-            disabled={isSaving}
-            className="w-full sm:w-auto"
-          >
-            {t(language, "requests.submitForApproval")}
-          </Button>
-          <p className="text-xs text-muted-foreground sm:text-center sm:ml-2">{t(language, "requests.submitHint")}</p>
+        <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => save({ submit: false })}
+              disabled={isSaving}
+              className="w-full sm:w-auto"
+            >
+              {t(language, "requests.saveDraft")}
+            </Button>
+            <Button
+              onClick={() => void save({ submit: true })}
+              disabled={isSaving}
+              className="w-full sm:w-auto"
+            >
+              {t(language, "requests.submitForApproval")}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground sm:max-w-[16rem] sm:text-right">{t(language, "requests.submitHint")}</p>
         </div>
       </div>
 

@@ -17,6 +17,7 @@ const INFRA_TYPES = [
   "Wifi",
   "Internal IT Infrastructure",
   "Backbone IP Network",
+  "Power",
 ]
 
 export default async function ApprovalMatrixPage() {
