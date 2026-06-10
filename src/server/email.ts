@@ -13,7 +13,10 @@ const transporter = (smtpUser && smtpPass) ? nodemailer.createTransport({
 }) : null
 
 const isDev = process.env.NODE_ENV !== "production"
-const FROM = process.env.EMAIL_FROM ?? (isDev ? "onboarding@resend.dev" : "CSquared CMS <noreply@csquared.com>")
+// Production default sends from the Resend-verified domain (csquarednet.com). Override
+// with EMAIL_FROM. Note this is the *sender* domain — distinct from recipient addresses
+// (@csquared.com). An unverified sender domain causes Resend to drop/bounce the mail.
+const FROM = process.env.EMAIL_FROM ?? (isDev ? "onboarding@resend.dev" : "CSquared CMS <noreply@csquarednet.com>")
 const BASE = process.env.NEXTAUTH_URL ?? "http://localhost:3000"
 
 function resolveRecipient(originalTo: string) {
