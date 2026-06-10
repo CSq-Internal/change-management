@@ -13,6 +13,8 @@ export interface DashboardChange {
   plannedStart: string | null
   opcoName: string
   opcoSlug: string
+  infrastructureType: string
+  createdAt: string
   ownerInitials: string
   expedited: boolean
   retroApprovalDueAt: string | null
