@@ -1,5 +1,5 @@
 export type ChangeStatusName =
-  | "draft" | "pending" | "approved" | "rejected" | "implemented" | "verified" | "closed"
+  | "draft" | "pending" | "approved" | "rejected" | "implemented" | "verified" | "closed" | "cancelled"
 export type RiskLevelName = "low" | "medium" | "high" | "emergency"
 
 /** Serializable input row (Dates as ISO strings). page.tsx maps Prisma rows to this. */
@@ -26,7 +26,7 @@ export const RISK_ORDER: RiskLevelName[] = ["low", "medium", "high", "emergency"
 const AT_RISK_WINDOW_MS = 4 * 3600_000
 
 export function isOpen(status: ChangeStatusName): boolean {
-  return status !== "closed" && status !== "rejected"
+  return status !== "closed" && status !== "rejected" && status !== "cancelled"
 }
 
 export type SlaState = "breached" | "atRisk" | "ok" | "none"
@@ -146,7 +146,7 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
   })
 
   const zeroStatus = () =>
-    ({ draft: 0, pending: 0, approved: 0, rejected: 0, implemented: 0, verified: 0, closed: 0 }) as Record<ChangeStatusName, number>
+    ({ draft: 0, pending: 0, approved: 0, rejected: 0, implemented: 0, verified: 0, closed: 0, cancelled: 0 }) as Record<ChangeStatusName, number>
   const statusCounts = zeroStatus()
   for (const c of changes) statusCounts[c.status]++
 

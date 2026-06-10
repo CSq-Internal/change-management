@@ -23,6 +23,7 @@ enum ChangeStatus {
   implemented
   verified
   closed
+  cancelled
 }
 
 enum RiskLevel {

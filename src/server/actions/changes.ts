@@ -228,6 +228,31 @@ export async function submitChange(id: string) {
   return updated
 }
 
+// Soft-delete a draft. A change can never be hard-deleted (its AuditLog rows are
+// protected by a DB immutability trigger), so "discard" moves it to `cancelled`,
+// which drops out of the open/active views while preserving the audit trail.
+export async function discardChange(id: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
+  if (!user) throw new Error("User not found")
+
+  const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
+  if (!change) throw new Error("Change not found")
+
+  const isAdmin = isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
+  if (change.requesterId !== user.id && !isAdmin)
+    throw new Error("Forbidden: only the requester or an admin can discard this change")
+  if (change.status !== "draft") throw new Error("Only draft changes can be discarded")
+
+  const updated = await db.changeRequest.update({ where: { id }, data: { status: "cancelled" } })
+  await db.auditLog.create({
+    data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
+  })
+  return updated
+}
+
 const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {
   draft: ["pending"],
   pending: ["approved", "rejected"],

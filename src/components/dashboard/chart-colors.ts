@@ -8,5 +8,5 @@ export const RISK_HEX: Record<RiskLevelName, string> = {
 }
 export const STATUS_HEX: Record<ChangeStatusName, string> = {
   draft: "#a1a1aa", pending: "#f59e0b", approved: "#10b981", rejected: "#f43f5e",
-  implemented: "#3b82f6", verified: "#8b5cf6", closed: "#64748b",
+  implemented: "#3b82f6", verified: "#8b5cf6", closed: "#64748b", cancelled: "#d4d4d8",
 }

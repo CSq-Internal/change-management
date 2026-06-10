@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { submitChange, updateChangeStatus } from "@/server/actions/changes"
+import { submitChange, updateChangeStatus, discardChange } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import { StatusPill, RiskPill } from "@/components/change-badges"
 import PirForm from "./pir-form"
 import AssigneesDialog from "./assignees-dialog"
+import ConfirmDialog from "../../users/confirm-dialog"
 
 // ── Serialised types (Dates as ISO strings) ──────────────────────────────────
 
@@ -126,6 +127,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
   const [isActing, setIsActing] = useState(false)
   const [comment, setComment] = useState("")
   const [assigneesOpen, setAssigneesOpen] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
 
   // ── Action gating ─────────────────────────────────────────────────────────
   const awaitingRetro = change.status === "implemented" && change.expedited && !change.retroApprovedAt
@@ -144,6 +146,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
       (caps.canApprove || caps.isAdmin),
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
+    discard: change.status === "draft" && (caps.isRequester || caps.isAdmin),
   }
   const hasActions = Object.values(a).some(Boolean)
 
@@ -196,6 +199,20 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
       t(language, "detail.toast.submitted"),
       t(language, "detail.toast.submittedDesc")
     )
+  }
+
+  async function handleDiscard() {
+    setIsActing(true)
+    try {
+      await discardChange(change.id)
+      toast({ title: "Draft discarded", description: "The change has been cancelled.", variant: "success" })
+      router.push("/requests")
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "An error occurred", variant: "error" })
+    } finally {
+      setIsActing(false)
+      setConfirmDiscard(false)
+    }
   }
 
   function handleApprove() {
@@ -437,6 +454,17 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
             onClose={() => setAssigneesOpen(false)}
           />
         )}
+        {confirmDiscard && (
+          <ConfirmDialog
+            title="Discard this draft?"
+            body="The change will be cancelled and removed from active lists. Its audit trail is kept. This can't be undone."
+            confirmLabel="Discard"
+            cancelLabel="Cancel"
+            pending={isActing}
+            onConfirm={handleDiscard}
+            onCancel={() => setConfirmDiscard(false)}
+          />
+        )}
 
         {/* Approvals */}
         {change.approvals.length > 0 && (
@@ -517,6 +545,17 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
               >
                 {t(language, "detail.edit")}
               </Link>
+            )}
+
+            {a.discard && (
+              <Button
+                className="w-full"
+                variant="outline"
+                disabled={isPending || isActing}
+                onClick={() => setConfirmDiscard(true)}
+              >
+                Discard Draft
+              </Button>
             )}
 
             {a.approve && (

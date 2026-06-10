@@ -52,7 +52,7 @@ vi.mock('@/server/db', () => ({
 
 vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
 
-import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange } from '@/server/actions/changes'
+import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
 import { notifyEvent } from '@/server/notify'
 
@@ -440,5 +440,24 @@ describe('updateChange', () => {
     // change.requesterId is 'user-1', not 'user-ga', but groupAdminSession has group_admin role
     const result = await updateChange('cr-1', { title: 'Admin edit' })
     expect(result).toHaveProperty('title', 'Admin edit')
+  })
+})
+
+describe('discardChange', () => {
+  it('cancels a draft and writes an audit row', async () => {
+    await discardChange('cr-1')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-1' }, data: { status: 'cancelled' },
+    })
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'cancelled', toStatus: 'cancelled' }) })
+    )
+  })
+
+  it('refuses to discard a non-draft change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'approved', opcoId: 'opco-1', requesterId: 'user-1', opco: { slug: 'ghana' },
+    })
+    await expect(discardChange('cr-1')).rejects.toThrow(/Only draft/)
   })
 })

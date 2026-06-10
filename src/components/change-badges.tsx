@@ -6,6 +6,7 @@ const STATUS_COLORS: Record<string, string> = {
   implemented: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   verified: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300",
   closed: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  cancelled: "bg-zinc-100 text-zinc-500 line-through dark:bg-zinc-800 dark:text-zinc-400",
 }
 const RISK_COLORS: Record<string, string> = {
   low: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
