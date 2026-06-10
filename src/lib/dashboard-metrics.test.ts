@@ -33,6 +33,7 @@ export function fixture(): DashboardChange[] {
     id, title, opcoName, opcoSlug, status, riskLevel, isEmergency, ownerInitials,
     slaDeadline: slaH === null ? null : iso(slaH),
     plannedStart: planH === null ? null : iso(planH),
+    infrastructureType: "Backbone IP Network", createdAt: iso(-72),
     expedited: false, retroApprovalDueAt: null, retroApprovedAt: null,
   })
   return [
@@ -110,7 +111,8 @@ it("counts overdue emergency retrospective reviews", () => {
   const now = Date.parse("2026-06-06T12:00:00Z")
   const mk = (over: { id: string; due: string | null; approved: string | null }): DashboardChange => ({
     id: over.id, title: "e", status: "implemented", riskLevel: "emergency", isEmergency: true,
-    slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana", ownerInitials: "X",
+    slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana",
+    infrastructureType: "Backbone IP Network", createdAt: iso(-72), ownerInitials: "X",
     expedited: true, retroApprovalDueAt: over.due, retroApprovedAt: over.approved,
   })
   const changes = [
@@ -127,6 +129,7 @@ it("labels a pending change with no SLA deadline instead of rendering NaN", () =
   const change: DashboardChange = {
     id: "no-sla", title: "Backbone route update", status: "pending", riskLevel: "medium",
     isEmergency: false, slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana",
+    infrastructureType: "Backbone IP Network", createdAt: iso(-72),
     ownerInitials: "DR", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null,
   }
   const item = buildDashboardData([change], now).triage.awaiting[0]

@@ -38,7 +38,7 @@ export default async function Home() {
       where: opcoFilter,
       select: {
         id: true, title: true, status: true, riskLevel: true, isEmergency: true,
-        slaDeadline: true, plannedStart: true, expedited: true, retroApprovalDueAt: true, retroApprovedAt: true,
+        slaDeadline: true, plannedStart: true, infrastructureType: true, createdAt: true, expedited: true, retroApprovalDueAt: true, retroApprovedAt: true,
         opco: { select: { name: true, slug: true } },
         requester: { select: { name: true, email: true } },
       },
@@ -60,6 +60,8 @@ export default async function Home() {
     slaDeadline: r.slaDeadline?.toISOString() ?? null,
     plannedStart: r.plannedStart?.toISOString() ?? null,
     opcoName: r.opco.name, opcoSlug: r.opco.slug,
+    infrastructureType: r.infrastructureType,
+    createdAt: r.createdAt.toISOString(),
     ownerInitials: initials(r.requester.name, r.requester.email),
     expedited: r.expedited,
     retroApprovalDueAt: r.retroApprovalDueAt?.toISOString() ?? null,

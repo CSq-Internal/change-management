@@ -9,11 +9,11 @@ const now = Date.parse("2026-06-02T09:00:00Z")
 const iso = (h: number) => new Date(now + h * 3600_000).toISOString()
 
 const changes: DashboardChange[] = [
-  { id: "CHG-1", title: "Core router OS patch", status: "pending", riskLevel: "high", isEmergency: false, slaDeadline: iso(-1.5), plannedStart: iso(30), opcoName: "Liberia", opcoSlug: "liberia", ownerInitials: "JG", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
-  { id: "CHG-2", title: "BGP peering change", status: "pending", riskLevel: "high", isEmergency: false, slaDeadline: iso(1), plannedStart: iso(26), opcoName: "Ghana", opcoSlug: "ghana", ownerInitials: "KO", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
-  { id: "CHG-3", title: "DWDM card replacement", status: "approved", riskLevel: "high", isEmergency: false, slaDeadline: iso(6), plannedStart: iso(14), opcoName: "Uganda", opcoSlug: "uganda", ownerInitials: "SN", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
-  { id: "CHG-4", title: "Submarine cable maintenance", status: "approved", riskLevel: "emergency", isEmergency: true, slaDeadline: iso(0.4), plannedStart: iso(9), opcoName: "Mauritius", opcoSlug: "mauritius", ownerInitials: "RB", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
-  { id: "CHG-5", title: "Power redundancy test", status: "closed", riskLevel: "low", isEmergency: false, slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana", ownerInitials: "AM", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
+  { id: "CHG-1", title: "Core router OS patch", status: "pending", riskLevel: "high", isEmergency: false, slaDeadline: iso(-1.5), plannedStart: iso(30), opcoName: "Liberia", opcoSlug: "liberia", infrastructureType: "Backbone IP Network", createdAt: iso(-48), ownerInitials: "JG", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
+  { id: "CHG-2", title: "BGP peering change", status: "pending", riskLevel: "high", isEmergency: false, slaDeadline: iso(1), plannedStart: iso(26), opcoName: "Ghana", opcoSlug: "ghana", infrastructureType: "Backbone IP Network", createdAt: iso(-40), ownerInitials: "KO", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
+  { id: "CHG-3", title: "DWDM card replacement", status: "approved", riskLevel: "high", isEmergency: false, slaDeadline: iso(6), plannedStart: iso(14), opcoName: "Uganda", opcoSlug: "uganda", infrastructureType: "Equiano Optics", createdAt: iso(-30), ownerInitials: "SN", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
+  { id: "CHG-4", title: "Submarine cable maintenance", status: "approved", riskLevel: "emergency", isEmergency: true, slaDeadline: iso(0.4), plannedStart: iso(9), opcoName: "Mauritius", opcoSlug: "mauritius", infrastructureType: "Equiano Optics", createdAt: iso(-20), ownerInitials: "RB", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
+  { id: "CHG-5", title: "Power redundancy test", status: "closed", riskLevel: "low", isEmergency: false, slaDeadline: null, plannedStart: null, opcoName: "Ghana", opcoSlug: "ghana", infrastructureType: "Power", createdAt: iso(-10), ownerInitials: "AM", expedited: false, retroApprovalDueAt: null, retroApprovedAt: null },
 ]
 
 const props = {
