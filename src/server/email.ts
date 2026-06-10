@@ -26,12 +26,22 @@ function resolveRecipient(originalTo: string) {
 async function dispatchEmail(to: string, subject: string, html: string) {
   const recipient = resolveRecipient(to)
   if (resend) {
-    await resend.emails.send({ from: FROM, to: recipient, subject, html })
+    // Resend returns { data, error } and does NOT throw on API failures (e.g. an
+    // unverified sender domain or a test-mode key), so the error must be inspected
+    // explicitly — otherwise failed sends look successful. Log, don't throw, so a
+    // mail problem never breaks the calling flow (sends are best-effort).
+    const { data, error } = await resend.emails.send({ from: FROM, to: recipient, subject, html })
+    if (error) {
+      console.error(`[email] Resend rejected message to ${recipient}: ${error.name ?? "Error"} — ${error.message ?? JSON.stringify(error)}`)
+      return
+    }
+    console.log(`[email] sent via Resend to ${recipient} (id=${data?.id ?? "?"}): ${subject}`)
   } else if (transporter) {
     const sender = isDev && smtpUser ? smtpUser : FROM
-    await transporter.sendMail({ from: sender, to: recipient, subject, html })
+    const info = await transporter.sendMail({ from: sender, to: recipient, subject, html })
+    console.log(`[email] sent via SMTP to ${recipient} (id=${info.messageId}): ${subject}`)
   } else {
-    console.log(`[Email Mock] To: ${recipient} | Subject: ${subject}`)
+    console.warn(`[email] no transport configured — set RESEND_API_KEY (and a verified EMAIL_FROM) or SMTP_USER+APP_PASSWORD. Mocked send to ${recipient}: ${subject}`)
   }
 }
 
