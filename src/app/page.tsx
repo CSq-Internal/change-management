@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel } from "@/lib/permissions"
 import { runDueEscalations } from "@/server/sla"
-import { buildDashboardData, durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
+import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
 import type { FeedEvent } from "@/components/dashboard/monitor-view"
 
@@ -68,7 +68,10 @@ export default async function Home() {
     retroApprovedAt: r.retroApprovedAt?.toISOString() ?? null,
   }))
 
-  const data = buildDashboardData(changes, now)
+  const infraOptions = [...new Set(changes.map((c) => c.infrastructureType))].sort()
+  const opcoOptions = [...new Map(changes.map((c) => [c.opcoSlug, c.opcoName])).entries()]
+    .map(([slug, name]) => ({ slug, name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const blackouts = blackoutRows.map((b) => ({
     id: b.id, label: b.label, scope: b.opco?.name ?? "Group",
@@ -83,5 +86,15 @@ export default async function Home() {
     tone: FEED_TONE[a.action] ?? "bg-slate-400",
   }))
 
-  return <DashboardClient data={data} blackouts={blackouts} feed={feed} blackoutCount={blackouts.length} />
+  return (
+    <DashboardClient
+      changes={changes}
+      now={now}
+      infraOptions={infraOptions}
+      opcoOptions={opcoOptions}
+      blackouts={blackouts}
+      feed={feed}
+      blackoutCount={blackouts.length}
+    />
+  )
 }

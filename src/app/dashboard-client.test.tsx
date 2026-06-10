@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest"
 import { render, screen, fireEvent, cleanup } from "@testing-library/react"
 import DashboardClient from "@/app/dashboard-client"
-import { buildDashboardData, type DashboardChange } from "@/lib/dashboard-metrics"
+import { type DashboardChange } from "@/lib/dashboard-metrics"
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); localStorage.clear() })
 
 const now = Date.parse("2026-06-02T09:00:00Z")
 const iso = (h: number) => new Date(now + h * 3600_000).toISOString()
@@ -17,7 +17,11 @@ const changes: DashboardChange[] = [
 ]
 
 const props = {
-  data: buildDashboardData(changes, now),
+  changes,
+  now,
+  infraOptions: [...new Set(changes.map((c) => c.infrastructureType))].sort(),
+  opcoOptions: [...new Map(changes.map((c) => [c.opcoSlug, c.opcoName])).entries()]
+    .map(([slug, name]) => ({ slug, name })),
   blackouts: [{ id: "b1", label: "Year-end freeze", scope: "Group", endsIn: "2d", amber: false }],
   feed: [{ id: "f1", changeId: "CHG-1", label: "submitted", actor: "S. Nakato", ago: "8m ago", tone: "bg-amber-500" }],
   blackoutCount: 1,
@@ -27,7 +31,9 @@ describe("DashboardClient", () => {
   it("renders the Triage worklist by default with an overdue change", () => {
     render(<DashboardClient {...props} />)
     expect(screen.getByText("Your worklist")).toBeInTheDocument()
-    expect(screen.getByText("Core router OS patch")).toBeInTheDocument()
+    // "Core router OS patch" now renders in both the Triage worklist and the
+    // (collapsed but DOM-present) matching list, so allow more than one match.
+    expect(screen.getAllByText("Core router OS patch").length).toBeGreaterThan(0)
   })
 
   it("switches to the Report tab and renders distributions", () => {
@@ -41,5 +47,12 @@ describe("DashboardClient", () => {
     render(<DashboardClient {...props} />)
     fireEvent.click(screen.getByRole("button", { name: /Monitor/ }))
     expect(screen.getByText("Live activity")).toBeInTheDocument()
+  })
+
+  it("narrows the matching list when a risk filter is applied", () => {
+    render(<DashboardClient {...props} />)
+    expect(screen.getByText("Matching changes · 5")).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText("emergency"))
+    expect(screen.getByText("Matching changes · 1")).toBeInTheDocument()
   })
 })
