@@ -24,6 +24,15 @@ const SEVERITY_RING: Record<string, string> = {
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+function formatDayLabel(key: string, language: string): string {
+  const [y, m, d] = key.split("-").map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
+}
+
 export default function CalendarClient({
   monthLabel, prevMonth, nextMonth, cells, chips,
 }: {
@@ -42,6 +51,7 @@ export default function CalendarClient({
     chipsByDay.set(c.day, arr)
   }
   for (const arr of chipsByDay.values()) arr.sort((a, b) => a.startMs - b.startMs)
+  const agenda = [...chipsByDay.entries()].sort(([a], [b]) => a.localeCompare(b))
 
   const onDrop = (dayKey: string) => {
     const chip = chips.find((c) => c.id === dragId)
@@ -81,7 +91,7 @@ export default function CalendarClient({
         </div>
       </div>
 
-      <Card className="border-border/80 bg-card/95">
+      <Card className="hidden border-border/80 bg-card/95 sm:block">
         <CardContent className="p-3">
           <div className="grid grid-cols-7 gap-px text-xs font-medium text-muted-foreground">
             {WEEKDAYS.map((w) => (<div key={w} className="px-2 py-1">{w}</div>))}
@@ -125,6 +135,39 @@ export default function CalendarClient({
           </div>
         </CardContent>
       </Card>
+
+      {/* Mobile agenda: chronological list of this month's changes (the 7-col grid is unusable at phone width) */}
+      <div className="space-y-4 sm:hidden">
+        {agenda.length === 0 ? (
+          <Card className="border-border/80 bg-card/95">
+            <CardContent className="p-4 text-sm text-muted-foreground">{t(language, "calendar.empty")}</CardContent>
+          </Card>
+        ) : (
+          agenda.map(([dayKey, dayChips]) => (
+            <div key={dayKey} className="space-y-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">{formatDayLabel(dayKey, language)}</h2>
+              <div className="space-y-1.5">
+                {dayChips.map((chip) => (
+                  <Link
+                    key={chip.id}
+                    href={`/changes/${chip.id}`}
+                    className="block rounded-md border border-border bg-card p-2.5 hover:bg-muted/40"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      {chip.blackout && <span title={t(language, "calendar.conflict.blackout")}>🚫</span>}
+                      {chip.overlap && <span title={t(language, "calendar.conflict.overlap")}>⚠</span>}
+                      <span className="font-medium">{chip.title}</span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {chip.timeLabel} · {chip.opcoName}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }
