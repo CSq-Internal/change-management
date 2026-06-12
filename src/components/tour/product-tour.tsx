@@ -54,9 +54,13 @@ export default function ProductTour() {
       start()
     }
 
+    // Intentionally do NOT destroy the tour on cleanup. React Strict Mode (dev)
+    // double-invokes effects (run → cleanup → run); destroying here would tear down
+    // the auto-started tour before it's seen, and the seen-flag would already be set
+    // so it wouldn't restart. ProductTour lives in AppShell for the whole authenticated
+    // session, so there is no real mid-tour unmount to clean up.
     return () => {
       window.removeEventListener(START_EVENT, onStart)
-      driverRef.current?.destroy()
     }
   }, [session, language])
 
