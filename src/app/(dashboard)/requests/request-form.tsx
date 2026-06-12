@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
 import { StatusPill } from "@/components/change-badges"
-import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
+import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import type { AttachmentKind } from "@prisma/client"
 
@@ -145,7 +145,9 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
       return
     }
     if (submit) {
-      const missingDocs = REQUIRED_DOC_KINDS.filter((k) => !stagedFiles[k] && !uploadedByKind[k])
+      const missingDocs = documentsRequiredForRisk(riskLevel)
+        ? REQUIRED_DOC_KINDS.filter((k) => !stagedFiles[k] && !uploadedByKind[k])
+        : []
       if (missingDocs.length > 0 || !plannedStart || !plannedEnd) {
         toast({
           title: t(language, "requests.toast.docMissing"),
@@ -412,6 +414,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
                 key={kind}
                 kind={kind}
                 label={t(language, DOC_LABEL_KEY[kind])}
+                required={documentsRequiredForRisk(riskLevel)}
                 hasSummary={Boolean(summary)}
                 summaryValue={summary?.value}
                 summaryPlaceholder={summary?.placeholder}

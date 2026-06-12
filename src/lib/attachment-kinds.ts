@@ -10,3 +10,9 @@ export const REQUIRED_DOC_KINDS: AttachmentKind[] = [
   "backout_plan",
   "solution_document",
 ]
+
+// The required documents are only mandatory for high-risk changes and above
+// (high, emergency). Low/medium-risk changes may be submitted without them.
+export function documentsRequiredForRisk(riskLevel: string): boolean {
+  return riskLevel === "high" || riskLevel === "emergency"
+}

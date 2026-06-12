@@ -374,7 +374,20 @@ describe('submitChange', () => {
     expect(result).toHaveProperty('status', 'pending')
   })
 
-  it('rejects submit when a required document is missing', async () => {
+  it('rejects submit when a required document is missing on a high-risk change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+      riskLevel: 'high', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network',
+      plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+      isEmergency: false,
+      attachments: [{ kind: 'impact_scope' }], // only 1 of 5
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/required document/i)
+  })
+
+  it('allows submit without documents for a low-risk change', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValueOnce({
       id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
       opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
@@ -382,9 +395,10 @@ describe('submitChange', () => {
       infrastructureType: 'Backbone IP Network',
       plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
       isEmergency: false,
-      attachments: [{ kind: 'impact_scope' }], // only 1 of 5
+      attachments: [], // no documents — allowed for low risk
     })
-    await expect(submitChange('cr-1')).rejects.toThrow(/required document/i)
+    const result = await submitChange('cr-1')
+    expect(result).toHaveProperty('status', 'pending')
   })
 
   it('rejects submit when planned dates are missing', async () => {

@@ -11,6 +11,8 @@ import type { AttachmentKind } from "@prisma/client"
 interface Props {
   kind: AttachmentKind
   label: string
+  /** Whether this document is mandatory for submission (drives the required asterisk). */
+  required?: boolean
   hasSummary?: boolean
   summaryValue?: string
   summaryPlaceholder?: string
@@ -29,6 +31,7 @@ function isAcceptedExtension(filename: string): boolean {
 
 export default function DocumentSection({
   label,
+  required = true,
   hasSummary = true,
   summaryValue = "",
   summaryPlaceholder,
@@ -65,7 +68,12 @@ export default function DocumentSection({
   return (
     <div className="rounded-lg border border-border/80 bg-card/95 p-4 space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
-        {label} <span className="text-rose-600">*</span>
+        {label}{" "}
+        {required ? (
+          <span className="text-rose-600">*</span>
+        ) : (
+          <span className="text-xs font-normal text-muted-foreground">{t(language, "requests.optional")}</span>
+        )}
       </div>
 
       {hasSummary && (
