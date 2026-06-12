@@ -292,7 +292,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         </Card>
 
         {infrastructureType && (
-          <Card className="border-emerald-300/70 bg-emerald-50/60">
+          <Card className="border-emerald-300/70 bg-emerald-50/60 dark:border-emerald-800/50 dark:bg-emerald-950/40">
             <CardHeader>
               <CardTitle className="text-base">{t(language, "requests.approverRouting")}</CardTitle>
               <CardDescription>{t(language, "requests.approverRoutingHint")}</CardDescription>
