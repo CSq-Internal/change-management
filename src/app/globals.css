@@ -127,3 +127,35 @@
   .safe-top { padding-top: env(safe-area-inset-top); }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* Product tour (driver.js) popover — themed via app CSS variables (light + dark). */
+.driver-popover.csq-tour {
+  background-color: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+.driver-popover.csq-tour .driver-popover-title {
+  font-weight: 600;
+  color: var(--foreground);
+}
+.driver-popover.csq-tour .driver-popover-description {
+  color: var(--muted-foreground);
+}
+.driver-popover.csq-tour .driver-popover-progress-text {
+  color: var(--muted-foreground);
+}
+.driver-popover.csq-tour .driver-popover-arrow {
+  color: var(--card);
+}
+.driver-popover.csq-tour button.driver-popover-next-btn {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  text-shadow: none;
+  border: none;
+  border-radius: 0.5rem;
+}
+.driver-popover.csq-tour button.driver-popover-prev-btn {
+  color: var(--foreground);
+  text-shadow: none;
+}

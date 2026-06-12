@@ -27,6 +27,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "dayjs": "^1.11.21",
+    "driver.js": "^1.4.0",
     "framer-motion": "^12.40.0",
     "google-auth-library": "^10.6.2",
     "lucide-react": "^1.17.0",
