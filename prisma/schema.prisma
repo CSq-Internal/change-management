@@ -6,10 +6,13 @@ datasource db {
   provider = "postgresql"
 }
 
-enum RiskLevel {
-  low
-  medium
-  high
+enum Role {
+  requester
+  approver
+  auditor
+  admin
+  group_admin
+  group_auditor
 }
 
 enum ChangeStatus {
@@ -20,87 +23,409 @@ enum ChangeStatus {
   implemented
   verified
   closed
+  cancelled
 }
 
-enum Role {
-  requester
-  approver
-  auditor
-  admin
+enum RiskLevel {
+  low
+  medium
+  high
+  emergency
+}
+
+enum ChangeCategory {
+  config
+  infrastructure
+  software
+  process
+}
+
+enum TeamRole {
+  lead
+  member
+}
+
+enum AttachmentKind {
+  impact_scope
+  implementation_plan
+  testing_plan
+  backout_plan
+  solution_document
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      Role     @default(requester)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  // relationships
-  requests  ChangeRequest[] @relation("UserRequests")
-  approvals Approval[]
-  audits    AuditLog[]
-  assignments UserAssignment[]
+  id           String   @id @default(cuid())
+  keycloakId   String   @unique
+  email        String   @unique
+  name         String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  opcoAssignments UserOpCoAssignment[]
+  requests        ChangeRequest[]      @relation("Requester")
+  approvals       Approval[]
+  auditEntries    AuditLog[]
+  delegationsFrom ApproverDelegation[] @relation("DelegatedBy")
+  delegationsTo   ApproverDelegation[] @relation("DelegatedTo")
+  cabMemberships       CABMembership[]
+  adminActions         AdminAuditLog[]      @relation("AdminActor")
+  uploadedAttachments  Attachment[]         @relation("UploadedAttachments")
+  implementedChanges   ChangeRequest[]            @relation("Implementer")
+  pirReviews           PostImplementationReview[] @relation("PirAuthor")
+  risksAuthored        RiskRegister[]             @relation("RiskAuthor")
+  notifications        Notification[]             @relation("UserNotifications")
+  notifPrefs           NotificationPreference[]   @relation("UserNotifPrefs")
+  chatWebhooks         ChatWebhook[]              @relation("ChatWebhookAuthor")
+  approverAssignments  ApproverAssignment[]       @relation("ApproverAssignments")
+  changeAssignments    ChangeAssignee[]           @relation("ChangeAssignments")
+}
+
+model OpCo {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  locale        String   @default("en")
+  keycloakOrgId String   @unique
+  createdAt     DateTime @default(now())
+
+  users      UserOpCoAssignment[]
+  changes    ChangeRequest[]
+  teams      Team[]
+  blackouts  BlackoutPeriod[]
+  cab        CABMembership[]
+  risks      RiskRegister[]
+  chatWebhooks ChatWebhook[]
+  archivedAt DateTime?
+  approverAssignments ApproverAssignment[]
+}
+
+model UserOpCoAssignment {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  opcoId    String
+  opco      OpCo      @relation(fields: [opcoId], references: [id])
+  role      Role
+  isActive  Boolean   @default(true)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  @@unique([userId, opcoId])
+  @@index([opcoId])
+  @@index([userId])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  opcoId      String
+  opco        OpCo     @relation(fields: [opcoId], references: [id])
+  name        String
+  description String?
+  planSummary String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members TeamMember[]
+
+  @@index([opcoId])
+}
+
+model TeamMember {
+  id     String   @id @default(cuid())
+  teamId String
+  team   Team     @relation(fields: [teamId], references: [id])
+  userId String
+  role   TeamRole @default(member)
+
+  @@unique([teamId, userId])
 }
 
 model ChangeRequest {
-  id           String        @id @default(cuid())
-  title        String
-  description  String
-  category     String
-  riskLevel    RiskLevel     @default(medium)
-  status       ChangeStatus  @default(pending)
-  requesterId  String
-  requester    User          @relation("UserRequests", fields: [requesterId], references: [id])
-  assignees    UserAssignment[]
-  plannedStart DateTime?
-  plannedEnd   DateTime?
-  backoutPlan  String?
-  approvals    Approval[]
-  attachments  Attachment[]
-  auditTrail   AuditLog[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String         @id @default(cuid())
+  reference          Int            @unique @default(autoincrement())
+  opcoId             String
+  opco               OpCo           @relation(fields: [opcoId], references: [id])
+  title              String
+  description        String
+  category           ChangeCategory
+  riskLevel          RiskLevel
+  status             ChangeStatus   @default(draft)
+  isEmergency        Boolean        @default(false)
+  requesterId        String
+  requester          User           @relation("Requester", fields: [requesterId], references: [id])
+
+  contactEmail       String
+  infrastructureType String
+  changeReason       String?
+  impactScope        String?
+  implementationPlan String?
+  testingPlan        String?
+  backoutPlan        String?
+  changeWindow       String?
+  plannedStart       DateTime?
+  plannedEnd         DateTime?
+  slaDeadline        DateTime?
+  driveFolderId      String?
+  implementedById    String?
+  implementedBy      User?     @relation("Implementer", fields: [implementedById], references: [id])
+  implementedAt      DateTime?
+  expedited          Boolean   @default(false)
+  retroApprovalDueAt DateTime?
+  retroApprovedAt    DateTime?
+  escalationLevel    Int       @default(0)   // 0 none · 1 OpCo admin notified · 2 group notified
+  lastEscalatedAt    DateTime?
+  pir                PostImplementationReview?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  assignees   ChangeAssignee[]
+  approvals   Approval[]
+  auditTrail  AuditLog[]
+  attachments Attachment[]
+
+  @@index([opcoId])
+  @@index([requesterId])
+  @@index([status])
 }
 
-model UserAssignment {
-  id        String        @id @default(cuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id])
-  changeId  String
-  change    ChangeRequest @relation(fields: [changeId], references: [id])
-  createdAt DateTime      @default(now())
+model ChangeAssignee {
+  id       String        @id @default(cuid())
+  changeId String
+  change   ChangeRequest @relation(fields: [changeId], references: [id])
+  userId   String
+  user     User          @relation("ChangeAssignments", fields: [userId], references: [id])
+  role     AssigneeRole  @default(implementer)
+
+  @@unique([changeId, userId])
+}
+
+model ApproverAssignment {
+  id                 String   @id @default(cuid())
+  infrastructureType String
+  opcoId             String?
+  opco               OpCo?    @relation(fields: [opcoId], references: [id])
+  userId             String
+  user               User     @relation("ApproverAssignments", fields: [userId], references: [id])
+  isActive           Boolean  @default(true)
+  createdById        String
+  createdAt          DateTime @default(now())
+
+  @@unique([infrastructureType, opcoId, userId])
+  @@index([infrastructureType, opcoId])
+  @@index([userId])
+}
+
+enum AssigneeRole {
+  approver
+  implementer
 }
 
 model Approval {
   id         String        @id @default(cuid())
   changeId   String
   change     ChangeRequest @relation(fields: [changeId], references: [id])
-  byId       String
-  by         User          @relation(fields: [byId], references: [id])
-  decision   String // approve | reject
+  approverId String
+  approver   User          @relation(fields: [approverId], references: [id])
+  decision   String
   comment    String?
+  isCab      Boolean       @default(false)
   decidedAt  DateTime      @default(now())
+
+  @@index([changeId])
+}
+
+model ApproverDelegation {
+  id         String   @id @default(cuid())
+  opcoId     String?
+  fromUserId String
+  fromUser   User     @relation("DelegatedBy", fields: [fromUserId], references: [id])
+  toUserId   String
+  toUser     User     @relation("DelegatedTo", fields: [toUserId], references: [id])
+  validFrom  DateTime @default(now())
+  validUntil DateTime
+  isActive   Boolean  @default(true)
+
+  @@index([opcoId])
+  @@index([toUserId])
 }
 
 model AuditLog {
-  id        String        @id @default(cuid())
-  changeId  String
-  change    ChangeRequest @relation(fields: [changeId], references: [id])
-  byId      String
-  by        User          @relation(fields: [byId], references: [id])
-  action    String
-  note      String?
-  at        DateTime      @default(now())
+  id         String        @id @default(cuid())
+  changeId   String
+  change     ChangeRequest @relation(fields: [changeId], references: [id])
+  actorId    String
+  actor      User          @relation(fields: [actorId], references: [id])
+  action     String
+  fromStatus ChangeStatus?
+  toStatus   ChangeStatus?
+  note       String?
+  metadata   Json?
+  at         DateTime      @default(now())
+
+  @@index([changeId])
+  @@index([actorId])
 }
 
 model Attachment {
-  id        String        @id @default(cuid())
-  changeId  String
-  change    ChangeRequest @relation(fields: [changeId], references: [id])
-  filename  String
-  url       String
-  mimeType  String?
-  sizeBytes Int?
-  uploadedAt DateTime     @default(now())
+  id           String         @id @default(cuid())
+  changeId     String
+  change       ChangeRequest  @relation(fields: [changeId], references: [id])
+  kind         AttachmentKind
+  filename     String
+  storageKey   String         // Google Drive file ID
+  mimeType     String?
+  sizeBytes    Int?
+  uploadedById String
+  uploadedBy   User           @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+  uploadedAt   DateTime       @default(now())
+
+  @@unique([changeId, kind])
+  @@index([changeId])
+}
+
+model BlackoutPeriod {
+  id          String    @id @default(cuid())
+  opcoId      String?
+  opco        OpCo?     @relation(fields: [opcoId], references: [id])
+  label       String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  @@index([opcoId])
+}
+
+model CABMembership {
+  id       String    @id @default(cuid())
+  userId   String
+  user     User      @relation(fields: [userId], references: [id])
+  opcoId   String?
+  opco     OpCo?     @relation(fields: [opcoId], references: [id])
+  isActive Boolean   @default(true)
+  addedAt  DateTime  @default(now())
+  endedAt  DateTime?
+
+  @@unique([userId, opcoId])
+  @@index([opcoId])
+  @@index([userId])
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  actor        User     @relation("AdminActor", fields: [actorId], references: [id])
+  action       String
+  opcoId       String?
+  targetUserId String?
+  summary      String
+  metadata     Json?
+  at           DateTime @default(now())
+
+  @@index([opcoId])
+  @@index([actorId])
+  @@index([targetUserId])
+  @@index([at])
+}
+
+enum PirOutcome {
+  success
+  partial
+  failed
+}
+
+model PostImplementationReview {
+  id          String        @id @default(cuid())
+  changeId    String        @unique
+  change      ChangeRequest @relation(fields: [changeId], references: [id])
+  outcome     PirOutcome
+  summary     String
+  backoutUsed Boolean       @default(false)
+  authorId    String
+  author      User          @relation("PirAuthor", fields: [authorId], references: [id])
+  createdAt   DateTime      @default(now())
+
+  @@index([changeId])
+}
+
+enum RiskCategory {
+  operational
+  security
+  compliance
+  technical
+}
+
+enum RiskStatus {
+  open
+  mitigating
+  closed
+}
+
+model RiskRegister {
+  id             String       @id @default(cuid())
+  title          String
+  description    String
+  category       RiskCategory
+  likelihood     Int
+  impact         Int
+  owner          String
+  mitigationPlan String?
+  status         RiskStatus   @default(open)
+  reviewDate     DateTime?
+  opcoId         String?
+  opco           OpCo?        @relation(fields: [opcoId], references: [id])
+  createdById    String
+  createdBy      User         @relation("RiskAuthor", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([opcoId])
+  @@index([status])
+}
+
+enum NotificationChannel {
+  email
+  in_app
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserNotifications", fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  changeId  String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation("UserNotifPrefs", fields: [userId], references: [id])
+  eventType String
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+
+  @@unique([userId, eventType, channel])
+  @@index([userId])
+}
+
+model ChatWebhook {
+  id          String   @id @default(cuid())
+  opcoId      String?
+  opco        OpCo?    @relation(fields: [opcoId], references: [id])
+  url         String
+  isActive    Boolean  @default(true)
+  createdById String
+  createdBy   User     @relation("ChatWebhookAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([opcoId])
 }

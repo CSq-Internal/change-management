@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Implementation Plan — Change Lifecycle Repair + Detail Hub</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e5e9f0;
+    --accent:#2563eb; --accent-soft:#eff6ff; --green:#16a34a; --amber:#b45309; --rose:#e11d48;
+    --code-bg:#0f172a; --code-ink:#e2e8f0; --code-key:#7dd3fc; --code-str:#86efac; --code-com:#64748b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  .layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:0;max-width:1180px;margin:0 auto}
+  /* TOC */
+  nav.toc{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:28px 18px;border-right:1px solid var(--line);font-size:13px}
+  nav.toc .label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:18px 0 8px}
+  nav.toc a{display:block;color:var(--muted);padding:4px 0;border-radius:6px}
+  nav.toc a:hover{color:var(--accent)}
+  main{padding:40px 36px 120px;min-width:0}
+  header.plan{border-bottom:3px solid var(--accent);padding-bottom:18px;margin-bottom:24px}
+  h1{font-size:27px;line-height:1.2;margin:6px 0 12px}
+  h2{font-size:21px;margin:42px 0 12px;padding-top:16px;border-top:1px solid var(--line)}
+  h3{font-size:16.5px;margin:20px 0 8px}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  code{background:#eef2f7;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .pill{font-size:12px;font-weight:600;border-radius:999px;padding:4px 12px;border:1px solid var(--line);background:#fff;color:var(--muted)}
+  .pill.accent{background:var(--accent-soft);border-color:#bfdbfe;color:var(--accent)}
+  .pill.ok{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin:16px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .callout{background:var(--accent-soft);border:1px solid #bfdbfe;border-left:4px solid var(--accent);border-radius:8px;padding:12px 16px;margin:14px 0;font-size:14px}
+  .warn{background:#fffbeb;border:1px solid #fde68a;border-left:4px solid var(--amber);border-radius:8px;padding:12px 16px;margin:14px 0;font-size:14px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f1f5f9;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  td code{font-size:12px}
+  pre{background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:16px 18px;overflow:auto;
+    font:12.7px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;margin:12px 0}
+  pre .c{color:var(--code-com)} pre .k{color:var(--code-key)} pre .s{color:var(--code-str)}
+  .filechip{display:inline-block;font:12px ui-monospace,Menlo,monospace;background:#f1f5f9;border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0}
+  .new{border-color:#a7f3d0;background:#ecfdf5;color:#047857}
+  .mod{border-color:#fde68a;background:#fffbeb;color:#b45309}
+  details{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:#fff;overflow:hidden}
+  details>summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:13.5px;background:#f8fafc;list-style:none}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary:before{content:"▸ ";color:var(--muted)}
+  details[open]>summary:before{content:"▾ "}
+  details .body{padding:4px 16px 14px}
+  .step{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-size:14px}
+  .chk{flex:none;width:16px;height:16px;border:2px solid #94a3b8;border-radius:4px;margin-top:3px}
+  .task-h{display:flex;align-items:center;gap:10px}
+  .tasknum{flex:none;width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+  /* diagram */
+  .flow{display:flex;flex-direction:column;gap:0;margin:8px 0}
+  .frow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 0;font-size:13px}
+  .node{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;font-weight:600}
+  .node.actor{background:#eef2ff;border-color:#c7d2fe}
+  .node.action{background:#0f172a;color:#fff;border:none;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .node.state{border-radius:999px}
+  .s-draft{background:#e2e8f0} .s-pending{background:#fde68a} .s-approved{background:#bbf7d0}
+  .s-impl{background:#bfdbfe} .s-verified{background:#c7d2fe} .s-closed{background:#e2e8f0} .s-rej{background:#fecaca}
+  .arrow{color:var(--muted);font-weight:700}
+  .side{color:var(--muted);font-size:12px}
+  /* mockup */
+  .mock{border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;font-size:12px;color:#475569;background:#fff}
+  .mock .bar{display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;padding:8px 12px;font-weight:700;color:#0f172a}
+  .mock .cols{display:flex;gap:10px;padding:12px}
+  .mock .main{flex:2;display:grid;gap:8px}
+  .mock .rail{flex:1;border:1px solid #94a3b8;border-radius:8px;padding:10px;background:#f8fafc;align-self:start;position:relative}
+  .mock .box{border:1px dashed #cbd5e1;border-radius:7px;padding:9px}
+  .mock .btn{border-radius:6px;text-align:center;padding:6px;color:#fff;font-weight:600;margin-top:6px}
+  .b-green{background:#16a34a} .b-rose{background:#e11d48} .b-blue{background:#2563eb} .b-slate{background:#334155}
+  .tag{display:inline-block;border-radius:999px;padding:1px 9px;font-weight:700}
+  .footer{margin-top:50px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
+  @media (max-width:820px){.layout{grid-template-columns:1fr} nav.toc{display:none} main{padding:24px 18px 80px}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="toc">
+    <div class="label">Plan</div>
+    <a href="#overview">Overview</a>
+    <a href="#files">File map</a>
+    <a href="#dataflow">Data flow</a>
+    <a href="#mockups">Mockups</a>
+    <div class="label">Tasks</div>
+    <a href="#t1">1 · Notify-on-submit + submitChange</a>
+    <a href="#t2">2 · getChange (read + authz)</a>
+    <a href="#t3">3 · updateChange (draft-only)</a>
+    <a href="#t4">4 · Requests form refactor</a>
+    <a href="#t5">5 · Change detail page</a>
+    <a href="#t6">6 · Edit-draft route</a>
+    <a href="#t7">7 · List page integration</a>
+    <a href="#t8">8 · i18n keys</a>
+    <a href="#t9">9 · Manual verification</a>
+    <div class="label">Wrap-up</div>
+    <a href="#coverage">Spec coverage</a>
+    <a href="#exec">Execution options</a>
+  </nav>
+
+  <main>
+    <header class="plan">
+      <div class="label" style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700">Implementation Plan</div>
+      <h1>Change Lifecycle Repair + Change Detail Hub</h1>
+      <div class="meta">
+        <span class="pill">2026-06-01</span>
+        <span class="pill accent">9 tasks · TDD</span>
+        <span class="pill ok">No schema changes</span>
+      </div>
+      <div class="callout" style="margin-top:16px">
+        <strong>For agentic workers:</strong> implement task-by-task with <code>superpowers:subagent-driven-development</code> (recommended) or <code>superpowers:executing-plans</code>. Each task is TDD: write the failing test, watch it fail, implement, watch it pass, commit. Checkboxes (☐) track steps.
+      </div>
+      <p><strong>Goal:</strong> Make the change lifecycle work end-to-end in the UI and add a change detail page that hosts full info, approvals, the audit timeline, and the contextual lifecycle actions.</p>
+      <p><strong>Architecture:</strong> Next.js 16 App Router. Server Components fetch + authorize; Server Actions mutate. A new <code>/changes/[id]</code> detail route is the action hub; list pages link into it. Reuses the existing transition guard, RBAC, SoD, CAB, blackout, audit-log, and email machinery — only the missing UI joints and two new read/edit actions are added.</p>
+      <p><strong>Tech stack:</strong> Next.js 16, React 19, NextAuth v5 (Keycloak), Prisma v7 + Postgres, Tailwind v4, Vitest + Testcontainers.</p>
+    </header>
+
+    <!-- OVERVIEW -->
+    <h2 id="overview">Overview</h2>
+    <p>The spine of the product is severed: a submitted request is saved as <code>draft</code>, and nothing moves it to <code>pending</code>, so it never reaches Approvals. We restore the full path and centralize change actions on a detail page.</p>
+    <div class="warn"><strong>Key refactor surfaced during planning:</strong> <code>createChange</code> currently emails OpCo approvers on <em>creation</em>. In the hybrid model that's wrong (a draft shouldn't notify anyone). Task 1 moves approver notification to the <code>submit</code> step so emails fire exactly once, when a change becomes <code>pending</code>.</p>
+
+    <!-- FILE MAP -->
+    <h2 id="files">File structure map</h2>
+    <p><span class="filechip new">new</span> created &nbsp; <span class="filechip mod">mod</span> modified</p>
+    <table>
+      <tr><th>File</th><th>Responsibility</th></tr>
+      <tr><td><span class="filechip mod">mod</span> <code>src/server/actions/changes.ts</code></td><td>Add <code>getChange</code>, <code>updateChange</code>, <code>submitChange</code>; remove approver-email from <code>createChange</code>.</td></tr>
+      <tr><td><span class="filechip mod">mod</span> <code>src/app/(dashboard)/requests/page.tsx</code></td><td>Becomes a Server Component: loads OpCo options + the user's recent requests, renders the form.</td></tr>
+      <tr><td><span class="filechip new">new</span> <code>src/app/(dashboard)/requests/request-form.tsx</code></td><td>Client form (create + edit modes): OpCo selector, emergency option, Save-draft / Submit buttons, "My Requests" list.</td></tr>
+      <tr><td><span class="filechip new">new</span> <code>src/app/(dashboard)/changes/[id]/page.tsx</code></td><td>Detail Server Component: <code>getChange</code> → serialize → render client (or <code>notFound()</code>).</td></tr>
+      <tr><td><span class="filechip new">new</span> <code>src/app/(dashboard)/changes/[id]/change-detail-client.tsx</code></td><td>Two-column detail + sticky action rail; contextual actions, approvals summary, CAB quorum, timeline.</td></tr>
+      <tr><td><span class="filechip new">new</span> <code>src/app/(dashboard)/changes/[id]/edit/page.tsx</code></td><td>Edit-draft Server Component: load draft via <code>getChange</code>, guard, render form in edit mode.</td></tr>
+      <tr><td><span class="filechip mod">mod</span> <code>src/app/(dashboard)/changes/changes-client.tsx</code></td><td>Cards link to the detail page; transition buttons move to the detail rail.</td></tr>
+      <tr><td><span class="filechip mod">mod</span> <code>src/app/(dashboard)/approvals/approvals-client.tsx</code></td><td>Title links to detail; keep inline Approve/Reject.</td></tr>
+      <tr><td><span class="filechip mod">mod</span> <code>src/lib/i18n.ts</code></td><td>Add en/fr keys for the new strings.</td></tr>
+      <tr><td><span class="filechip mod">mod</span> <code>src/test/actions/changes.test.ts</code></td><td>Tests for submit / getChange / updateChange / emergency.</td></tr>
+    </table>
+
+    <!-- DATA FLOW -->
+    <h2 id="dataflow">Data flow</h2>
+    <div class="card">
+      <div class="flow">
+        <div class="frow"><span class="node actor">Requester</span><span class="arrow">→</span><span class="side">fills form, picks OpCo</span></div>
+        <div class="frow">
+          <span class="node action">createChange()</span><span class="arrow">→</span><span class="node state s-draft">draft</span>
+          <span class="side">· "Save draft" stops here · "Submit" continues ↓</span>
+        </div>
+        <div class="frow">
+          <span class="node action">submitChange()</span><span class="arrow">→</span><span class="node state s-pending">pending</span>
+          <span class="arrow">+</span><span class="side">emails OpCo approvers · audit "submitted"</span>
+        </div>
+        <div class="frow"><span class="node actor">Approver</span><span class="arrow">→</span><span class="node action">submitApproval()</span><span class="side">SoD: not the requester · CAB 2× for high/emergency</span></div>
+        <div class="frow">
+          <span class="node state s-approved">approved</span><span class="arrow">/</span><span class="node state s-rej">rejected</span>
+          <span class="arrow">→</span><span class="side">emails requester · audit entry</span>
+        </div>
+        <div class="frow"><span class="node actor">Implementer</span><span class="arrow">→</span><span class="node action">updateChangeStatus()</span><span class="arrow">→</span>
+          <span class="node state s-impl">implemented</span><span class="arrow">→</span><span class="node state s-verified">verified</span><span class="arrow">→</span><span class="node state s-closed">closed</span>
+        </div>
+        <div class="frow"><span class="side">Every transition writes an immutable <code>AuditLog</code> row → shown in the detail Timeline and the Audits page.</span></div>
+      </div>
+    </div>
+
+    <!-- MOCKUPS -->
+    <h2 id="mockups">Mockups</h2>
+
+    <h3>Change detail page — <code>/changes/[id]</code> (two-column, sticky rail)</h3>
+    <div class="mock">
+      <div class="bar"><span>Backbone IP route table update</span><span class="tag s-pending">pending</span></div>
+      <div class="cols">
+        <div class="main">
+          <div class="box"><strong>Overview</strong><br>Risk: high · Category: config · Infra: Backbone IP Network<br>Requester: devops@csquared.com · OpCo: CSquared Ghana · SLA: 4h</div>
+          <div class="box"><strong>Description &amp; plans</strong><br>Description · Impact scope · Implementation / Testing / Backout plans · Change window · Planned start–end</div>
+          <div class="box"><strong>Timeline</strong><br>● created — devops — 12:11<br>● submitted — devops — 12:14<br>● approved (1/2 CAB) — akua — 12:30</div>
+        </div>
+        <div class="rail">
+          <strong style="color:#0f172a">Actions</strong>
+          <div class="btn b-green">Approve</div>
+          <div class="btn b-rose">Reject</div>
+          <div style="margin-top:10px"><strong style="color:#0f172a">CAB quorum</strong><br>1 / 2 approvals</div>
+          <div style="margin-top:10px"><strong style="color:#0f172a">Approvals</strong><br>akua ✓ approve “looks safe”</div>
+          <div class="side" style="margin-top:8px">(rail is position:sticky)</div>
+        </div>
+      </div>
+    </div>
+    <p class="side">The rail shows only the actions valid for the current status + viewer role. A <code>draft</code> you own shows <em>Submit for approval</em> + <em>Edit draft</em>; an <code>approved</code> change shows <em>Mark implemented</em>; etc.</p>
+
+    <h3 style="margin-top:24px">Requests form — changed regions</h3>
+    <div class="mock">
+      <div class="bar"><span>New Change Request</span><span class="side">* required</span></div>
+      <div style="padding:12px;display:grid;gap:8px">
+        <div class="box"><strong>Operating company *</strong> &nbsp; <span style="border:1px solid #cbd5e1;border-radius:6px;padding:3px 10px">CSquared Ghana ▾</span> <span class="side">(your OpCos; group-level = all 6)</span></div>
+        <div class="box"><strong>Risk level</strong> &nbsp; ○ Low &nbsp; ● Medium &nbsp; ○ High &nbsp; <span style="color:#b45309">○ Emergency</span><br><span class="side" style="color:#b45309">⚠ Emergency bypasses blackout windows, 1h SLA, requires CAB quorum.</span></div>
+        <div class="box" style="border-style:solid;border-color:#fecaca;text-decoration:line-through;opacity:.6">Approvers (free text) — REMOVED (routing is role-based)</div>
+        <div style="display:flex;gap:8px"><span class="btn b-slate" style="padding:7px 16px">Save draft</span><span class="btn b-blue" style="padding:7px 16px">Submit for approval</span></div>
+        <div class="box"><strong>My Requests</strong> <span class="side">(now wired)</span><br>● Email-hook smoke test — draft → <span style="color:#2563eb">open</span><br>● Backbone IP route update — pending → <span style="color:#2563eb">open</span></div>
+      </div>
+    </div>
+
+    <!-- TASKS -->
+    <h2 id="t1">Tasks</h2>
+
+    <!-- TASK 1 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">1</span><h3 style="margin:0" id="task1">Notify-on-submit refactor + <code>submitChange</code></h3></div>
+      <p><span class="filechip mod">mod</span> <code>src/server/actions/changes.ts</code> &nbsp; <span class="filechip mod">mod</span> <code>src/test/actions/changes.test.ts</code></p>
+      <div class="step"><span class="chk"></span><div><strong>Step 1 — failing test.</strong> Add tests: (a) <code>createChange</code> does <em>not</em> call <code>sendApprovalRequestEmail</code>; (b) <code>submitChange</code> sets status <code>pending</code>, writes a <code>submitted</code> audit row, and notifies approvers; (c) <code>submitChange</code> throws on a non-draft change.</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 2 — run, expect fail</strong> (<code>submitChange</code> undefined). <code>pnpm test src/test/actions/changes.test.ts</code></div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 3 — implement.</strong> Remove the approver-email block from <code>createChange</code>; add <code>submitChange</code>.</div></div>
+      <details><summary>Code — <code>submitChange</code> + <code>createChange</code> email removal</summary>
+      <div class="body">
+<pre><span class="c">// add imports already present: getPrisma, getAppSession, isGroupAdmin, hasRoleInOpCo, sendApprovalRequestEmail</span>
+
+<span class="c">// in createChange(): DELETE the trailing block that fetches approvers and</span>
+<span class="c">// calls sendApprovalRequestEmail(...). Drafts must not notify anyone.</span>
+
+<span class="k">export async function</span> submitChange(id: <span class="k">string</span>) {
+  <span class="k">const</span> session = <span class="k">await</span> getAppSession()
+  <span class="k">const</span> db = getPrisma()
+  <span class="k">const</span> user = <span class="k">await</span> db.user.findUnique({ where: { keycloakId: session.keycloakId } })
+  <span class="k">if</span> (!user) <span class="k">throw new</span> Error(<span class="s">"User not found"</span>)
+
+  <span class="k">const</span> change = <span class="k">await</span> db.changeRequest.findUnique({ where: { id }, include: { opco: <span class="k">true</span> } })
+  <span class="k">if</span> (!change) <span class="k">throw new</span> Error(<span class="s">"Change not found"</span>)
+
+  <span class="k">const</span> isAdmin = isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, <span class="s">"admin"</span>)
+  <span class="k">if</span> (change.requesterId !== user.id &amp;&amp; !isAdmin)
+    <span class="k">throw new</span> Error(<span class="s">"Forbidden: only the requester or an admin can submit this change"</span>)
+  <span class="k">if</span> (change.status !== <span class="s">"draft"</span>) <span class="k">throw new</span> Error(<span class="s">"Only draft changes can be submitted"</span>)
+
+  <span class="k">const</span> updated = <span class="k">await</span> db.changeRequest.update({ where: { id }, data: { status: <span class="s">"pending"</span> } })
+  <span class="k">await</span> db.auditLog.create({
+    data: { changeId: id, actorId: user.id, action: <span class="s">"submitted"</span>, fromStatus: <span class="s">"draft"</span>, toStatus: <span class="s">"pending"</span> },
+  })
+
+  <span class="c">// notify OpCo approvers (moved here from createChange)</span>
+  <span class="k">const</span> approvers = <span class="k">await</span> db.userOpCoAssignment.findMany({
+    where: { opcoId: change.opcoId, role: <span class="s">"approver"</span>, isActive: <span class="k">true</span> },
+    include: { user: <span class="k">true</span> },
+  })
+  <span class="k">await</span> Promise.allSettled(approvers.map((a) =>
+    sendApprovalRequestEmail({
+      to: a.user.email, approverName: a.user.name ?? a.user.email,
+      changeTitle: change.title, requesterName: user.name ?? user.email,
+      riskLevel: change.riskLevel, changeId: change.id,
+    })
+  ))
+  <span class="k">return</span> updated
+}</pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 4 — run, expect pass.</strong></div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 5 — commit:</strong> <code>feat: add submitChange and move approver notification to submit step</code></div></div>
+    </div>
+
+    <!-- TASK 2 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">2</span><h3 style="margin:0" id="task2"><code>getChange</code> — single read + OpCo authz</h3></div>
+      <p><span class="filechip mod">mod</span> <code>src/server/actions/changes.ts</code> &nbsp; <span class="filechip mod">mod</span> <code>src/test/actions/changes.test.ts</code> (+ isolation in integration test)</p>
+      <div class="step"><span class="chk"></span><div><strong>Step 1 — failing test.</strong> <code>getChange</code> returns the full change for a member; returns <code>null</code> for a non-member (cross-OpCo hidden). Cover isolation in <code>src/test/integration/isolation.test.ts</code> against real Postgres.</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 2 — run, expect fail.</strong></div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 3 — implement.</strong></div></div>
+      <details><summary>Code — <code>getChange</code></summary>
+      <div class="body">
+<pre><span class="c">// imports: isGroupLevel, isMemberOfOpCo (from @/lib/permissions)</span>
+<span class="k">export async function</span> getChange(id: <span class="k">string</span>) {
+  <span class="k">const</span> session = <span class="k">await</span> getAppSession()
+  <span class="k">const</span> db = getPrisma()
+  <span class="k">const</span> change = <span class="k">await</span> db.changeRequest.findUnique({
+    where: { id },
+    include: {
+      opco: <span class="k">true</span>,
+      requester: <span class="k">true</span>,
+      approvals: { include: { approver: <span class="k">true</span> }, orderBy: { decidedAt: <span class="s">"asc"</span> } },
+      auditTrail: { include: { actor: <span class="k">true</span> }, orderBy: { at: <span class="s">"asc"</span> } },
+    },
+  })
+  <span class="k">if</span> (!change) <span class="k">return null</span>
+  <span class="k">if</span> (!isGroupLevel(session.realmRoles) &amp;&amp; !isMemberOfOpCo(session.organizations, change.opco.slug)) {
+    <span class="k">return null</span>  <span class="c">// hide cross-OpCo existence — surfaces as 404</span>
+  }
+  <span class="k">return</span> change
+}</pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 4 — run, expect pass. Step 5 — commit:</strong> <code>feat: add getChange with OpCo authorization</code></div></div>
+    </div>
+
+    <!-- TASK 3 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">3</span><h3 style="margin:0" id="task3"><code>updateChange</code> — draft-only edit</h3></div>
+      <p><span class="filechip mod">mod</span> <code>src/server/actions/changes.ts</code> &nbsp; <span class="filechip mod">mod</span> <code>src/test/actions/changes.test.ts</code></p>
+      <div class="step"><span class="chk"></span><div><strong>Step 1 — failing test.</strong> Updates a draft for the requester; throws <code>"Only draft changes can be edited"</code> when status ≠ draft; throws Forbidden when caller is neither requester nor admin.</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 2 — run, expect fail. Step 3 — implement.</strong></div></div>
+      <details><summary>Code — <code>updateChange</code></summary>
+      <div class="body">
+<pre><span class="k">type</span> UpdateChangeInput = Partial&lt;CreateChangeInput&gt;  <span class="c">// reuse the create shape, all optional</span>
+
+<span class="k">export async function</span> updateChange(id: <span class="k">string</span>, data: UpdateChangeInput) {
+  <span class="k">const</span> session = <span class="k">await</span> getAppSession()
+  <span class="k">const</span> db = getPrisma()
+  <span class="k">const</span> user = <span class="k">await</span> db.user.findUnique({ where: { keycloakId: session.keycloakId } })
+  <span class="k">if</span> (!user) <span class="k">throw new</span> Error(<span class="s">"User not found"</span>)
+
+  <span class="k">const</span> change = <span class="k">await</span> db.changeRequest.findUnique({ where: { id }, include: { opco: <span class="k">true</span> } })
+  <span class="k">if</span> (!change) <span class="k">throw new</span> Error(<span class="s">"Change not found"</span>)
+
+  <span class="k">const</span> isAdmin = isGroupAdmin(session.realmRoles) ||
+    hasRoleInOpCo(session.organizations, change.opco.slug, <span class="s">"admin"</span>)
+  <span class="k">if</span> (change.requesterId !== user.id &amp;&amp; !isAdmin)
+    <span class="k">throw new</span> Error(<span class="s">"Forbidden: only the requester or an admin can edit this change"</span>)
+  <span class="k">if</span> (change.status !== <span class="s">"draft"</span>) <span class="k">throw new</span> Error(<span class="s">"Only draft changes can be edited"</span>)
+
+  <span class="k">return</span> db.changeRequest.update({ where: { id }, data })
+}</pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 4 — run, expect pass. Step 5 — commit:</strong> <code>feat: add updateChange with draft-only guard</code></div></div>
+    </div>
+
+    <!-- TASK 4 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">4</span><h3 style="margin:0" id="task4">Requests form refactor (server wrapper + client form)</h3></div>
+      <p><span class="filechip mod">mod</span> <code>requests/page.tsx</code> &nbsp; <span class="filechip new">new</span> <code>requests/request-form.tsx</code></p>
+      <div class="warn">Behavioral changes only — keep all existing field cards and styling. The grep'd lucide imports and i18n usage stay intact.</div>
+      <div class="step"><span class="chk"></span><div><strong>Step 1.</strong> Convert <code>requests/page.tsx</code> to a Server Component: read the session, compute OpCo options (memberships, or all 6 for group-level), and fetch the user's recent requests; render <code>&lt;RequestForm&gt;</code>.</div></div>
+      <details><summary>Code — <code>requests/page.tsx</code> (server)</summary>
+      <div class="body">
+<pre><span class="k">import</span> { redirect } <span class="k">from</span> <span class="s">"next/navigation"</span>
+<span class="k">import</span> { auth } <span class="k">from</span> <span class="s">"@/auth"</span>
+<span class="k">import</span> { getPrisma } <span class="k">from</span> <span class="s">"@/server/db"</span>
+<span class="k">import</span> { isGroupLevel } <span class="k">from</span> <span class="s">"@/lib/permissions"</span>
+<span class="k">import</span> { OPCO_SLUGS } <span class="k">from</span> <span class="s">"@/lib/opco"</span>
+<span class="k">import</span> RequestForm <span class="k">from</span> <span class="s">"./request-form"</span>
+
+<span class="k">export default async function</span> RequestsPage() {
+  <span class="k">const</span> session = <span class="k">await</span> auth()
+  <span class="k">if</span> (!session) redirect(<span class="s">"/login"</span>)
+  <span class="k">const</span> db = getPrisma()
+
+  <span class="k">const</span> opcoOptions = isGroupLevel(session.user.realmRoles)
+    ? [...OPCO_SLUGS]
+    : session.user.organizations.map((o) => o.alias)
+
+  <span class="k">const</span> mine = <span class="k">await</span> db.changeRequest.findMany({
+    where: { requester: { keycloakId: session.user.keycloakId } },
+    orderBy: { updatedAt: <span class="s">"desc"</span> }, take: <span class="s">8</span>,
+    select: { id: <span class="k">true</span>, title: <span class="k">true</span>, status: <span class="k">true</span>, updatedAt: <span class="k">true</span> },
+  })
+
+  <span class="k">return</span> &lt;RequestForm opcoOptions={opcoOptions} myRequests={mine} /&gt;
+}</pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 2.</strong> Create <code>request-form.tsx</code> from the current client body, with these changes: OpCo <code>&lt;select&gt;</code> (from <code>opcoOptions</code>, default first); <strong>Emergency</strong> as a 4th risk radio; <strong>remove</strong> the <code>approvers</code> field/state; two buttons calling the handlers below; render <code>myRequests</code> in the sidebar (links to <code>/changes/[id]</code>). Add an optional <code>mode="edit"</code> + <code>initial</code> prop for Task 6.</div></div>
+      <details><summary>Code — submit handlers + emergency mapping (the part to review)</summary>
+      <div class="body">
+<pre><span class="c">// risk radio now includes "emergency"; selecting it flags the change.</span>
+<span class="k">const</span> isEmergency = riskLevel === <span class="s">"emergency"</span>
+
+<span class="k">async function</span> save({ submit }: { submit: <span class="k">boolean</span> }) {
+  <span class="c">// ...existing required-field validation...</span>
+  <span class="k">const</span> payload = {
+    title, description, category, riskLevel,
+    contactEmail: email, infrastructureType,
+    impactScope: impactScope || <span class="k">undefined</span>,
+    implementationPlan: implementationPlan || <span class="k">undefined</span>,
+    testingPlan: testingPlan || <span class="k">undefined</span>,
+    backoutPlan: backoutPlan || <span class="k">undefined</span>,
+    plannedStart: plannedStart ? <span class="k">new</span> Date(plannedStart) : <span class="k">undefined</span>,
+    plannedEnd: plannedEnd ? <span class="k">new</span> Date(plannedEnd) : <span class="k">undefined</span>,
+    isEmergency,
+  }
+  <span class="k">try</span> {
+    <span class="k">if</span> (mode === <span class="s">"edit"</span> &amp;&amp; initial) {
+      <span class="k">await</span> updateChange(initial.id, payload)
+      <span class="k">if</span> (submit) <span class="k">await</span> submitChange(initial.id)
+      router.push(<span class="s">`/changes/${initial.id}`</span>)
+    } <span class="k">else</span> {
+      <span class="k">const</span> created = <span class="k">await</span> createChange(opcoSlug, payload)
+      <span class="k">if</span> (submit) <span class="k">await</span> submitChange(created.id)
+      router.push(<span class="s">`/changes/${created.id}`</span>)
+    }
+    router.refresh()
+  } <span class="k">catch</span> (err) { <span class="c">/* toast err.message — e.g. blackout block */</span> }
+}
+<span class="c">// Buttons:  &lt;Button variant="outline" onClick={() =&gt; save({ submit:false })}&gt;Save draft&lt;/Button&gt;</span>
+<span class="c">//          &lt;Button onClick={() =&gt; save({ submit:true })}&gt;Submit for approval&lt;/Button&gt;</span></pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 3.</strong> Manual check (dev server): Save draft → lands on detail as <code>draft</code>; Submit → lands as <code>pending</code> and appears in Approvals. <strong>Commit:</strong> <code>feat: rework request form — OpCo select, emergency, save-draft/submit, my-requests</code></div></div>
+    </div>
+
+    <!-- TASK 5 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">5</span><h3 style="margin:0" id="task5">Change detail page (server + client)</h3></div>
+      <p><span class="filechip new">new</span> <code>changes/[id]/page.tsx</code> &nbsp; <span class="filechip new">new</span> <code>changes/[id]/change-detail-client.tsx</code></p>
+      <div class="step"><span class="chk"></span><div><strong>Step 1 — server page.</strong> Load via <code>getChange</code>, <code>notFound()</code> if null, serialize Dates, pass a viewer-capabilities object so the client doesn't re-derive auth.</div></div>
+      <details><summary>Code — <code>changes/[id]/page.tsx</code></summary>
+      <div class="body">
+<pre><span class="k">import</span> { notFound } <span class="k">from</span> <span class="s">"next/navigation"</span>
+<span class="k">import</span> { auth } <span class="k">from</span> <span class="s">"@/auth"</span>
+<span class="k">import</span> { redirect } <span class="k">from</span> <span class="s">"next/navigation"</span>
+<span class="k">import</span> { getChange } <span class="k">from</span> <span class="s">"@/server/actions/changes"</span>
+<span class="k">import</span> { canApprove, isGroupAdmin, hasRoleInOpCo } <span class="k">from</span> <span class="s">"@/lib/permissions"</span>
+<span class="k">import</span> ChangeDetailClient <span class="k">from</span> <span class="s">"./change-detail-client"</span>
+
+<span class="k">export default async function</span> ChangeDetailPage({ params }: { params: Promise&lt;{ id: <span class="k">string</span> }&gt; }) {
+  <span class="k">const</span> { id } = <span class="k">await</span> params
+  <span class="k">const</span> session = <span class="k">await</span> auth()
+  <span class="k">if</span> (!session) redirect(<span class="s">"/login"</span>)
+
+  <span class="k">const</span> change = <span class="k">await</span> getChange(id)   <span class="c">// null = not found OR not your OpCo</span>
+  <span class="k">if</span> (!change) notFound()
+
+  <span class="k">const</span> slug = change.opco.slug
+  <span class="k">const</span> me = session.user
+  <span class="k">const</span> isAdmin = isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, <span class="s">"admin"</span>)
+  <span class="k">const</span> caps = {
+    isRequester: change.requester.keycloakId === me.keycloakId,
+    canApprove: canApprove(me.organizations, slug) || isGroupAdmin(me.realmRoles),
+    isAdmin,
+    isCabMember: isGroupAdmin(me.realmRoles),
+  }
+  <span class="k">return</span> &lt;ChangeDetailClient change={serialize(change)} caps={caps} /&gt;
+  <span class="c">// serialize(): map Dates → ISO strings; flatten approver/actor names for the client</span>
+}</pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 2 — client.</strong> Two-column; sticky right rail. Render <em>only</em> the valid actions (server re-checks). Handlers call the existing/new actions, then <code>router.refresh()</code>.</div></div>
+      <details><summary>Code — action-gating logic (the part to review)</summary>
+      <div class="body">
+<pre><span class="c">// status drives which actions appear; caps gates by role.</span>
+<span class="k">const</span> actions = {
+  submit:      change.status === <span class="s">"draft"</span>     &amp;&amp; (caps.isRequester || caps.isAdmin),
+  edit:        change.status === <span class="s">"draft"</span>     &amp;&amp; (caps.isRequester || caps.isAdmin),
+  approve:     change.status === <span class="s">"pending"</span>   &amp;&amp; caps.canApprove &amp;&amp; !caps.isRequester,
+  reject:      change.status === <span class="s">"pending"</span>   &amp;&amp; caps.canApprove &amp;&amp; !caps.isRequester,
+  implement:   change.status === <span class="s">"approved"</span>  &amp;&amp; (caps.canApprove || caps.isAdmin),
+  verify:      change.status === <span class="s">"implemented"</span> &amp;&amp; (caps.canApprove || caps.isAdmin),
+  close:       change.status === <span class="s">"verified"</span>  &amp;&amp; (caps.canApprove || caps.isAdmin),
+  reopen:      change.status === <span class="s">"rejected"</span>  &amp;&amp; (caps.isRequester || caps.isAdmin),
+}
+
+<span class="k">async function</span> act(fn: () =&gt; Promise&lt;<span class="k">unknown</span>&gt;) {
+  <span class="k">try</span> { <span class="k">await</span> fn(); startTransition(() =&gt; router.refresh()) }
+  <span class="k">catch</span> (e) { toast({ title: <span class="s">"Error"</span>, description: msg(e), variant: <span class="s">"error"</span> }) }
+}
+<span class="c">// submit  → act(() =&gt; submitChange(change.id))</span>
+<span class="c">// approve → act(() =&gt; submitApproval(change.id, "approve", comment, caps.isCabMember))</span>
+<span class="c">// reject  → act(() =&gt; submitApproval(change.id, "reject",  comment, caps.isCabMember))</span>
+<span class="c">// implement/verify/close/reopen → act(() =&gt; updateChangeStatus(change.id, &lt;target&gt;))</span></pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 3.</strong> Render left column (all fields + Timeline from <code>auditTrail</code>) and the rail (status badge, CAB <code>count/2</code> for high/emergency, approvals list, action buttons + reject-comment box). <strong>Commit:</strong> <code>feat: add change detail page with sticky action rail and timeline</code></div></div>
+    </div>
+
+    <!-- TASK 6 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">6</span><h3 style="margin:0" id="task6">Edit-draft route</h3></div>
+      <p><span class="filechip new">new</span> <code>changes/[id]/edit/page.tsx</code></p>
+      <div class="step"><span class="chk"></span><div><strong>Step 1.</strong> Server component: load via <code>getChange</code>; <code>notFound()</code> if null; <code>redirect</code> back to the detail page if <code>status !== "draft"</code> or the viewer is neither requester nor admin; otherwise render <code>&lt;RequestForm mode="edit" initial={...} opcoOptions={[change.opco.slug]} /&gt;</code> prefilled.</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Step 2.</strong> Manual check: edit a draft → save → fields persist; the “Edit draft” button on the detail rail routes here. <strong>Commit:</strong> <code>feat: add draft edit route reusing the request form</code></div></div>
+    </div>
+
+    <!-- TASK 7 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">7</span><h3 style="margin:0" id="task7">List page integration</h3></div>
+      <p><span class="filechip mod">mod</span> <code>changes/changes-client.tsx</code> &nbsp; <span class="filechip mod">mod</span> <code>approvals/approvals-client.tsx</code></p>
+      <div class="step"><span class="chk"></span><div><strong>Changes list:</strong> wrap each card title in <code>&lt;Link href={`/changes/${c.id}`}&gt;</code>; <strong>remove</strong> the implement/verify/close buttons and the <code>updateChangeStatus</code> import (those actions now live on the detail rail). The page query already returns approved/implemented/verified — leave it.</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Approvals list:</strong> wrap each card title in a <code>&lt;Link href={`/changes/${c.id}`}&gt;</code>; <strong>keep</strong> the inline Approve/Reject for fast triage.</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Commit:</strong> <code>feat: link list pages into the change detail hub; move transitions to detail</code></div></div>
+    </div>
+
+    <!-- TASK 8 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">8</span><h3 style="margin:0" id="task8">i18n keys</h3></div>
+      <p><span class="filechip mod">mod</span> <code>src/lib/i18n.ts</code></p>
+      <div class="step"><span class="chk"></span><div><strong>Step 1.</strong> Add en + fr entries for the new strings, following the existing flat-key pattern. Representative set:</div></div>
+      <details><summary>Keys to add (en shown; mirror under fr)</summary>
+      <div class="body">
+<pre>requests.opco            <span class="c">// "Operating company"</span>
+requests.risk.emergency  <span class="c">// "Emergency"</span>
+requests.emergencyWarn   <span class="c">// "Bypasses blackout windows, 1h SLA, requires CAB quorum."</span>
+requests.saveDraft       <span class="c">// "Save draft"</span>
+requests.submit          <span class="c">// "Submit for approval"</span>
+detail.actions           detail.timeline        detail.approvals
+detail.cabQuorum         detail.submit          detail.edit
+detail.implement         detail.verify          detail.close        detail.reopen
+detail.noActions         <span class="c">// "No actions available for your role at this stage."</span></pre>
+      </div></details>
+      <div class="step"><span class="chk"></span><div><strong>Step 2.</strong> <code>pnpm tsc --noEmit</code> clean. <strong>Commit:</strong> <code>chore: add i18n keys for lifecycle + detail UI</code></div></div>
+    </div>
+
+    <!-- TASK 9 -->
+    <div class="card">
+      <div class="task-h"><span class="tasknum">9</span><h3 style="margin:0" id="task9">Manual end-to-end verification</h3></div>
+      <div class="step"><span class="chk"></span><div>Run <code>pnpm tsc --noEmit</code>, <code>pnpm lint</code>, <code>pnpm test</code> — all green.</div></div>
+      <div class="step"><span class="chk"></span><div>Drive the live app (Keycloak + Postgres up): create &amp; <strong>Submit</strong> a change → it appears in Approvals → approve it (as a different user / OpCo approver) → it moves to the Changes list → implement → verify → close, all from the detail rail. Confirm the Timeline and Audits page record each step.</div></div>
+      <div class="step"><span class="chk"></span><div>Probes: try to approve your own change (SoD blocks); submit during an active blackout as non-emergency (blocked) then emergency (allowed); open another OpCo's change id directly (404).</div></div>
+      <div class="step"><span class="chk"></span><div><strong>Commit</strong> any final fixes.</div></div>
+    </div>
+
+    <!-- COVERAGE -->
+    <h2 id="coverage">Spec coverage (self-review)</h2>
+    <table>
+      <tr><th>Spec requirement</th><th>Task(s)</th></tr>
+      <tr><td>Hybrid Save-draft / Submit</td><td>1 (submitChange), 4 (buttons)</td></tr>
+      <tr><td>In-form OpCo selector (membership-scoped)</td><td>4</td></tr>
+      <tr><td>Emergency option → isEmergency + riskLevel</td><td>4</td></tr>
+      <tr><td>Remove approvers field</td><td>4</td></tr>
+      <tr><td>"My Requests" wired</td><td>4</td></tr>
+      <tr><td>Detail page: two-column, sticky rail, contextual actions, CAB, approvals, timeline</td><td>5</td></tr>
+      <tr><td>getChange (read + OpCo authz)</td><td>2</td></tr>
+      <tr><td>updateChange (draft-only) + edit route</td><td>3, 6</td></tr>
+      <tr><td>Changes links to detail; Approvals keeps inline triage</td><td>7</td></tr>
+      <tr><td>Tests: submit reaches queue, isolation, draft-only, emergency, action gating</td><td>1,2,3,9</td></tr>
+      <tr><td>Notify-on-submit (not on draft create)</td><td>1</td></tr>
+    </table>
+    <p class="side">Out of scope (unchanged): the 7 static pages, users/teams admin, reports polish, attachments, approver delegation.</p>
+
+    <!-- EXEC -->
+    <h2 id="exec">Execution options</h2>
+    <div class="card">
+      <p><strong>1 · Subagent-driven (recommended).</strong> A fresh subagent implements each task; I review between tasks. Fast iteration, isolated context.</p>
+      <p><strong>2 · Inline execution.</strong> I implement the tasks in this session in batches with checkpoints for your review.</p>
+      <p class="side">Either way I'll generate the markdown checkbox version of these tasks for the executor when you choose.</p>
+    </div>
+
+    <div class="footer">CSquared CMS · implementation plan · 2026-06-01 · 9 tasks · derived from the approved design spec</div>
+  </main>
+</div>
+</body>
+</html>

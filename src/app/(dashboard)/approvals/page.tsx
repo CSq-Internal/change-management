@@ -1,97 +1,35 @@
-"use client"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { getPrisma } from "@/server/db"
+import { isGroupLevel } from "@/lib/permissions"
+import { runDueEscalations } from "@/server/sla"
+import { listApprovableChanges } from "@/server/approval-authority"
+import ApprovalsClient from "./approvals-client"
 
-import { useStore } from "@/lib/store"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/toaster"
-import { t } from "@/lib/i18n"
+export default async function Approvals() {
+  const session = await auth()
+  if (!session) redirect("/login")
 
-export default function Approvals() {
-  const { changes, update, currentUser, role, language } = useStore()
-  const { toast } = useToast()
-  const pending = currentUser
-    ? changes.filter(
-        (c) =>
-          c.status === "pending" &&
-          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
-      )
-    : []
-  const canApprove = role === "approver" || role === "admin"
+  const db = getPrisma()
+  const me = await db.user.findUnique({ where: { keycloakId: session.user.keycloakId }, select: { id: true } })
+  if (!me) redirect("/login")
 
-  if (!currentUser) {
-    return (
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader>
-          <CardTitle className="text-base">{t(language, "approvals.signIn")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">{t(language, "approvals.signInDesc")}</p>
-        </CardContent>
-      </Card>
-    )
-  }
+  const groupLevel = isGroupLevel(session.user.realmRoles)
+  const opcoSlugs = session.user.organizations.map((o) => o.alias)
+  void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})
 
-  if (!canApprove) {
-    return (
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader>
-          <CardTitle className="text-base">{t(language, "approvals.accessRequired")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            {t(language, "approvals.accessDesc")}
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
+  const changes = await listApprovableChanges({ userId: me.id, realmRoles: session.user.realmRoles })
 
-  return (
-    <div className="grid gap-4">
-      {pending.map((c) => (
-        <Card key={c.id} className="border-border/80 bg-card/95">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base line-clamp-2 sm:line-clamp-1">{c.title}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{c.description}</p>
-            <div className="mt-2 text-xs text-muted-foreground">
-              {t(language, "approvals.requestedBy")} {c.requester} • {new Date(c.createdAt).toLocaleString()}
-            </div>
-            <div className="mt-3 flex flex-col sm:flex-row gap-2">
-              <Button
-                onClick={() => {
-                  update(c.id, { status: "approved" })
-                  toast({
-                    title: t(language, "approvals.toast.approved"),
-                    description: t(language, "approvals.toast.approvedDesc"),
-                    variant: "success",
-                  })
-                }}
-                variant="default"
-                className="w-full sm:w-auto"
-              >
-                {t(language, "approvals.approve")}
-              </Button>
-              <Button
-                onClick={() => {
-                  update(c.id, { status: "rejected" })
-                  toast({
-                    title: t(language, "approvals.toast.rejected"),
-                    description: t(language, "approvals.toast.rejectedDesc"),
-                    variant: "error",
-                  })
-                }}
-                variant="destructive"
-                className="w-full sm:w-auto"
-              >
-                {t(language, "approvals.reject")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-      {pending.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "approvals.none")}</p>}
-    </div>
-  )
+  const serializable = changes.map((c) => ({
+    id: c.id,
+    title: c.title,
+    description: c.description,
+    riskLevel: c.riskLevel,
+    createdAt: c.createdAt,
+    requester: { name: c.requester.name, email: c.requester.email },
+    opco: { name: c.opco.name, slug: c.opco.slug },
+    approvals: c.approvals.map((a) => ({ isCab: a.isCab, decision: a.decision, approverId: a.approverId })),
+  }))
+
+  return <ApprovalsClient changes={serializable} isCabMember={true} />
 }

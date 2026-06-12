@@ -4,9 +4,14 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
+import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
+import { getNavCounts } from "@/server/actions/notifications"
+import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
+import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
+import { resolveTheme, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme"
 import {
   ArrowLeft,
   BarChart3,
@@ -14,7 +19,6 @@ import {
   FileClock,
   GitCompare,
   Home,
-  KeyRound,
   LogOut,
   Settings,
   ShieldCheck,
@@ -24,61 +28,63 @@ import {
   Bell,
   Lock,
   Plug,
-  SlidersHorizontal,
   CalendarDays,
-  FileText,
   LineChart,
   Shield,
   Sliders,
-  FileStack,
-  Map,
   BellRing,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
   X,
+  Sun,
+  Moon,
+  HelpCircle,
+  Gavel,
+  ArrowLeftRight,
+  Building2,
+  ScrollText,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
+import ProductTour from "@/components/tour/product-tour"
 
 const navGroups = [
   {
     labelKey: "nav.core",
     items: [
-      { href: "/", labelKey: "nav.dashboard", icon: BarChart3 },
-      { href: "/requests", labelKey: "nav.requests", icon: ClipboardList },
-      { href: "/approvals", labelKey: "nav.approvals", icon: ShieldCheck },
-      { href: "/changes", labelKey: "nav.changes", icon: GitCompare },
+      { href: "/", labelKey: "nav.dashboard", icon: BarChart3, tour: "nav-dashboard" },
+      { href: "/requests", labelKey: "nav.requests", icon: ClipboardList, tour: "nav-requests" },
+      { href: "/approvals", labelKey: "nav.approvals", icon: ShieldCheck, tour: "nav-approvals" },
+      { href: "/changes", labelKey: "nav.changes", icon: GitCompare, tour: "nav-changes" },
       { href: "/audits", labelKey: "nav.audits", icon: FileClock },
     ],
   },
   {
     labelKey: "nav.userManagement",
     items: [
-      { href: "/users", labelKey: "nav.users", icon: Users },
-      { href: "/teams", labelKey: "nav.teams", icon: UsersRound },
+      { href: "/users", labelKey: "nav.users", icon: Users, gate: "admin", tour: "nav-users" },
+      { href: "/teams", labelKey: "nav.teams", icon: UsersRound, gate: "admin" },
+      { href: "/cab", labelKey: "nav.cab", icon: Gavel, gate: "admin", tour: "nav-cab" },
+      { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight, gate: "admin" },
+      { href: "/opcos", labelKey: "nav.opcos", icon: Building2, gate: "groupAdmin", tour: "nav-opcos" },
+      { href: "/admin-audit", labelKey: "nav.audit", icon: ScrollText, gate: "adminOrAudit" },
     ],
   },
   {
     labelKey: "nav.insights",
     items: [
-      { href: "/change-details", labelKey: "nav.changeDetails", icon: FileText },
-      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
+      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays, tour: "nav-calendar" },
       { href: "/risk-register", labelKey: "nav.riskRegister", icon: Shield },
-      { href: "/audit-exports", labelKey: "nav.auditExports", icon: FileStack },
-      { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders },
+      { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders, tour: "nav-approval-matrix" },
       { href: "/reports", labelKey: "nav.reports", icon: LineChart },
       { href: "/notifications/history", labelKey: "nav.notificationHistory", icon: BellRing },
-      { href: "/automation", labelKey: "nav.automation", icon: Map },
     ],
   },
   {
     labelKey: "nav.settings",
     items: [
       { href: "/settings/profile", labelKey: "nav.settingsProfile", icon: UserCircle2 },
-      { href: "/settings/preferences", labelKey: "nav.settingsPreferences", icon: SlidersHorizontal },
-      { href: "/settings/approvers", labelKey: "nav.settingsApprovers", icon: ShieldCheck },
       { href: "/settings/notifications", labelKey: "nav.settingsNotifications", icon: Bell },
-      { href: "/settings/alerts", labelKey: "nav.settingsAlerts", icon: Bell },
       { href: "/settings/security", labelKey: "nav.settingsSecurity", icon: Lock },
       { href: "/settings/integrations", labelKey: "nav.settingsIntegrations", icon: Plug },
     ],
@@ -89,40 +95,51 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [passwordOpen, setPasswordOpen] = useState(false)
-  const [newPassword, setNewPassword] = useState("")
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light")
+  const { data: session } = useSession()
+  const currentUser = session?.user ?? null
   const {
-    changes,
-    currentUser,
-    logout,
-    updatePassword,
     language,
     fontScale,
+    theme,
     setLanguage,
     setFontScale,
-    setCurrentUser,
-    authHydrated,
-    setAuthHydrated,
-    users,
+    setTheme,
   } = useStore()
   const translate = (key: string) => t(language, key)
-  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
-  const pendingApprovals = currentUser
-    ? changes.filter(
-        (c) =>
-          c.status === "pending" &&
-          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
-      )
-    : []
-  const canManageUsers = currentUser?.permissions.includes("admin")
+  const [navCounts, setNavCounts] = useState({ pendingApprovals: 0, myRequests: 0, unreadNotifications: 0 })
+  useEffect(() => {
+    if (!currentUser) return
+    getNavCounts().then(setNavCounts).catch(() => {})
+  }, [currentUser, pathname])
+  const anyAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
+  const groupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
+  const groupLevel = session ? isGroupLevel(session.user.realmRoles) : false
+  const showAdminGroup = anyAdmin || groupLevel
+
+  const itemAllowed = (gate?: string) => {
+    if (gate === "groupAdmin") return groupAdmin
+    if (gate === "adminOrAudit") return anyAdmin || groupLevel
+    if (gate === "admin") return anyAdmin
+    return true
+  }
+
   const effectiveNavGroups = useMemo(
-    () => navGroups.filter((group) => group.labelKey !== "nav.userManagement" || canManageUsers),
-    [canManageUsers]
+    () =>
+      navGroups
+        .filter((group) => group.labelKey !== "nav.userManagement" || showAdminGroup)
+        .map((group) =>
+          group.labelKey === "nav.userManagement"
+            ? { ...group, items: group.items.filter((item) => itemAllowed((item as { gate?: string }).gate)) }
+            : group
+        ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showAdminGroup, anyAdmin, groupAdmin, groupLevel]
   )
   const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
   const currentNav = flatNavItems.find((item) => item.href === pathname)
@@ -135,15 +152,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const savedLang = window.localStorage.getItem("csq-lang") as "en" | "fr" | null
+    const savedLang = window.localStorage.getItem("csq-language") as "en" | "fr" | null
     const savedScale = window.localStorage.getItem("csq-font-scale")
     if (savedLang) setLanguage(savedLang)
     if (savedScale) setFontScale(Number(savedScale))
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null
+    if (savedTheme) setTheme(savedTheme)
   }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    window.localStorage.setItem("csq-lang", language)
+    window.localStorage.setItem("csq-language", language)
     document.documentElement.lang = language
   }, [language])
 
@@ -154,15 +173,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     document.documentElement.style.setProperty("--app-font-scale", String(value))
   }, [fontScale])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const mql = window.matchMedia("(prefers-color-scheme: dark)")
+    const apply = () => {
+      const resolved = resolveTheme(theme, mql.matches)
+      document.documentElement.classList.toggle("dark", resolved === "dark")
+      document.documentElement.style.colorScheme = resolved
+      setResolvedTheme(resolved)
+    }
+    apply()
+    if (theme === "system") {
+      mql.addEventListener("change", apply)
+      return () => mql.removeEventListener("change", apply)
+    }
+  }, [theme])
+
   if (pathname === "/login") {
     return (
       <div className="min-h-screen bg-background text-foreground">
-        <AuthHydrate
-          users={users}
-          currentUser={currentUser}
-          setCurrentUser={setCurrentUser}
-          setAuthHydrated={setAuthHydrated}
-        />
         {children}
         <Toaster />
       </div>
@@ -171,13 +200,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <AuthHydrate
-        users={users}
-        currentUser={currentUser}
-        setCurrentUser={setCurrentUser}
-        setAuthHydrated={setAuthHydrated}
-      />
-      <AuthGuard pathname={pathname} authHydrated={authHydrated} />
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.14)_0,_rgba(56,189,248,0.08)_45%,_transparent_70%)]" />
         <div className="absolute -bottom-52 right-[-10%] h-[480px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.12)_0,_rgba(234,179,8,0.08)_50%,_transparent_70%)]" />
@@ -235,6 +257,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         key={item.href}
                         href={item.href}
+                        data-tour={(item as { tour?: string }).tour}
                         className={cn(
                           "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
                           active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-muted"
@@ -251,7 +274,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                   active ? "bg-white/20" : "bg-muted"
                                 )}
                               >
-                                {myRequests.length}
+                                {navCounts.myRequests}
                               </span>
                             )}
                             {item.href === "/approvals" && (
@@ -261,7 +284,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                   active ? "bg-white/20" : "bg-muted"
                                 )}
                               >
-                                {pendingApprovals.length}
+                                {navCounts.pendingApprovals}
                               </span>
                             )}
                           </>
@@ -309,8 +332,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Home className="h-4 w-4" />
                 </Link>
+                <OpCoSwitcher />
                 <label className="flex cursor-pointer items-center gap-2 rounded-full bg-card px-2 py-1">
-                  <span className="relative h-8 w-8 overflow-hidden rounded-full bg-slate-100">
+                  <span className="relative h-8 w-8 overflow-hidden rounded-full bg-muted">
                     {avatarUrl ? (
                       <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
                     ) : (
@@ -330,6 +354,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     }}
                   />
                 </label>
+                <button
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                  onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                  aria-label={translate("theme.toggle")}
+                >
+                  {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </button>
+                <button
+                  data-tour="tour-help"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                  onClick={() => window.dispatchEvent(new Event("csq:start-tour"))}
+                  aria-label={translate("tour.help")}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
                 <div className="relative">
                   <button
                     className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"
@@ -361,25 +400,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
                 {currentUser && (
-                  <>
-                    <button
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                      onClick={() => setPasswordOpen(true)}
-                      aria-label="Change password"
-                    >
-                      <KeyRound className="h-4 w-4" />
-                    </button>
-                    <button
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                      onClick={() => {
-                        logout()
-                        router.push("/login")
-                      }}
-                      aria-label="Log out"
-                    >
-                      <LogOut className="h-4 w-4" />
-                    </button>
-                  </>
+                  <Link
+                    href="/notifications/history"
+                    data-tour="tour-notifications"
+                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                    aria-label={translate("nav.notificationHistory")}
+                  >
+                    <Bell className="h-4 w-4" />
+                    {navCounts.unreadNotifications > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold text-white">
+                        {navCounts.unreadNotifications}
+                      </span>
+                    )}
+                  </Link>
+                )}
+                {currentUser && (
+                  <button
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                    onClick={() => nextAuthSignOut({ callbackUrl: "/login" })}
+                    aria-label="Log out"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             </div>
@@ -410,8 +452,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <Link
                       href={crumb.href}
                       className={cn(
-                        "transition hover:text-slate-800",
-                        index === breadcrumbs.length - 1 && "font-semibold text-slate-800"
+                        "transition hover:text-foreground",
+                        index === breadcrumbs.length - 1 && "font-semibold text-foreground"
                       )}
                     >
                       {translate(crumb.labelKey)}
@@ -490,50 +532,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <Toaster />
-      {passwordOpen && currentUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
-            <h3 className="text-lg font-semibold">Change Password</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Set a new password for your account.</p>
-            <input
-              type="password"
-              placeholder="New password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className="mt-4 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                className="rounded-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setPasswordOpen(false)
-                  setNewPassword("")
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white"
-                onClick={() => {
-                  if (!newPassword) return
-                  updatePassword(currentUser.id, newPassword)
-                  setPasswordOpen(false)
-                  setNewPassword("")
-                }}
-              >
-                Update
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {currentUser && <ProductTour />}
       {preferencesOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{translate("prefs.title")}</h3>
               <button
-                className="text-sm text-muted-foreground hover:text-slate-800"
+                className="text-sm text-muted-foreground hover:text-foreground"
                 onClick={() => setPreferencesOpen(false)}
               >
                 {translate("prefs.close")}
@@ -576,53 +582,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {translate("prefs.text.current")}: {(fontScale * 100).toFixed(0)}%
                 </div>
               </div>
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  {translate("prefs.theme")}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["light", "dark", "system"] as ThemeMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setTheme(mode)}
+                      className={`h-9 rounded-md border text-sm ${
+                        theme === mode
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                      aria-pressed={theme === mode}
+                    >
+                      {translate(`prefs.theme.${mode}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
   )
-}
-
-function AuthGuard({ pathname, authHydrated }: { pathname: string; authHydrated: boolean }) {
-  const router = useRouter()
-  const { currentUser } = useStore()
-
-  useEffect(() => {
-    if (authHydrated && !currentUser && pathname !== "/login") {
-      router.push("/login")
-    }
-  }, [authHydrated, currentUser, pathname, router])
-
-  return null
-}
-
-function AuthHydrate({
-  users,
-  currentUser,
-  setCurrentUser,
-  setAuthHydrated,
-}: {
-  users: { id: string }[]
-  currentUser: { id: string } | null
-  setCurrentUser: (user: any) => void
-  setAuthHydrated: (value: boolean) => void
-}) {
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (currentUser) {
-      setAuthHydrated(true)
-      return
-    }
-    const storedId = window.localStorage.getItem("csq-session-user")
-    if (storedId) {
-      const match = users.find((user) => user.id === storedId)
-      if (match) {
-        setCurrentUser(match)
-      }
-    }
-    setAuthHydrated(true)
-  }, [currentUser, setAuthHydrated, setCurrentUser, users])
-
-  return null
 }

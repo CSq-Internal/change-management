@@ -9,7 +9,7 @@ export async function GET() {
       include: { approvals: true, attachments: true }
     })
     return NextResponse.json(items)
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Database is not configured. Set DATABASE_URL or PRISMA_ACCELERATE_URL.' },
       { status: 500 }

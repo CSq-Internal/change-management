@@ -1,170 +1,100 @@
-"use client"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { getPrisma } from "@/server/db"
+import { isGroupLevel } from "@/lib/permissions"
+import { runDueEscalations } from "@/server/sla"
+import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
+import DashboardClient from "./dashboard-client"
+import type { FeedEvent } from "@/components/dashboard/monitor-view"
 
-import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useStore } from "@/lib/store"
-import { t } from "@/lib/i18n"
-import { ArrowUpRight, BellDot, CalendarClock, ClipboardList, FileClock, ShieldCheck } from "lucide-react"
+const initials = (name: string | null, email: string) => {
+  const src = (name ?? email.split("@")[0] ?? "").trim()
+  const parts = src.split(/[ .]+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?"
+}
+const FEED_TONE: Record<string, string> = {
+  submit: "bg-amber-500", approve: "bg-emerald-500", reject: "bg-rose-500",
+  implement: "bg-blue-500", verify: "bg-violet-500", breach: "bg-rose-500",
+}
+// A blackout ending within this window is flagged amber (vs. red) in the UI.
+const BLACKOUT_ENDING_SOON_MS = 12 * 3600_000
 
-export default function Home() {
-  const { changes, currentUser, role, language } = useStore()
-  const myRequests = currentUser ? changes.filter((c) => c.requester === currentUser.id) : []
-  const pendingApprovals = currentUser
-    ? changes.filter(
-        (c) =>
-          c.status === "pending" &&
-          (c.assignees.length === 0 || c.assignees.includes(currentUser.id))
-      )
-    : []
-  const activeChanges = changes.filter((c) => ["approved", "implemented", "verified"].includes(c.status))
-  const recent = [...changes].slice(0, 4)
-  const welcomeName = (() => {
-    const email = currentUser?.email ?? ""
-    if (email.toLowerCase().endsWith("@csquared.com")) {
-      return email.split("@")[0] || t(language, "dashboard.fallbackName")
-    }
-    return currentUser?.name ?? t(language, "dashboard.fallbackName")
-  })()
+export default async function Home() {
+  const session = await auth()
+  if (!session) redirect("/login")
+
+  const db = getPrisma()
+  // eslint-disable-next-line react-hooks/purity -- async server component, not a hook; Date.now() is safe here
+  const now = Date.now()
+  const groupLevel = isGroupLevel(session.user.realmRoles)
+  const opcoSlugs = session.user.organizations.map((o) => o.alias)
+  const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
+
+  // Fire-and-forget SLA escalation sweep — never block render.
+  void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})
+
+  const [rows, blackoutRows, auditRows] = await Promise.all([
+    db.changeRequest.findMany({
+      where: opcoFilter,
+      select: {
+        id: true, title: true, status: true, riskLevel: true, isEmergency: true,
+        slaDeadline: true, plannedStart: true, infrastructureType: true, createdAt: true, expedited: true, retroApprovalDueAt: true, retroApprovedAt: true,
+        opco: { select: { name: true, slug: true } },
+        requester: { select: { name: true, email: true } },
+      },
+    }),
+    db.blackoutPeriod.findMany({
+      where: { startsAt: { lte: new Date(now) }, endsAt: { gte: new Date(now) }, ...(groupLevel ? {} : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }) },
+      select: { id: true, label: true, endsAt: true, opco: { select: { name: true } } },
+    }),
+    db.auditLog.findMany({
+      where: { change: opcoFilter },
+      orderBy: { at: "desc" },
+      take: 8,
+      select: { id: true, action: true, at: true, change: { select: { id: true } }, actor: { select: { name: true, email: true } } },
+    }),
+  ])
+
+  const changes: DashboardChange[] = rows.map((r) => ({
+    id: r.id, title: r.title, status: r.status, riskLevel: r.riskLevel, isEmergency: r.isEmergency,
+    slaDeadline: r.slaDeadline?.toISOString() ?? null,
+    plannedStart: r.plannedStart?.toISOString() ?? null,
+    opcoName: r.opco.name, opcoSlug: r.opco.slug,
+    infrastructureType: r.infrastructureType,
+    createdAt: r.createdAt.toISOString(),
+    ownerInitials: initials(r.requester.name, r.requester.email),
+    expedited: r.expedited,
+    retroApprovalDueAt: r.retroApprovalDueAt?.toISOString() ?? null,
+    retroApprovedAt: r.retroApprovedAt?.toISOString() ?? null,
+  }))
+
+  const infraOptions = [...new Set(changes.map((c) => c.infrastructureType))].sort()
+  const opcoOptions = [...new Map(changes.map((c) => [c.opcoSlug, c.opcoName])).entries()]
+    .map(([slug, name]) => ({ slug, name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  const blackouts = blackoutRows.map((b) => ({
+    id: b.id, label: b.label, scope: b.opco?.name ?? "Group",
+    endsIn: durLabel(b.endsAt.getTime() - now), amber: b.endsAt.getTime() - now < BLACKOUT_ENDING_SOON_MS,
+  }))
+
+  const feed: FeedEvent[] = auditRows.map((a) => ({
+    id: a.id, changeId: a.change.id,
+    label: a.action,
+    actor: a.actor.name ?? a.actor.email.split("@")[0],
+    ago: `${durLabel(now - a.at.getTime())} ago`,
+    tone: FEED_TONE[a.action] ?? "bg-slate-400",
+  }))
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:grid-cols-1">
-      <section className="space-y-6">
-        <Card className="border-border/80 bg-card/90">
-          <CardHeader className="gap-2">
-            <CardTitle className="text-2xl sm:text-xl">
-              {t(language, "dashboard.welcome")} {welcomeName}.
-            </CardTitle>
-            <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.subtitle")}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/requests"
-              className="inline-flex h-11 sm:h-10 items-center justify-center rounded-md bg-blue-600 px-5 sm:px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-            >
-              {t(language, "dashboard.newRequest")}
-            </Link>
-            <Link
-              href="/approvals"
-              className="inline-flex h-11 sm:h-10 items-center justify-center rounded-md border border-border px-5 sm:px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              {t(language, "dashboard.reviewApprovals")}
-            </Link>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4 md:grid-cols-2 sm:grid-cols-1">
-          <Card className="border-border/80 bg-card/90">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{t(language, "dashboard.myRequests")}</CardTitle>
-              <ClipboardList className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl sm:text-2xl font-semibold">{myRequests.length}</div>
-              <p className="mt-2 text-sm text-muted-foreground">{t(language, "dashboard.myRequestsDesc")}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/80 bg-card/90">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{t(language, "dashboard.pendingApprovals")}</CardTitle>
-              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl sm:text-2xl font-semibold">{pendingApprovals.length}</div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {role === "approver" || role === "admin"
-                  ? t(language, "dashboard.pendingApprovalsDesc")
-                  : t(language, "dashboard.pendingApprovalsHint")}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/80 bg-card/90">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{t(language, "dashboard.activeChanges")}</CardTitle>
-              <CalendarClock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl sm:text-2xl font-semibold">{activeChanges.length}</div>
-              <p className="mt-2 text-sm text-muted-foreground">{t(language, "dashboard.activeChangesDesc")}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/80 bg-card/90">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{t(language, "dashboard.auditReady")}</CardTitle>
-              <FileClock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl sm:text-2xl font-semibold">{changes.filter((c) => c.status === "closed").length}</div>
-              <p className="mt-2 text-sm text-muted-foreground">{t(language, "dashboard.auditReadyDesc")}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="border-border/80 bg-card/90">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base">{t(language, "dashboard.liveActivity")}</CardTitle>
-              <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.liveActivityDesc")}</CardDescription>
-            </div>
-            <BellDot className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {recent.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "dashboard.noRequests")}</p>}
-            <div className="space-y-3">
-              {recent.map((change) => (
-                <div key={change.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3 gap-2">
-                  <div>
-                    <div className="text-sm font-medium line-clamp-2 sm:line-clamp-1">{change.title}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(change.updatedAt).toLocaleString()}</div>
-                  </div>
-                  <span className="self-start sm:self-auto rounded-full bg-white px-3 py-1 text-xs capitalize text-muted-foreground">
-                    {change.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <aside className="space-y-6">
-        <Card className="border-border/80 bg-card/90">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "dashboard.queue")}</CardTitle>
-            <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.queueDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted px-3 py-2">
-              <span>{t(language, "dashboard.awaitingApproval")}</span>
-              <span className="font-semibold text-foreground">{pendingApprovals.length}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted px-3 py-2">
-              <span>{t(language, "dashboard.inProgress")}</span>
-              <span className="font-semibold text-foreground">{activeChanges.length}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted px-3 py-2">
-              <span>{t(language, "dashboard.requestsRaised")}</span>
-              <span className="font-semibold text-foreground">{myRequests.length}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-card/90">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "dashboard.quickActions")}</CardTitle>
-            <CardDescription className="text-sm sm:text-xs">{t(language, "dashboard.quickActionsDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <Link href="/requests" className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3 text-sm text-foreground transition hover:border-border">
-              {t(language, "dashboard.startRequest")}
-              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-            </Link>
-            <Link href="/approvals" className="flex items-center justify-between rounded-xl border border-border/70 bg-muted px-3 sm:px-4 py-3 text-sm text-foreground transition hover:border-border">
-              {t(language, "dashboard.reviewApprovalsLink")}
-              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          </CardContent>
-        </Card>
-      </aside>
-    </div>
+    <DashboardClient
+      changes={changes}
+      now={now}
+      infraOptions={infraOptions}
+      opcoOptions={opcoOptions}
+      blackouts={blackouts}
+      feed={feed}
+      blackoutCount={blackouts.length}
+    />
   )
 }

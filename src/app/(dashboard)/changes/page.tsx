@@ -1,65 +1,33 @@
-"use client"
-import { useStore } from "@/lib/store"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/toaster"
-import { t } from "@/lib/i18n"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { getPrisma } from "@/server/db"
+import { isGroupLevel } from "@/lib/permissions"
+import ChangesClient from "./changes-client"
 
-export default function Changes(){
-  const { changes, update, language } = useStore()
-  const { toast } = useToast()
-  return (
-    <div className="grid gap-4">
-      {changes.map(c => (
-        <Card key={c.id} className="border-border/80 bg-card/95">
-          <CardHeader className="pb-2"><CardTitle className="text-base line-clamp-2 sm:line-clamp-1">{c.title}</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-xs text-muted-foreground">{c.status} • {new Date(c.updatedAt).toLocaleString()}</div>
-            <div className="mt-3 flex flex-col sm:flex-row flex-wrap gap-2 text-sm">
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  update(c.id, { status: "implemented" })
-                  toast({
-                    title: t(language, "changes.toast.implemented"),
-                    description: t(language, "changes.toast.implementedDesc"),
-                  })
-                }}
-              >
-                {t(language, "changes.implemented")}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  update(c.id, { status: "verified" })
-                  toast({
-                    title: t(language, "changes.toast.verified"),
-                    description: t(language, "changes.toast.verifiedDesc"),
-                  })
-                }}
-              >
-                {t(language, "changes.verified")}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  update(c.id, { status: "closed" })
-                  toast({
-                    title: t(language, "changes.toast.closed"),
-                    description: t(language, "changes.toast.closedDesc"),
-                  })
-                }}
-              >
-                {t(language, "changes.close")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-      {changes.length === 0 && <p className="text-sm text-muted-foreground">{t(language, "changes.none")}</p>}
-    </div>
-  )
+export default async function Changes() {
+  const session = await auth()
+  if (!session) redirect("/login")
+
+  const db = getPrisma()
+  const groupLevel = isGroupLevel(session.user.realmRoles)
+  const opcoSlugs = session.user.organizations.map((o) => o.alias)
+  const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
+
+  const changes = await db.changeRequest.findMany({
+    where: {
+      status: { in: ["approved", "implemented", "verified"] },
+      ...opcoFilter,
+    },
+    include: { requester: true, opco: true },
+    orderBy: { updatedAt: "desc" },
+  })
+
+  const serializable = changes.map((c) => ({
+    id: c.id,
+    title: c.title,
+    status: c.status,
+    updatedAt: c.updatedAt,
+  }))
+
+  return <ChangesClient changes={serializable} />
 }

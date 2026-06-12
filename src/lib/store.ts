@@ -1,147 +1,35 @@
-import { create } from 'zustand';
-import dayjs from 'dayjs';
-import { AppUser, ChangeRequest, Role, Team } from './types';
+// src/lib/store.ts
+import { create } from 'zustand'
+import type { ThemeMode } from './theme'
 
-function randomId(){return Math.random().toString(36).slice(2,10)}
+type Language = 'en' | 'fr'
 
-interface State {
-  changes: ChangeRequest[];
-  currentUser: AppUser | null;
-  authHydrated: boolean;
-  role: Role;
-  setRole: (role: Role) => void;
-  language: 'en' | 'fr';
-  fontScale: number;
-  setLanguage: (language: 'en' | 'fr') => void;
-  setFontScale: (fontScale: number) => void;
-  defaultApproverIds: string[];
-  setDefaultApprovers: (ids: string[]) => void;
-  setCurrentUser: (user: AppUser | null) => void;
-  setAuthHydrated: (value: boolean) => void;
-  users: AppUser[];
-  teams: Team[];
-  addUser: (user: Omit<AppUser, 'id' | 'createdAt'>) => AppUser;
-  addTeam: (team: Omit<Team, 'id' | 'createdAt'>) => Team;
-  updateTeam: (id: string, patch: Partial<Team>) => void;
-  login: (email: string, password: string) => boolean;
-  loginWithGoogle: () => AppUser;
-  logout: () => void;
-  updatePassword: (userId: string, password: string) => void;
-  add: (cr: Omit<ChangeRequest,'id'|'createdAt'|'updatedAt'|'approvals'|'auditTrail'>) => ChangeRequest;
-  update: (id: string, patch: Partial<ChangeRequest>) => void;
+interface UIState {
+  language: Language
+  fontScale: number
+  theme: ThemeMode
+  setLanguage: (lang: Language) => void
+  setFontScale: (scale: number) => void
+  setTheme: (theme: ThemeMode) => void
 }
 
-export const useStore = create<State>((set, get) => ({
-  changes: [],
-  currentUser: null,
-  authHydrated: false,
-  role: 'requester',
-  setRole: (role) =>
-    set((state) => ({
-      role,
-      currentUser: state.currentUser ? { ...state.currentUser, role } : state.currentUser,
-    })),
-  language: 'en',
-  fontScale: 1,
-  setLanguage: (language) => set({ language }),
-  setFontScale: (fontScale) => set({ fontScale }),
-  defaultApproverIds: [],
-  setDefaultApprovers: (ids) => set({ defaultApproverIds: ids }),
-  setCurrentUser: (user) => set({ currentUser: user, role: user?.role ?? 'requester' }),
-  setAuthHydrated: (value) => set({ authHydrated: value }),
-  users: [
-    {
-      id: 'admin',
-      name: 'devops@csquared.com',
-      email: 'devops@csquared.com',
-      role: 'admin',
-      permissions: ['admin', 'read', 'write', 'approve', 'audit'],
-      country: 'Ghana',
-      teamIds: [],
-      password: 'Admin2025$',
-      createdAt: dayjs().toISOString(),
-    },
-  ],
-  teams: [],
-  addUser: (user) => {
-    const now = dayjs().toISOString();
-    const item: AppUser = { id: randomId(), createdAt: now, ...user };
-    set((s) => ({ users: [item, ...s.users] }));
-    return item;
+export const useStore = create<UIState>((set) => ({
+  language: (typeof window !== 'undefined'
+    ? (localStorage.getItem('csq-language') as Language) : null) ?? 'en',
+  fontScale: typeof window !== 'undefined'
+    ? Number(localStorage.getItem('csq-font-scale') ?? 1) : 1,
+  theme: (typeof window !== 'undefined'
+    ? (localStorage.getItem('csq-theme') as ThemeMode) : null) ?? 'system',
+  setLanguage: (language) => {
+    set({ language })
+    if (typeof window !== 'undefined') localStorage.setItem('csq-language', language)
   },
-  addTeam: (team) => {
-    const now = dayjs().toISOString();
-    const item: Team = { id: randomId(), createdAt: now, ...team };
-    set((s) => ({ teams: [item, ...s.teams] }));
-    return item;
+  setFontScale: (fontScale) => {
+    set({ fontScale })
+    if (typeof window !== 'undefined') localStorage.setItem('csq-font-scale', String(fontScale))
   },
-  updateTeam: (id, patch) =>
-    set((s) => ({
-      teams: s.teams.map((team) => (team.id === id ? { ...team, ...patch } : team)),
-    })),
-  login: (email, password) => {
-    let success = false;
-    set((state) => {
-      const normalized = email.toLowerCase();
-      const user = state.users.find(
-        (u) => u.email.toLowerCase() === normalized || u.name.toLowerCase() === normalized
-      );
-      if (!user || user.password !== password) {
-        success = false;
-        return state;
-      }
-      success = true;
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('csq-session-user', user.id);
-      }
-      return { ...state, currentUser: user, role: user.role };
-    });
-    return success;
+  setTheme: (theme) => {
+    set({ theme })
+    if (typeof window !== 'undefined') localStorage.setItem('csq-theme', theme)
   },
-  loginWithGoogle: () => {
-    const now = dayjs().toISOString();
-    const existing = get().users.find((u) => u.email === 'google.user@csquared.com');
-    const user =
-      existing ??
-      ({
-        id: randomId(),
-        name: 'Google User',
-        email: 'google.user@csquared.com',
-        role: 'requester',
-        permissions: ['read', 'write'],
-        country: 'Ghana',
-        teamIds: [],
-        password: 'GoogleSSO',
-        createdAt: now,
-      } as AppUser);
-    set((state) => ({
-      ...state,
-      users: existing ? state.users : [user, ...state.users],
-      currentUser: user,
-      role: user.role,
-    }));
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('csq-session-user', user.id);
-    }
-    return user;
-  },
-  logout: () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('csq-session-user');
-    }
-    set({ currentUser: null, role: 'requester' });
-  },
-  updatePassword: (userId, password) =>
-    set((state) => ({
-      users: state.users.map((user) => (user.id === userId ? { ...user, password } : user)),
-      currentUser:
-        state.currentUser?.id === userId ? { ...state.currentUser, password } : state.currentUser,
-    })),
-  add: (cr) => {
-    const now = dayjs().toISOString();
-    const item: ChangeRequest = { id: randomId(), createdAt: now, updatedAt: now, approvals: [], auditTrail: [], ...cr } as ChangeRequest;
-    set(s => ({ changes: [item, ...s.changes] }));
-    return item;
-  },
-  update: (id, patch) => set(s => ({ changes: s.changes.map(c => c.id===id ? { ...c, ...patch, updatedAt: dayjs().toISOString() } : c) }))
-}));
+}))
