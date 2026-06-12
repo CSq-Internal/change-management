@@ -300,7 +300,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </aside>
 
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col min-w-0 overflow-x-clip">
           <header
             className={cn(
               "sticky top-0 z-20 border-b border-border bg-card/80 backdrop-blur",
