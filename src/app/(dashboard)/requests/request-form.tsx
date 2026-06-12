@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { OPCO_NAMES } from "@/lib/opco"
@@ -108,7 +109,9 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
   const [implementationPlan, setImplementationPlan] = useState(initial?.implementationPlan ?? "")
   const [testingPlan, setTestingPlan] = useState(initial?.testingPlan ?? "")
   const [backoutPlan, setBackoutPlan] = useState(initial?.backoutPlan ?? "")
-  const [isSaving, setIsSaving] = useState(false)
+  // Which action is in flight, so we can spinner the right button and disable both.
+  const [savingAction, setSavingAction] = useState<"draft" | "submit" | null>(null)
+  const isSaving = savingAction !== null
 
   // The change id, once persisted. Set on first save so retries update rather than re-create.
   const [persistedId, setPersistedId] = useState<string | null>(initial?.id ?? null)
@@ -141,6 +144,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
   const isEmergency = riskLevel === "emergency"
 
   async function save({ submit }: { submit: boolean }) {
+    if (isSaving) return // guard against double-submit / button spam
     if (!title || !description || !email || !infrastructureType || !opcoSlug) {
       toast({
         title: t(language, "requests.toast.missing"),
@@ -160,7 +164,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         return
       }
     }
-    setIsSaving(true)
+    setSavingAction(submit ? "submit" : "draft")
     const payload = {
       title,
       description,
@@ -221,7 +225,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         variant: "error",
       })
     } finally {
-      setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -440,18 +444,20 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               variant="outline"
-              onClick={() => save({ submit: false })}
+              onClick={() => void save({ submit: false })}
               disabled={isSaving}
               className="w-full sm:w-auto"
             >
-              {t(language, "requests.saveDraft")}
+              {savingAction === "draft" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t(language, savingAction === "draft" ? "requests.savingDraft" : "requests.saveDraft")}
             </Button>
             <Button
               onClick={() => void save({ submit: true })}
               disabled={isSaving}
               className="w-full sm:w-auto"
             >
-              {t(language, "requests.submitForApproval")}
+              {savingAction === "submit" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t(language, savingAction === "submit" ? "requests.submitting" : "requests.submitForApproval")}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground sm:max-w-[16rem] sm:text-right">{t(language, "requests.submitHint")}</p>
