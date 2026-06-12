@@ -92,7 +92,7 @@ export default function EditUserDialog({ user, language, manageable, onClose, on
               {readOnly.map((a) => (
                 <span
                   key={a.opco.slug}
-                  className="rounded-full bg-slate-100 px-2 py-0.5"
+                  className="rounded-full bg-muted px-2 py-0.5 text-foreground"
                   title={t(language, "users.edit.readOnly")}
                 >
                   {a.opco.slug} ({a.role})
@@ -104,7 +104,7 @@ export default function EditUserDialog({ user, language, manageable, onClose, on
             <div key={row.opcoSlug} className="flex items-center gap-2">
               <span className="w-40 text-sm">{OPCO_NAMES[row.opcoSlug as OpCoSlug] ?? row.opcoSlug}</span>
               <select
-                className="h-9 flex-1 rounded-md border border-border bg-white px-3 text-sm"
+                className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
                 value={row.role}
                 onChange={(e) => setRole(row.opcoSlug, e.target.value as Role)}
               >

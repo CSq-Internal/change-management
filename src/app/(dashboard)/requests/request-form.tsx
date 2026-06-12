@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
+import { StatusPill } from "@/components/change-badges"
 import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import type { AttachmentKind } from "@prisma/client"
@@ -73,16 +74,6 @@ function formatRelativeDate(iso: string): string {
   if (diffDays === 1) return "Yesterday"
   if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString()
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-zinc-100 text-zinc-600",
-  pending: "bg-amber-100 text-amber-700",
-  approved: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
-  implemented: "bg-blue-100 text-blue-700",
-  verified: "bg-purple-100 text-purple-700",
-  closed: "bg-gray-100 text-gray-500",
 }
 
 export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail, attachments = [], groupCtos = [], approversByOpco = {} }: Props) {
@@ -261,7 +252,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           </CardHeader>
           <CardContent>
             <select
-              className="h-10 sm:h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
+              className="h-10 sm:h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
               value={opcoSlug}
               onChange={(e) => setOpcoSlug(e.target.value)}
               disabled={mode === "edit"}
@@ -284,7 +275,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           </CardHeader>
           <CardContent>
             <select
-              className="h-10 sm:h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
+              className="h-10 sm:h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
               value={infrastructureType}
               onChange={(e) => setInfrastructureType(e.target.value as (typeof infraTypes)[number])}
             >
@@ -365,7 +356,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
             </CardHeader>
             <CardContent>
               <select
-                className="h-10 sm:h-9 w-full rounded-md border border-border bg-white px-3 text-sm"
+                className="h-10 sm:h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as typeof category)}
               >
@@ -481,10 +472,8 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
                     <p className="truncate text-sm font-medium leading-tight">{r.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{formatRelativeDate(r.updatedAt)}</p>
                   </div>
-                  <span
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium capitalize ${STATUS_COLORS[r.status] ?? "bg-zinc-100 text-zinc-600"}`}
-                  >
-                    {r.status}
+                  <span className="shrink-0">
+                    <StatusPill status={r.status} />
                   </span>
                 </Link>
               ))
