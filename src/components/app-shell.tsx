@@ -39,41 +39,43 @@ import {
   X,
   Sun,
   Moon,
+  HelpCircle,
   Gavel,
   ArrowLeftRight,
   Building2,
   ScrollText,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
+import ProductTour from "@/components/tour/product-tour"
 
 const navGroups = [
   {
     labelKey: "nav.core",
     items: [
-      { href: "/", labelKey: "nav.dashboard", icon: BarChart3 },
-      { href: "/requests", labelKey: "nav.requests", icon: ClipboardList },
-      { href: "/approvals", labelKey: "nav.approvals", icon: ShieldCheck },
-      { href: "/changes", labelKey: "nav.changes", icon: GitCompare },
+      { href: "/", labelKey: "nav.dashboard", icon: BarChart3, tour: "nav-dashboard" },
+      { href: "/requests", labelKey: "nav.requests", icon: ClipboardList, tour: "nav-requests" },
+      { href: "/approvals", labelKey: "nav.approvals", icon: ShieldCheck, tour: "nav-approvals" },
+      { href: "/changes", labelKey: "nav.changes", icon: GitCompare, tour: "nav-changes" },
       { href: "/audits", labelKey: "nav.audits", icon: FileClock },
     ],
   },
   {
     labelKey: "nav.userManagement",
     items: [
-      { href: "/users", labelKey: "nav.users", icon: Users, gate: "admin" },
+      { href: "/users", labelKey: "nav.users", icon: Users, gate: "admin", tour: "nav-users" },
       { href: "/teams", labelKey: "nav.teams", icon: UsersRound, gate: "admin" },
-      { href: "/cab", labelKey: "nav.cab", icon: Gavel, gate: "admin" },
+      { href: "/cab", labelKey: "nav.cab", icon: Gavel, gate: "admin", tour: "nav-cab" },
       { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight, gate: "admin" },
-      { href: "/opcos", labelKey: "nav.opcos", icon: Building2, gate: "groupAdmin" },
+      { href: "/opcos", labelKey: "nav.opcos", icon: Building2, gate: "groupAdmin", tour: "nav-opcos" },
       { href: "/admin-audit", labelKey: "nav.audit", icon: ScrollText, gate: "adminOrAudit" },
     ],
   },
   {
     labelKey: "nav.insights",
     items: [
-      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
+      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays, tour: "nav-calendar" },
       { href: "/risk-register", labelKey: "nav.riskRegister", icon: Shield },
-      { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders },
+      { href: "/approval-matrix", labelKey: "nav.approvalMatrix", icon: Sliders, tour: "nav-approval-matrix" },
       { href: "/reports", labelKey: "nav.reports", icon: LineChart },
       { href: "/notifications/history", labelKey: "nav.notificationHistory", icon: BellRing },
     ],
@@ -255,6 +257,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         key={item.href}
                         href={item.href}
+                        data-tour={(item as { tour?: string }).tour}
                         className={cn(
                           "mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
                           active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-muted"
@@ -358,6 +361,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </button>
+                <button
+                  data-tour="tour-help"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
+                  onClick={() => window.dispatchEvent(new Event("csq:start-tour"))}
+                  aria-label={translate("tour.help")}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
                 <div className="relative">
                   <button
                     className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"
@@ -391,6 +402,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {currentUser && (
                   <Link
                     href="/notifications/history"
+                    data-tour="tour-notifications"
                     className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
                     aria-label={translate("nav.notificationHistory")}
                   >
@@ -520,6 +532,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <Toaster />
+      {currentUser && <ProductTour />}
       {preferencesOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
