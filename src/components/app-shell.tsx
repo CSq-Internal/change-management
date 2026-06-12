@@ -334,7 +334,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
                 <OpCoSwitcher />
                 <label className="flex cursor-pointer items-center gap-2 rounded-full bg-card px-2 py-1">
-                  <span className="relative h-8 w-8 overflow-hidden rounded-full bg-slate-100">
+                  <span className="relative h-8 w-8 overflow-hidden rounded-full bg-muted">
                     {avatarUrl ? (
                       <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
                     ) : (
@@ -452,8 +452,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <Link
                       href={crumb.href}
                       className={cn(
-                        "transition hover:text-slate-800",
-                        index === breadcrumbs.length - 1 && "font-semibold text-slate-800"
+                        "transition hover:text-foreground",
+                        index === breadcrumbs.length - 1 && "font-semibold text-foreground"
                       )}
                     >
                       {translate(crumb.labelKey)}
@@ -539,7 +539,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{translate("prefs.title")}</h3>
               <button
-                className="text-sm text-muted-foreground hover:text-slate-800"
+                className="text-sm text-muted-foreground hover:text-foreground"
                 onClick={() => setPreferencesOpen(false)}
               >
                 {translate("prefs.close")}

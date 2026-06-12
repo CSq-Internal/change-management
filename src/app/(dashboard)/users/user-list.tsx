@@ -49,7 +49,7 @@ export default function UserList({
               key={f}
               onClick={() => setFilter(f)}
               className={`rounded-full px-3 py-1 text-xs ${
-                filter === f ? "bg-slate-900 text-white" : "bg-slate-100 text-muted-foreground"
+                filter === f ? "bg-slate-900 text-white" : "bg-muted text-muted-foreground"
               }`}
             >
               {t(language, filterKey[f])}
@@ -70,7 +70,9 @@ export default function UserList({
               </div>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs ${
-                  user.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
+                  user.isActive
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                    : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
                 }`}
               >
                 {user.isActive ? t(language, "users.list.active") : t(language, "users.list.inactive")}

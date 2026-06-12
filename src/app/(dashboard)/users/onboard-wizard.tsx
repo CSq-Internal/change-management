@@ -114,7 +114,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
               <span
                 key={item.titleKey}
                 className={`rounded-full px-3 py-1 ${
-                  index === step ? "bg-slate-900 text-white" : "bg-slate-100 text-muted-foreground"
+                  index === step ? "bg-slate-900 text-white" : "bg-muted text-muted-foreground"
                 }`}
               >
                 {index + 1}. {t(language, item.titleKey)}
@@ -144,7 +144,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
               {assignments.map((a) => (
                 <div key={a.opcoSlug} className="flex items-center gap-2">
                   <select
-                    className="h-9 flex-1 rounded-md border border-border bg-white px-3 text-sm"
+                    className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
                     value={a.opcoSlug}
                     onChange={(e) => setSlug(a.opcoSlug, e.target.value)}
                   >
@@ -155,7 +155,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
                     ))}
                   </select>
                   <select
-                    className="h-9 w-40 rounded-md border border-border bg-white px-3 text-sm"
+                    className="h-9 w-40 rounded-md border border-border bg-background px-3 text-sm text-foreground"
                     value={a.role}
                     onChange={(e) => setRole(a.opcoSlug, e.target.value as Role)}
                   >
