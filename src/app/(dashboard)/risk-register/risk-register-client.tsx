@@ -103,7 +103,7 @@ export default function RiskRegisterClient({
           {rows.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">{t(language, "risk.empty")}</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="responsive-table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">{t(language, "risk.col.title")}</th>
@@ -119,18 +119,18 @@ export default function RiskRegisterClient({
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-border/40 align-top">
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-2" data-label={t(language, "risk.col.title")}>
                       <div className="font-medium">{r.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-2">{r.description}</div>
                     </td>
-                    <td className="px-4 py-2 capitalize">{r.category}</td>
-                    <td className="px-4 py-2"><ScoreBadge likelihood={r.likelihood} impact={r.impact} /></td>
-                    <td className="px-4 py-2">{r.owner}</td>
-                    <td className="px-4 py-2 capitalize">{r.status}</td>
-                    <td className="px-4 py-2">{r.reviewDate ? r.reviewDate.slice(0, 10) : "—"}</td>
-                    <td className="px-4 py-2">{r.opcoName ?? t(language, "risk.scope.group")}</td>
+                    <td className="px-4 py-2 capitalize" data-label={t(language, "risk.col.category")}>{r.category}</td>
+                    <td className="px-4 py-2" data-label={t(language, "risk.col.score")}><ScoreBadge likelihood={r.likelihood} impact={r.impact} /></td>
+                    <td className="px-4 py-2" data-label={t(language, "risk.col.owner")}>{r.owner}</td>
+                    <td className="px-4 py-2 capitalize" data-label={t(language, "risk.col.status")}>{r.status}</td>
+                    <td className="px-4 py-2" data-label={t(language, "risk.col.review")}>{r.reviewDate ? r.reviewDate.slice(0, 10) : "—"}</td>
+                    <td className="px-4 py-2" data-label={t(language, "risk.col.scope")}>{r.opcoName ?? t(language, "risk.scope.group")}</td>
                     {canManage && (
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-4 py-2 text-right" data-label="">
                         <button onClick={() => openEdit(r)} className="text-xs text-primary hover:underline">{t(language, "risk.edit")}</button>
                       </td>
                     )}

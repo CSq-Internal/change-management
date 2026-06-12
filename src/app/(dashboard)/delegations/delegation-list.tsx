@@ -25,7 +25,7 @@ export default function DelegationList({ delegations, language, onRevoke }: Dele
   return (
     <Card className="border-border/80 bg-card/95">
       <CardContent className="p-0">
-        <table className="w-full text-sm">
+        <table className="responsive-table w-full text-sm">
           <thead>
             <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
               <th className="px-4 py-2">{t(language, "delegationsAdmin.colFrom")}</th>
@@ -38,11 +38,11 @@ export default function DelegationList({ delegations, language, onRevoke }: Dele
           <tbody>
             {delegations.map((d) => (
               <tr key={d.id} className="border-b border-border/40">
-                <td className="px-4 py-2">{d.fromUser.email}</td>
-                <td className="px-4 py-2">{d.toUser.email}</td>
-                <td className="px-4 py-2">{d.opco.slug}</td>
-                <td className="px-4 py-2">{new Date(d.validUntil).toLocaleDateString()}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colFrom")}>{d.fromUser.email}</td>
+                <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colTo")}>{d.toUser.email}</td>
+                <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colOpco")}>{d.opco.slug}</td>
+                <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colUntil")}>{new Date(d.validUntil).toLocaleDateString()}</td>
+                <td className="px-4 py-2" data-label="">
                   <div className="flex justify-end">
                     <Button variant="outline" onClick={() => onRevoke(d)}>
                       {t(language, "delegationsAdmin.revoke")}

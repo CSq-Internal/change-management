@@ -23,7 +23,7 @@ export default function AuditList({ rows, language }: AuditListProps) {
   return (
     <Card className="border-border/80 bg-card/95">
       <CardContent className="p-0">
-        <table className="w-full text-sm">
+        <table className="responsive-table w-full text-sm">
           <thead>
             <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
               <th className="px-4 py-2">{t(language, "auditAdmin.colWhen")}</th>
@@ -36,13 +36,13 @@ export default function AuditList({ rows, language }: AuditListProps) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-border/40 align-top">
-                <td className="px-4 py-2 whitespace-nowrap text-xs text-muted-foreground">
+                <td className="px-4 py-2 whitespace-nowrap text-xs text-muted-foreground" data-label={t(language, "auditAdmin.colWhen")}>
                   {new Date(r.at).toLocaleString()}
                 </td>
-                <td className="px-4 py-2">{r.actorEmail}</td>
-                <td className="px-4 py-2 font-mono text-xs">{r.action}</td>
-                <td className="px-4 py-2">{r.opcoSlug ?? "—"}</td>
-                <td className="px-4 py-2">{r.summary}</td>
+                <td className="px-4 py-2" data-label={t(language, "auditAdmin.colActor")}>{r.actorEmail}</td>
+                <td className="px-4 py-2 font-mono text-xs" data-label={t(language, "auditAdmin.colAction")}>{r.action}</td>
+                <td className="px-4 py-2" data-label={t(language, "auditAdmin.colOpco")}>{r.opcoSlug ?? "—"}</td>
+                <td className="px-4 py-2" data-label={t(language, "auditAdmin.colSummary")}>{r.summary}</td>
               </tr>
             ))}
           </tbody>

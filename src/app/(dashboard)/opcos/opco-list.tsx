@@ -26,7 +26,7 @@ export default function OpcoList({ opcos, language, onRename, onArchiveToggle }:
   return (
     <Card className="border-border/80 bg-card/95">
       <CardContent className="p-0">
-        <table className="w-full text-sm">
+        <table className="responsive-table w-full text-sm">
           <thead>
             <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
               <th className="px-4 py-2">{t(language, "opcosAdmin.colName")}</th>
@@ -38,12 +38,12 @@ export default function OpcoList({ opcos, language, onRename, onArchiveToggle }:
           <tbody>
             {opcos.map((o) => (
               <tr key={o.id} className="border-b border-border/40">
-                <td className="px-4 py-2 font-medium">{o.name}</td>
-                <td className="px-4 py-2">{o.slug}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 font-medium" data-label={t(language, "opcosAdmin.colName")}>{o.name}</td>
+                <td className="px-4 py-2" data-label={t(language, "opcosAdmin.colSlug")}>{o.slug}</td>
+                <td className="px-4 py-2" data-label={t(language, "opcosAdmin.colStatus")}>
                   {t(language, o.archived ? "opcosAdmin.statusArchived" : "opcosAdmin.statusActive")}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-label="">
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => onRename(o)}>
                       {t(language, "opcosAdmin.rename")}

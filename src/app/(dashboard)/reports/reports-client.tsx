@@ -183,7 +183,7 @@ export default function ReportsClient({ data }: ReportsClientProps) {
           {data.slaCompliance.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t(language, "reports.slaCompliance.empty")}</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="responsive-table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
                   <th className="py-2 pr-4 font-medium">{t(language, "reports.slaCol.opco")}</th>
@@ -196,11 +196,11 @@ export default function ReportsClient({ data }: ReportsClientProps) {
               <tbody>
                 {data.slaCompliance.map((cell) => (
                   <tr key={`${cell.opcoSlug}-${cell.riskLevel}`} className="border-b border-border/40">
-                    <td className="py-2 pr-4">{cell.opcoName}</td>
-                    <td className="py-2 pr-4 capitalize">{cell.riskLevel}</td>
-                    <td className="py-2 pr-4 text-right">{cell.decided}</td>
-                    <td className="py-2 pr-4 text-right">{cell.inSla}</td>
-                    <td className="py-2 text-right font-medium">
+                    <td className="py-2 pr-4" data-label={t(language, "reports.slaCol.opco")}>{cell.opcoName}</td>
+                    <td className="py-2 pr-4 capitalize" data-label={t(language, "reports.slaCol.risk")}>{cell.riskLevel}</td>
+                    <td className="py-2 pr-4 text-right" data-label={t(language, "reports.slaCol.decided")}>{cell.decided}</td>
+                    <td className="py-2 pr-4 text-right" data-label={t(language, "reports.slaCol.inSla")}>{cell.inSla}</td>
+                    <td className="py-2 text-right font-medium" data-label={t(language, "reports.slaCol.adherence")}>
                       {cell.adherencePct == null ? "—" : `${cell.adherencePct}%`}
                     </td>
                   </tr>
