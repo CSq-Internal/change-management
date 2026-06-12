@@ -75,7 +75,7 @@ export function MatchingChangesList({
         <p className="px-4 pb-4 text-sm text-muted-foreground">{t(language, "dashboard.list.empty")}</p>
       ) : (
         <div className="overflow-x-auto px-2 pb-2">
-          <table className="w-full text-left text-sm">
+          <table className="responsive-table w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-muted-foreground">
                 {cols.map((c) => (
@@ -90,15 +90,15 @@ export function MatchingChangesList({
             <tbody>
               {sorted.map((r) => (
                 <tr key={r.id} className="border-b border-border/50 hover:bg-muted/50">
-                  <td className="px-2 py-2">
+                  <td className="px-2 py-2" data-label={t(language, "dashboard.list.col.title")}>
                     <Link href={`/changes/${r.id}`} className="text-primary hover:underline">{r.title}</Link>
                   </td>
-                  <td className="px-2 py-2">{r.opcoName}</td>
-                  <td className="px-2 py-2">{r.infrastructureType}</td>
-                  <td className="px-2 py-2">{r.riskLevel}</td>
-                  <td className="px-2 py-2">{r.status}</td>
-                  <td className="px-2 py-2 tabular-nums">{fmtDate(r.plannedStart)}</td>
-                  <td className="px-2 py-2 tabular-nums">{fmtDate(r.createdAt)}</td>
+                  <td className="px-2 py-2" data-label={t(language, "dashboard.list.col.opco")}>{r.opcoName}</td>
+                  <td className="px-2 py-2" data-label={t(language, "dashboard.list.col.infra")}>{r.infrastructureType}</td>
+                  <td className="px-2 py-2" data-label={t(language, "dashboard.list.col.risk")}>{r.riskLevel}</td>
+                  <td className="px-2 py-2" data-label={t(language, "dashboard.list.col.status")}>{r.status}</td>
+                  <td className="px-2 py-2 tabular-nums" data-label={t(language, "dashboard.list.col.planned")}>{fmtDate(r.plannedStart)}</td>
+                  <td className="px-2 py-2 tabular-nums" data-label={t(language, "dashboard.list.col.created")}>{fmtDate(r.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

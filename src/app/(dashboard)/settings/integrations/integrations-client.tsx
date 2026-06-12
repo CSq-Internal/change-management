@@ -58,7 +58,7 @@ export default function IntegrationsClient({
           {rows.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">{t(language, "chat.empty")}</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="responsive-table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">{t(language, "chat.scope")}</th>
@@ -70,11 +70,11 @@ export default function IntegrationsClient({
               <tbody>
                 {rows.map((w) => (
                   <tr key={w.id} className="border-b border-border/40">
-                    <td className="px-4 py-2">{w.opcoName ?? t(language, "chat.group")}</td>
-                    <td className="px-4 py-2 truncate max-w-xs">{w.url}</td>
-                    <td className="px-4 py-2">{w.isActive ? "✓" : "—"}</td>
+                    <td className="px-4 py-2" data-label={t(language, "chat.scope")}>{w.opcoName ?? t(language, "chat.group")}</td>
+                    <td className="px-4 py-2 truncate max-w-xs" data-label={t(language, "chat.url")}>{w.url}</td>
+                    <td className="px-4 py-2" data-label={t(language, "chat.active")}>{w.isActive ? "✓" : "—"}</td>
                     {canManage && (
-                      <td className="px-4 py-2 text-right space-x-3">
+                      <td className="px-4 py-2 text-right space-x-3" data-label="">
                         <button className="text-xs text-primary hover:underline" onClick={() => run(() => setChatWebhookActive(w.id, !w.isActive), "chat.saved")}>{w.isActive ? t(language, "chat.active") + " ✕" : t(language, "chat.active")}</button>
                         <button className="text-xs text-rose-600 hover:underline" onClick={() => run(() => deleteChatWebhook(w.id), "chat.removed")}>{t(language, "chat.remove")}</button>
                       </td>

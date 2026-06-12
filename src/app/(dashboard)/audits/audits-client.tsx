@@ -75,7 +75,7 @@ export default function AuditsClient({ entries }: AuditsClientProps) {
           <p className="mt-4 text-sm text-muted-foreground">No audit entries found.</p>
         ) : (
           <div className="mt-4 overflow-auto max-h-[60vh] sm:max-h-[50vh]">
-            <table className="w-full text-xs text-foreground/80">
+            <table className="responsive-table w-full text-xs text-foreground/80">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <th className="pb-2 pr-4">Timestamp</th>
@@ -91,18 +91,18 @@ export default function AuditsClient({ entries }: AuditsClientProps) {
               <tbody>
                 {entries.map((entry) => (
                   <tr key={entry.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-2 pr-4 whitespace-nowrap">
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label="Timestamp">
                       {new Date(entry.at).toLocaleString()}
                     </td>
-                    <td className="py-2 pr-4 whitespace-nowrap">
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label="Actor">
                       {entry.actor.name ?? entry.actor.email}
                     </td>
-                    <td className="py-2 pr-4 max-w-[180px] truncate">{entry.change.title}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap">{entry.action}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap">{entry.change.opco.slug}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap">{entry.fromStatus ?? "—"}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap">{entry.toStatus ?? "—"}</td>
-                    <td className="py-2 max-w-[160px] truncate">{entry.note ?? "—"}</td>
+                    <td className="py-2 pr-4 max-w-[180px] truncate" data-label="Change">{entry.change.title}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label="Action">{entry.action}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label="OpCo">{entry.change.opco.slug}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label="From">{entry.fromStatus ?? "—"}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label="To">{entry.toStatus ?? "—"}</td>
+                    <td className="py-2 max-w-[160px] truncate" data-label="Note">{entry.note ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

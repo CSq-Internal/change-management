@@ -27,7 +27,7 @@ export default function TeamList({ teams, language, onEdit, onMembers, onDelete 
   return (
     <Card className="border-border/80 bg-card/95">
       <CardContent className="p-0">
-        <table className="w-full text-sm">
+        <table className="responsive-table w-full text-sm">
           <thead>
             <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
               <th className="px-4 py-2">{t(language, "teamsAdmin.colName")}</th>
@@ -39,15 +39,15 @@ export default function TeamList({ teams, language, onEdit, onMembers, onDelete 
           <tbody>
             {teams.map((team) => (
               <tr key={team.id} className="border-b border-border/40">
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-label={t(language, "teamsAdmin.colName")}>
                   <div className="font-medium">{team.name}</div>
                   {team.description && (
                     <div className="text-xs text-muted-foreground">{team.description}</div>
                   )}
                 </td>
-                <td className="px-4 py-2">{team.opco.slug}</td>
-                <td className="px-4 py-2">{team.members.length}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-label={t(language, "teamsAdmin.colOpco")}>{team.opco.slug}</td>
+                <td className="px-4 py-2" data-label={t(language, "teamsAdmin.colMembers")}>{team.members.length}</td>
+                <td className="px-4 py-2" data-label="">
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => onMembers(team)}>
                       {t(language, "teamsAdmin.members")}
