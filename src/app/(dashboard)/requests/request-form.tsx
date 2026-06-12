@@ -222,7 +222,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:grid-cols-1">
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-2xl sm:text-xl">{t(language, "requests.title")}</CardTitle>
@@ -455,7 +455,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
         </div>
       </div>
 
-      <aside className="space-y-6">
+      <aside className="min-w-0 space-y-6">
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle className="text-base">{t(language, "requests.myRequests")}</CardTitle>
