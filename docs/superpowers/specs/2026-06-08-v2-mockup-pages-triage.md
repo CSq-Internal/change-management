@@ -135,3 +135,21 @@ own brainstorming → spec → plan cycle; out of scope for this triage.
    Briefs 1–3 as "triaged: drop/fold."
 3. **Optional v2 enhancement:** severity/category routing policies on `/settings/notifications`
    (Brief 2), only if there is real demand.
+
+---
+
+## Resolution (2026-06-13)
+
+The cleanup follow-up above is **done**:
+- `/automation` and `/settings/alerts` — already removed (pages gone; never linked in nav).
+- `/settings/security` — shipped as a working **Keycloak Account-Console deep-link**
+  (`${KEYCLOAK_ISSUER}/account`), kept in the Settings nav.
+- `/settings/preferences` — a leftover unlinked stub (non-functional buttons; its display
+  options duplicated the working Preferences modal) was **deleted** (page + i18n keys).
+
+### v2 candidate carried forward — Workspace defaults
+
+The one genuine idea inside the deleted preferences stub: **per-user workspace defaults that
+pre-fill a new change request** (default OpCo, default risk level, default approvers). Small,
+self-contained UX win — deferred to v2. Display density was intentionally dropped (theme /
+font scale / language already work in the global Preferences modal).

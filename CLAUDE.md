@@ -45,7 +45,7 @@ Use `pnpm` — `package-lock.json` has been deleted and the project uses `pnpm-l
 
 **Domain types (`src/lib/types.ts`)** — `AppUser`, `ChangeRequest`, and `Team` are the core TypeScript interfaces, but `prisma/schema.prisma` is the source of truth and additionally models CAB membership, approver delegations/overrides, change assignees, approvals, attachments, notifications + preferences, PIR records, blackout periods, and the systemic risk register. `ChangeRequest.details` holds telecom-specific fields (country, infrastructure type, impact scope, etc.) from the CSquared paper change-request form.
 
-**Stub pages** — The following pages still render static placeholder data with no real logic: `/audit-exports`, `/automation`, `/change-details`, and the `/settings/{profile,security,alerts,preferences,approvers}` sub-pages. Some likely duplicate real pages and are pending a stub/duplicate review (`/change-details` vs the live `/changes/[id]` detail hub; `/audit-exports` vs `/audits`; `/settings/approvers` vs `/approval-matrix`).
+**Stub pages** — The earlier placeholder/duplicate pages have been triaged and removed (`/automation`, `/settings/alerts`, `/audit-exports`, `/change-details`, `/settings/approvers`, `/settings/preferences`). See `docs/superpowers/specs/2026-06-08-v2-mockup-pages-triage.md` for the verdicts. The live Settings sub-pages are `profile` (read-only account card), `notifications` (preference matrix), `security` (Keycloak Account-Console deep-link), and `integrations` (Google Chat webhooks) — all functional, no stubs remain.
 
 ## Key conventions
 
