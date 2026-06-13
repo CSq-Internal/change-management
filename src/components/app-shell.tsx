@@ -142,13 +142,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     [showAdminGroup, anyAdmin, groupAdmin, groupLevel]
   )
   const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
-  const currentNav = flatNavItems.find((item) => item.href === pathname)
-  const breadcrumbs = currentNav
-    ? [
-        { href: "/", labelKey: "nav.dashboard" },
-        ...(currentNav.href === "/" ? [] : [currentNav]),
-      ]
-    : [{ href: "/", labelKey: "nav.dashboard" }]
+  // Match the current path to a nav item — exact first, then the longest non-root
+  // prefix so dynamic routes (e.g. /changes/:id) resolve to their parent (Changes).
+  const activeNav =
+    flatNavItems.find((item) => item.href === pathname) ??
+    flatNavItems
+      .filter((item) => item.href !== "/" && pathname.startsWith(`${item.href}/`))
+      .sort((a, b) => b.href.length - a.href.length)[0]
+  const activeGroup = activeNav
+    ? effectiveNavGroups.find((group) => group.items.some((item) => item.href === activeNav.href))
+    : undefined
+  // Breadcrumb = the page's real section + the page. Primary (Core) pages stand alone;
+  // only grouped sections (Administration / Insights / Settings) prepend their section.
+  const breadcrumbs: { labelKey: string; href?: string }[] = activeNav
+    ? activeGroup && activeGroup.labelKey !== "nav.core"
+      ? [{ labelKey: activeGroup.labelKey }, { labelKey: activeNav.labelKey, href: activeNav.href }]
+      : [{ labelKey: activeNav.labelKey, href: activeNav.href }]
+    : [{ labelKey: "nav.dashboard", href: "/" }]
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -447,20 +457,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="border-t border-slate-100">
               <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-                {breadcrumbs.map((crumb, index) => (
-                  <span key={crumb.href} className="flex items-center gap-2">
-                    <Link
-                      href={crumb.href}
-                      className={cn(
-                        "transition hover:text-foreground",
-                        index === breadcrumbs.length - 1 && "font-semibold text-foreground"
+                {breadcrumbs.map((crumb, index) => {
+                  const isLast = index === breadcrumbs.length - 1
+                  return (
+                    <span key={crumb.labelKey} className="flex items-center gap-2">
+                      {crumb.href ? (
+                        <Link
+                          href={crumb.href}
+                          className={cn("transition hover:text-foreground", isLast && "font-semibold text-foreground")}
+                        >
+                          {translate(crumb.labelKey)}
+                        </Link>
+                      ) : (
+                        // Section label (e.g. "Administration") — not a page, so not a link.
+                        <span>{translate(crumb.labelKey)}</span>
                       )}
-                    >
-                      {translate(crumb.labelKey)}
-                    </Link>
-                    {index < breadcrumbs.length - 1 && <span className="text-slate-300">/</span>}
-                  </span>
-                ))}
+                      {!isLast && <span className="text-slate-300">/</span>}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           </header>
