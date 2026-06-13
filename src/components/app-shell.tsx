@@ -215,7 +215,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="sticky top-0 z-10 bg-card/90 px-6 py-6 backdrop-blur">
             <div className={cn("flex items-center gap-3", sidebarCollapsed ? "justify-center" : "justify-between")}>
               <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}>
-                <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} className="rounded-full" />
+                <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} unoptimized className="shrink-0 rounded-full" />
                 {!sidebarCollapsed && (
                   <div>
                     <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CSquared</div>
@@ -470,7 +470,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="absolute left-0 top-0 h-full w-72 bg-card px-4 py-5 shadow-xl">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} className="rounded-full" />
+                    <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} unoptimized className="shrink-0 rounded-full" />
                     <div className="text-sm font-semibold">CSquared</div>
                   </div>
                   <button

@@ -8,6 +8,7 @@ import { t } from "@/lib/i18n"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
 import { rescheduleChange } from "@/server/actions/changes"
+import { createBlackoutPeriod, deleteBlackoutPeriod } from "@/server/actions/blackout"
 import type { RiskLevel } from "@/lib/calendar"
 
 export type CalDay = { key: string; inMonth: boolean; dayNum: number | null; isToday: boolean }
@@ -17,6 +18,8 @@ export type CalChipData = {
   overlap: boolean; blackout: boolean; severity: RiskLevel | null
   blackoutLabels: string[]; canReschedule: boolean
 }
+export type BlackoutScope = { value: string; label: string }
+export type BlackoutRow = { id: string; label: string; scopeName: string; startMs: number; endMs: number }
 
 const SEVERITY_RING: Record<string, string> = {
   low: "ring-emerald-400", medium: "ring-amber-400", high: "ring-orange-500", emergency: "ring-rose-500",
@@ -35,14 +38,54 @@ function formatDayLabel(key: string, language: string): string {
 
 export default function CalendarClient({
   monthLabel, prevMonth, nextMonth, cells, chips,
+  canManageBlackouts = false, blackoutScopes = [], blackouts = [],
 }: {
   monthLabel: string; prevMonth: string; nextMonth: string; cells: CalDay[]; chips: CalChipData[]
+  canManageBlackouts?: boolean; blackoutScopes?: BlackoutScope[]; blackouts?: BlackoutRow[]
 }) {
   const { language } = useStore()
   const router = useRouter()
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
   const [dragId, setDragId] = useState<string | null>(null)
+  const [boScope, setBoScope] = useState(blackoutScopes[0]?.value ?? "")
+  const [boLabel, setBoLabel] = useState("")
+  const [boStart, setBoStart] = useState("")
+  const [boEnd, setBoEnd] = useState("")
+
+  const addBlackout = () => {
+    if (!boLabel || !boStart || !boEnd) {
+      toast({ title: t(language, "calendar.blackout.incomplete"), variant: "error" })
+      return
+    }
+    startTransition(async () => {
+      try {
+        await createBlackoutPeriod({
+          opcoSlug: boScope || null,
+          label: boLabel,
+          startsAt: new Date(boStart),
+          endsAt: new Date(boEnd),
+        })
+        setBoLabel(""); setBoStart(""); setBoEnd("")
+        toast({ title: t(language, "calendar.blackout.created"), variant: "success" })
+        router.refresh()
+      } catch (err) {
+        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      }
+    })
+  }
+
+  const removeBlackout = (id: string) => {
+    startTransition(async () => {
+      try {
+        await deleteBlackoutPeriod(id)
+        toast({ title: t(language, "calendar.blackout.removed"), variant: "success" })
+        router.refresh()
+      } catch (err) {
+        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      }
+    })
+  }
 
   const chipsByDay = new Map<string, CalChipData[]>()
   for (const c of chips) {
@@ -168,6 +211,81 @@ export default function CalendarClient({
           ))
         )}
       </div>
+
+      {canManageBlackouts && (
+        <Card className="border-border/80 bg-card/95">
+          <CardContent className="space-y-4 p-4">
+            <div>
+              <h2 className="text-sm font-semibold">{t(language, "calendar.blackout.title")}</h2>
+              <p className="text-xs text-muted-foreground">{t(language, "calendar.blackout.subtitle")}</p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {t(language, "calendar.blackout.label")}
+                <input
+                  type="text"
+                  value={boLabel}
+                  onChange={(e) => setBoLabel(e.target.value)}
+                  placeholder={t(language, "calendar.blackout.labelPlaceholder")}
+                  className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                />
+              </label>
+              {blackoutScopes.length > 1 && (
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  {t(language, "calendar.blackout.scope")}
+                  <select
+                    value={boScope}
+                    onChange={(e) => setBoScope(e.target.value)}
+                    className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                  >
+                    {blackoutScopes.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+                  </select>
+                </label>
+              )}
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {t(language, "calendar.blackout.start")}
+                <input type="datetime-local" value={boStart} onChange={(e) => setBoStart(e.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {t(language, "calendar.blackout.end")}
+                <input type="datetime-local" value={boEnd} onChange={(e) => setBoEnd(e.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground" />
+              </label>
+              <button
+                type="button"
+                onClick={addBlackout}
+                disabled={isPending}
+                className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-50"
+              >
+                {t(language, "calendar.blackout.add")}
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              {blackouts.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t(language, "calendar.blackout.none")}</p>
+              ) : (
+                blackouts.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{b.label}</span>
+                      <span className="text-muted-foreground"> · {b.scopeName} · {formatDayLabel(new Date(b.startMs).toISOString().slice(0, 10), language)} → {formatDayLabel(new Date(b.endMs).toISOString().slice(0, 10), language)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeBlackout(b.id)}
+                      disabled={isPending}
+                      className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    >
+                      {t(language, "calendar.blackout.remove")}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

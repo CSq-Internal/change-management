@@ -80,8 +80,10 @@ export async function canUserApproveChange(args: {
 /** Pending changes the user is authorized to approve (group_admin sees all). */
 export async function listApprovableChanges(args: { userId: string; realmRoles: string[] }) {
   const db = getPrisma()
+  // Exclude the user's own requests — an approver can never act on a change they
+  // requested (SoD, ISO 27001 A.5.3), so they should not appear in the queue at all.
   const pending = await db.changeRequest.findMany({
-    where: { status: "pending" },
+    where: { status: "pending", requesterId: { not: args.userId } },
     include: { requester: true, opco: true, approvals: true },
     orderBy: { createdAt: "asc" },
   })

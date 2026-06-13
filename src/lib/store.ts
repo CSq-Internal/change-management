@@ -14,8 +14,11 @@ interface UIState {
 }
 
 export const useStore = create<UIState>((set) => ({
-  language: (typeof window !== 'undefined'
-    ? (localStorage.getItem('csq-language') as Language) : null) ?? 'en',
+  // Language must start at the SSR default ('en') so the server render and the
+  // client's first render agree — otherwise the persisted French value renders
+  // on the client before hydration and React throws a text-mismatch error.
+  // The persisted language is re-applied after mount (see AppShell's load effect).
+  language: 'en',
   fontScale: typeof window !== 'undefined'
     ? Number(localStorage.getItem('csq-font-scale') ?? 1) : 1,
   theme: (typeof window !== 'undefined'
