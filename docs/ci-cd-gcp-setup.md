@@ -61,7 +61,25 @@ gcloud iam service-accounts add-iam-policy-binding \
 The value for `GCP_WIF_PROVIDER` is:
 `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github-oidc`
 
-## Phase 2 (not yet wired)
-Migrations (`prisma migrate deploy` via the Dockerfile `migrate` target), Cloud Run deploy
-(`dev`→staging, `prod`→production behind a manual-approval Environment), and a post-deploy
-smoke check. These need the Cloud Run service(s) + Secret Manager wiring to exist first.
+## Phase 2 — runtime resources
+
+Provision the per-env Secret Manager secrets, runtime service account, and IAM with:
+
+```bash
+PROJECT_ID=<project> ./scripts/provision-gcp-runtime.sh staging
+PROJECT_ID=<project> ./scripts/provision-gcp-runtime.sh prod
+```
+
+This creates **empty, namespaced** secrets `cms-<env>-<key>` (8 credentials:
+`database-url`, `nextauth-secret`, `keycloak-client-secret`, `keycloak-admin-client-secret`,
+`resend-api-key`, `app-password`, `google-service-account-key`, `cron-secret`), a runtime SA
+`cms-run-<env>` with `secretAccessor` on only that env's secrets, and grants the deploy SA
+`run.admin` + `serviceAccountUser`. You then add secret **values** (`gcloud secrets versions add …`).
+Non-sensitive config (`NEXTAUTH_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID`,
+`KEYCLOAK_ADMIN_CLIENT_ID`, `EMAIL_FROM`, `SMTP_USER`, `GDRIVE_*`) is passed as plain env vars
+at deploy time, not stored in Secret Manager.
+
+**Still not wired:** the deploy itself — migrations (`prisma migrate deploy` via the Dockerfile
+`migrate` target), `gcloud run deploy` (`dev`→`cms-staging`, `prod`→`cms-prod` behind a
+manual-approval Environment), and a post-deploy smoke check — added to `ci-cd.yml` once secret
+values are populated.
