@@ -1,9 +1,13 @@
-name: CI
+name: CI/CD
 
 on:
   pull_request:
   push:
     branches: [dev, prod]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 # gitleaks-action lists PR commits via the API on pull_request events; without
 # pull-requests:read the default token returns 403 "Resource not accessible".
@@ -104,3 +108,91 @@ jobs:
       # so a red audit surfaces vulnerabilities without blocking merges.
       # Known: Next.js 16.1.4 carries high advisories fixed in >=16.2.5 — upgrade to clear.
       - run: pnpm audit --audit-level=high
+
+  image:
+    name: Build, Scan & Push Image
+    runs-on: ubuntu-latest
+    # Ship images only from the integration/production branches, never from PRs.
+    if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'prod')
+    needs: [quality, test]
+    permissions:
+      contents: read
+      id-token: write          # mint the OIDC token for Workload Identity Federation
+      security-events: write   # upload Trivy SARIF to the Security tab
+    env:
+      IMAGE: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO }}/csquared-cms
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.AR_REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (load locally so we can scan before pushing)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan — fail on CRITICAL
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      - name: Trivy report — SARIF (CRITICAL/HIGH/MEDIUM, non-blocking)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          format: cyclonedx
+          output: sbom.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 90
+
+      - name: Push image (SHA + branch tags)
+        run: |
+          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${GITHUB_REF_NAME}"
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:${GITHUB_REF_NAME}"
