@@ -1,53 +1,48 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupLevel } from "@/lib/permissions"
-import { OPCO_SLUGS } from "@/lib/opco"
-import RequestForm from "./request-form"
+import { viewerTier } from "@/lib/permissions"
+import { requestScope } from "@/server/request-scope"
+import RequestsTableClient, { type RequestRow } from "./requests-table-client"
 
-export default async function RequestsPage() {
+export default async function RequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>
+}) {
   const session = await auth()
   if (!session) redirect("/login")
   const db = getPrisma()
 
-  const opcoOptions = isGroupLevel(session.user.realmRoles)
-    ? [...OPCO_SLUGS]
-    : session.user.organizations.map((o) => o.alias)
+  const tier = viewerTier(session.user.organizations, session.user.realmRoles)
+  const where = requestScope(session.user)
 
-  const mine = await db.changeRequest.findMany({
-    where: { requester: { keycloakId: session.user.keycloakId } },
+  const changes = await db.changeRequest.findMany({
+    where,
     orderBy: { updatedAt: "desc" },
-    take: 8,
-    select: { id: true, title: true, status: true, updatedAt: true },
+    select: {
+      id: true, title: true, status: true, riskLevel: true, infrastructureType: true,
+      opco: { select: { name: true } },
+      requester: { select: { name: true, email: true } },
+      approvals: { select: { decision: true } },
+    },
   })
 
-  // Approver-routing data for the live preview: group CAB + per-OpCo CAB members per selectable OpCo.
-  const opcoRecords = await db.opCo.findMany({
-    where: { slug: { in: opcoOptions } },
-    select: { id: true, slug: true },
-  })
-  const groupCtos = (await db.cABMembership.findMany({
-    where: { opcoId: null, isActive: true },
-    include: { user: { select: { name: true, email: true } } },
-  })).map((m) => m.user)
+  const rows: RequestRow[] = changes.map((c) => ({
+    id: c.id,
+    title: c.title,
+    status: c.status,
+    riskLevel: c.riskLevel,
+    infrastructureType: c.infrastructureType,
+    opcoName: c.opco?.name ?? "—",
+    approvalsGiven: c.approvals.filter((a) => a.decision === "approve").length,
+    requesterName: c.requester?.name ?? c.requester?.email ?? "—",
+  }))
 
-  const opcoCab = await db.cABMembership.findMany({
-    where: { opcoId: { in: opcoRecords.map((o) => o.id) }, isActive: true },
-    include: { user: { select: { name: true, email: true } }, opco: { select: { slug: true } } },
-  })
-  const approversByOpco: Record<string, { name: string | null; email: string }[]> = {}
-  for (const o of opcoRecords) approversByOpco[o.slug] = []
-  for (const m of opcoCab) {
-    if (m.opco) approversByOpco[m.opco.slug]?.push({ name: m.user.name, email: m.user.email })
-  }
+  const { status } = await searchParams
+  // The /changes redirect passes a comma list; the table filters by a single value,
+  // so use the first as the initial selection (sufficient for the retired-list case).
+  const initialStatus = status?.split(",")[0] ?? ""
 
-  return (
-    <RequestForm
-      opcoOptions={opcoOptions}
-      myRequests={mine.map((m) => ({ ...m, updatedAt: m.updatedAt.toISOString() }))}
-      defaultEmail={session.user.email ?? ""}
-      groupCtos={groupCtos}
-      approversByOpco={approversByOpco}
-    />
-  )
+  return <RequestsTableClient rows={rows} showRequester={tier !== "member"} initialStatus={initialStatus} />
 }
