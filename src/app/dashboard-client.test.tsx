@@ -23,7 +23,7 @@ const props = {
   opcoOptions: [...new Map(changes.map((c) => [c.opcoSlug, c.opcoName])).entries()]
     .map(([slug, name]) => ({ slug, name })),
   blackouts: [{ id: "b1", label: "Year-end freeze", scope: "Group", endsIn: "2d", amber: false }],
-  feed: [{ id: "f1", changeId: "CHG-1", label: "submitted", actor: "S. Nakato", ago: "8m ago", tone: "bg-amber-500" }],
+  feed: [{ id: "f1", changeId: "CHG-1", changeTitle: "Core router upgrade", label: "submitted", actor: "S. Nakato", ago: "8m ago", tone: "bg-amber-500" }],
   blackoutCount: 1,
 }
 

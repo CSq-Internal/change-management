@@ -51,7 +51,7 @@ export default async function Home() {
       where: { change: opcoFilter },
       orderBy: { at: "desc" },
       take: 8,
-      select: { id: true, action: true, at: true, change: { select: { id: true } }, actor: { select: { name: true, email: true } } },
+      select: { id: true, action: true, at: true, change: { select: { id: true, title: true } }, actor: { select: { name: true, email: true } } },
     }),
   ])
 
@@ -79,7 +79,7 @@ export default async function Home() {
   }))
 
   const feed: FeedEvent[] = auditRows.map((a) => ({
-    id: a.id, changeId: a.change.id,
+    id: a.id, changeId: a.change.id, changeTitle: a.change.title,
     label: a.action,
     actor: a.actor.name ?? a.actor.email.split("@")[0],
     ago: `${durLabel(now - a.at.getTime())} ago`,

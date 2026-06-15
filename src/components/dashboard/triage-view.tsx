@@ -33,7 +33,7 @@ function Row({ item, language }: { item: WorklistItem; language: Language }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-medium text-foreground">{item.title}</div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
-          <span className="font-mono text-[11px] text-muted-foreground/70">{item.id}</span> · {item.opcoName}
+          {item.opcoName}
           <RiskPill risk={item.risk} />
           <span className={`font-medium ${SEV_WHY[item.severity]}`}>{item.why}</span>
         </div>
