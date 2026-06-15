@@ -33,6 +33,12 @@ describe('getNavCounts', () => {
     const counts = await getNavCounts()
     expect(counts).toEqual({ pendingApprovals: 2, myRequests: 5, unreadNotifications: 2 })
   })
+  it('counts only requests needing the requester action (draft + rejected)', async () => {
+    await getNavCounts()
+    expect(mockDb.changeRequest.count).toHaveBeenCalledWith({
+      where: { requesterId: 'user-me', status: { in: ['draft', 'rejected'] } },
+    })
+  })
 })
 
 describe('markAllNotificationsRead', () => {

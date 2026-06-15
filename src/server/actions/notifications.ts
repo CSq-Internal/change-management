@@ -37,7 +37,10 @@ export async function getNavCounts() {
   if (!u) return { pendingApprovals: 0, myRequests: 0, unreadNotifications: 0 }
   const [approvable, myRequests, unreadNotifications] = await Promise.all([
     listApprovableChanges({ userId: u.id, realmRoles: session.realmRoles }),
-    db.changeRequest.count({ where: { requesterId: u.id } }),
+    // Only requests that need the requester's action: drafts to finish/submit and
+    // rejected ones to rework. In-flight (pending/approved/implemented) and terminal
+    // (verified/closed) states need nothing from them, so they don't belong on the badge.
+    db.changeRequest.count({ where: { requesterId: u.id, status: { in: ["draft", "rejected"] } } }),
     db.notification.count({ where: { userId: u.id, readAt: null } }),
   ])
   return { pendingApprovals: approvable.length, myRequests, unreadNotifications }
