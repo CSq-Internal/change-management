@@ -20,13 +20,15 @@ jobs:
     name: Type-check, Lint, Secrets
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -67,13 +69,13 @@ jobs:
       NEXTAUTH_SECRET: test-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -97,11 +99,11 @@ jobs:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       # Fails on high-severity advisories by design (security signal). This job is
       # NOT a required status check (branch protection gates on quality + test only),
@@ -117,57 +119,69 @@ jobs:
     needs: [quality, test]
     permissions:
       contents: read
-      id-token: write          # mint the OIDC token for Workload Identity Federation
-      security-events: write   # upload Trivy SARIF to the Security tab
+      id-token: write # mint the OIDC token for Workload Identity Federation
+      security-events: write # upload Trivy SARIF to the Security tab
     env:
       IMAGE: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO }}/csquared-cms
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Authenticate to Google Cloud (Workload Identity Federation)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SA_EMAIL }}
 
       - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ vars.AR_REGION }}-docker.pkg.dev --quiet
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Docker metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          # Immutable per-commit tag (full SHA, so the scan ref below is deterministic)
+          # plus a moving branch tag (:dev / :prod).
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=ref,event=branch
 
       - name: Build image (load locally so we can scan before pushing)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runner
           load: true
           push: false
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Trivy scan — fail on CRITICAL
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           format: table
           severity: CRITICAL
-          exit-code: '1'
+          exit-code: "1"
           ignore-unfixed: true
           vuln-type: os,library
 
       - name: Trivy report — SARIF (CRITICAL/HIGH/MEDIUM, non-blocking)
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH,MEDIUM
-          exit-code: '0'
+          exit-code: "0"
           ignore-unfixed: true
 
       - name: Upload Trivy SARIF to the Security tab
@@ -177,12 +191,12 @@ jobs:
           sarif_file: trivy-results.sarif
 
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           format: cyclonedx
           output: sbom.cdx.json
-          exit-code: '0'
+          exit-code: "0"
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
@@ -191,8 +205,10 @@ jobs:
           path: sbom.cdx.json
           retention-days: 90
 
-      - name: Push image (SHA + branch tags)
+      - name: Push scanned image to Artifact Registry
+        # Only reached if the CRITICAL gate passed. Pushes every tag metadata-action
+        # generated (full-SHA + branch); the image was loaded locally during build.
         run: |
-          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${GITHUB_REF_NAME}"
-          docker push "${IMAGE}:${GITHUB_SHA}"
-          docker push "${IMAGE}:${GITHUB_REF_NAME}"
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            [ -n "$tag" ] && docker push "$tag"
+          done
