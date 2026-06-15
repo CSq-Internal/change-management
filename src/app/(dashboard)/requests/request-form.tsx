@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
@@ -15,7 +14,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
-import { StatusPill } from "@/components/change-badges"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import type { AttachmentKind } from "@prisma/client"
@@ -32,8 +30,6 @@ const infraTypes = [
   "Backbone IP Network",
   "Power",
 ] as const
-
-type MyRequest = { id: string; title: string; status: string; updatedAt: string }
 
 type Initial = {
   id: string
@@ -56,7 +52,6 @@ type AttachmentSlot = { id: string; kind: string; filename: string }
 
 interface Props {
   opcoOptions: string[]
-  myRequests?: MyRequest[]
   mode?: "create" | "edit"
   initial?: Initial
   defaultEmail?: string
@@ -65,18 +60,7 @@ interface Props {
   approversByOpco?: Record<string, Approver[]>
 }
 
-function formatRelativeDate(iso: string): string {
-  const date = new Date(iso)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  if (diffDays === 0) return "Today"
-  if (diffDays === 1) return "Yesterday"
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
-}
-
-export default function RequestForm({ opcoOptions, myRequests, mode = "create", initial, defaultEmail, attachments = [], groupCtos = [], approversByOpco = {} }: Props) {
+export default function RequestForm({ opcoOptions, mode = "create", initial, defaultEmail, attachments = [], groupCtos = [], approversByOpco = {} }: Props) {
   const { language } = useStore()
   const router = useRouter()
   const { toast } = useToast()
@@ -223,7 +207,7 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:grid-cols-1">
+    <div className="mx-auto max-w-3xl">
       <div className="min-w-0 space-y-5">
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
@@ -457,35 +441,6 @@ export default function RequestForm({ opcoOptions, myRequests, mode = "create", 
           <p className="text-xs text-muted-foreground sm:max-w-[16rem] sm:text-right">{t(language, "requests.submitHint")}</p>
         </div>
       </div>
-
-      <aside className="min-w-0 space-y-6">
-        <Card className="border-border/80 bg-card/95">
-          <CardHeader>
-            <CardTitle className="text-base">{t(language, "requests.myRequests")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {myRequests && myRequests.length > 0 ? (
-              myRequests.map((r) => (
-                <Link
-                  key={r.id}
-                  href={`/changes/${r.id}`}
-                  className="flex items-start justify-between gap-2 rounded-md p-2 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium leading-tight">{r.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatRelativeDate(r.updatedAt)}</p>
-                  </div>
-                  <span className="shrink-0">
-                    <StatusPill status={r.status} />
-                  </span>
-                </Link>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">{t(language, "requests.none")}</p>
-            )}
-          </CardContent>
-        </Card>
-      </aside>
     </div>
   )
 }

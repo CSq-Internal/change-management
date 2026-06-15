@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupLevel } from "@/lib/permissions"
+import { viewerTier, requestScopedSlugs } from "@/lib/permissions"
+import { requestScope } from "@/server/request-scope"
 import { runDueEscalations } from "@/server/sla"
 import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
@@ -24,11 +25,16 @@ export default async function Home() {
   if (!session) redirect("/login")
 
   const db = getPrisma()
+  // Members have no ops dashboard — send them to their requests.
+  const tier = viewerTier(session.user.organizations, session.user.realmRoles)
+  if (tier === "member") redirect("/requests")
+
   // eslint-disable-next-line react-hooks/purity -- async server component, not a hook; Date.now() is safe here
   const now = Date.now()
-  const groupLevel = isGroupLevel(session.user.realmRoles)
-  const opcoSlugs = session.user.organizations.map((o) => o.alias)
-  const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
+  const groupLevel = tier === "group"
+  // Managed OpCos for an OpCo admin/approver (admin OR approver); group sees all.
+  const opcoSlugs = groupLevel ? [] : requestScopedSlugs(session.user.organizations)
+  const opcoFilter = requestScope(session.user)
 
   // Fire-and-forget SLA escalation sweep — never block render.
   void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})

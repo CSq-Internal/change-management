@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole, canManageTeams, canManageCab } from '@/lib/permissions'
+import { viewerTier, requestScopedSlugs } from '@/lib/permissions'
 import type { SessionOrganization } from '@/types/next-auth'
 
 const ghanaApprover: SessionOrganization = { id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }
@@ -144,5 +145,44 @@ describe("canManageCab", () => {
 
   it("forbids a mere approver (eligibility is not management)", () => {
     expect(canManageCab(ghanaApproverOrgs, [], "ghana")).toBe(false)
+  })
+})
+
+describe('viewerTier', () => {
+  const memberOrg = { id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['requester'] }
+  const approverOrg = { id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }
+  const adminOrg = { id: 'o2', name: 'Uganda', alias: 'uganda', roles: ['admin'] }
+
+  it('group_admin → group', () => {
+    expect(viewerTier([memberOrg], ['group_admin'])).toBe('group')
+  })
+  it('group_auditor → group', () => {
+    expect(viewerTier([], ['group_auditor'])).toBe('group')
+  })
+  it('opco admin → opco', () => {
+    expect(viewerTier([adminOrg], [])).toBe('opco')
+  })
+  it('opco approver → opco', () => {
+    expect(viewerTier([approverOrg], [])).toBe('opco')
+  })
+  it('only requester role → member', () => {
+    expect(viewerTier([memberOrg], [])).toBe('member')
+  })
+  it('no orgs, no realm roles → member', () => {
+    expect(viewerTier([], [])).toBe('member')
+  })
+})
+
+describe('requestScopedSlugs', () => {
+  it('returns slugs where the user is admin or approver, deduped', () => {
+    const orgs = [
+      { id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['approver'] },
+      { id: 'o2', name: 'Uganda', alias: 'uganda', roles: ['admin'] },
+      { id: 'o3', name: 'Togo', alias: 'togo', roles: ['requester'] },
+    ]
+    expect(requestScopedSlugs(orgs).sort()).toEqual(['ghana', 'uganda'])
+  })
+  it('returns [] when the user holds neither role anywhere', () => {
+    expect(requestScopedSlugs([{ id: 'o1', name: 'Ghana', alias: 'ghana', roles: ['requester'] }])).toEqual([])
   })
 })

@@ -17,7 +17,6 @@ import {
   BarChart3,
   ClipboardList,
   FileClock,
-  GitCompare,
   Home,
   LogOut,
   Settings,
@@ -52,10 +51,9 @@ const navGroups = [
   {
     labelKey: "nav.core",
     items: [
-      { href: "/", labelKey: "nav.dashboard", icon: BarChart3, tour: "nav-dashboard" },
+      { href: "/", labelKey: "nav.dashboard", icon: BarChart3, gate: "dashboard", tour: "nav-dashboard" },
       { href: "/requests", labelKey: "nav.requests", icon: ClipboardList, tour: "nav-requests" },
       { href: "/approvals", labelKey: "nav.approvals", icon: ShieldCheck, tour: "nav-approvals" },
-      { href: "/changes", labelKey: "nav.changes", icon: GitCompare, tour: "nav-changes" },
       { href: "/audits", labelKey: "nav.audits", icon: FileClock },
     ],
   },
@@ -120,12 +118,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const anyAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
   const groupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
   const groupLevel = session ? isGroupLevel(session.user.realmRoles) : false
+  const anyApprover = session ? session.user.organizations.some((o) => o.roles.includes("approver")) : false
   const showAdminGroup = anyAdmin || groupLevel
 
   const itemAllowed = (gate?: string) => {
     if (gate === "groupAdmin") return groupAdmin
     if (gate === "adminOrAudit") return anyAdmin || groupLevel
     if (gate === "admin") return anyAdmin
+    if (gate === "dashboard") return anyAdmin || groupLevel || anyApprover
     return true
   }
 
@@ -133,13 +133,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     () =>
       navGroups
         .filter((group) => group.labelKey !== "nav.userManagement" || showAdminGroup)
-        .map((group) =>
-          group.labelKey === "nav.userManagement"
-            ? { ...group, items: group.items.filter((item) => itemAllowed((item as { gate?: string }).gate)) }
-            : group
-        ),
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => itemAllowed((item as { gate?: string }).gate)),
+        })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showAdminGroup, anyAdmin, groupAdmin, groupLevel]
+    [showAdminGroup, anyAdmin, groupAdmin, groupLevel, anyApprover]
   )
   const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
   // Match the current path to a nav item — exact first, then the longest non-root
