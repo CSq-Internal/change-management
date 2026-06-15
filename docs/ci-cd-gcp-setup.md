@@ -19,6 +19,11 @@ Settings → Secrets and variables → Actions → **Variables**:
 No secrets are required for this job (WIF is keyless).
 
 ## One-time GCP setup (gcloud)
+
+**Automated:** run `PROJECT_ID=<your-project> ./scripts/provision-gcp-cicd.sh` — idempotent;
+it provisions everything below and prints the five Variables to set (add `--set-gh-vars`
+to write them via the `gh` CLI). The manual commands follow for reference.
+
 Replace `PROJECT`, `PROJECT_NUMBER`, `REGION`, `REPO` accordingly. Repo is `CSq-Internal/change-management`.
 
 ```bash
