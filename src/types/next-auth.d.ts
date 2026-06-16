@@ -16,7 +16,7 @@ declare module "next-auth" {
       image?: string | null
       keycloakId: string
       organizations: SessionOrganization[]
-      realmRoles: string[]  // "group_admin" | "group_auditor"
+      realmRoles: string[]  // CMS client roles on csquared-cms: "group_admin" | "group_auditor"
     }
   }
 }

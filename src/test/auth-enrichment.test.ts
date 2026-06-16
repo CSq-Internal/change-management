@@ -17,6 +17,7 @@ const account = { provider: 'keycloak', type: 'oidc', providerAccountId: 'x', ac
 
 describe('auth enrichment', () => {
   beforeEach(() => {
+    process.env.KEYCLOAK_CLIENT_ID = 'csquared-cms'
     userFindUnique.mockReset()
     userUpsert.mockReset()
     findMany.mockReset()
@@ -32,7 +33,7 @@ describe('auth enrichment', () => {
       token: {},
       user: {},
       account,
-      profile: { sub: 'kc-sub-1', email: 'devops@csquared.com', email_verified: true, realm_access: { roles: ['group_admin'] } },
+      profile: { sub: 'kc-sub-1', email: 'devops@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: ['group_admin'] } } },
     })
 
     expect(token.keycloakId).toBe('kc-sub-1')
@@ -93,6 +94,27 @@ describe('auth enrichment', () => {
     })
 
     expect(userUpsert).not.toHaveBeenCalled()
+  })
+
+  it('reads group roles from the csquared-cms client roles and ignores realm roles', async () => {
+    userFindUnique.mockResolvedValue({ id: 'u1', keycloakId: 'kc-sub-1' })
+    findMany.mockResolvedValue([])
+
+    const token = await enrichedJwt({
+      token: {},
+      user: {},
+      account,
+      profile: {
+        sub: 'kc-sub-1',
+        email: 'devops@csquared.com',
+        email_verified: true,
+        // realm_access MUST be ignored; only the client's resource_access counts
+        realm_access: { roles: ['group_admin'] },
+        resource_access: { 'csquared-cms': { roles: ['group_auditor'] } },
+      },
+    })
+
+    expect(token.realmRoles).toEqual(['group_auditor'])
   })
 
   it('does not query the DB when account is absent (token refresh)', async () => {
