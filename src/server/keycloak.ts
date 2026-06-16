@@ -195,6 +195,10 @@ export async function deactivateKeycloakUser(keycloakUserId: string): Promise<vo
       body: JSON.stringify({ enabled: false }),
     }
   )
+  if (res.status === 404) {
+    console.warn(`Keycloak user ${keycloakUserId} not found (404) — already absent; treating as no-op.`)
+    return
+  }
   if (!res.ok) {
     throw new Error(`Failed to deactivate Keycloak user: ${res.status} ${await res.text()}`)
   }
@@ -214,6 +218,10 @@ export async function reactivateKeycloakUser(keycloakUserId: string): Promise<vo
       body: JSON.stringify({ enabled: true }),
     }
   )
+  if (res.status === 404) {
+    console.warn(`Keycloak user ${keycloakUserId} not found (404) — already absent; treating as no-op.`)
+    return
+  }
   if (!res.ok) {
     throw new Error(`Failed to reactivate Keycloak user: ${res.status} ${await res.text()}`)
   }
