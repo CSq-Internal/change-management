@@ -9,7 +9,7 @@ vi.mock('@/lib/session', () => ({
 }))
 
 const mockDb = {
-  user: { findUnique: vi.fn().mockResolvedValue({ id: 'user-me' }) },
+  user: { findUnique: vi.fn().mockResolvedValue({ id: 'user-me' }), update: vi.fn().mockResolvedValue({}) },
   notification: {
     findMany: vi.fn().mockResolvedValue([]),
     updateMany: vi.fn().mockResolvedValue({ count: 3 }),
@@ -22,9 +22,13 @@ vi.mock('@/server/approval-authority', () => ({
   listApprovableChanges: vi.fn().mockResolvedValue([{ id: 'a' }, { id: 'b' }]),
 }))
 
-import { getNavCounts, markAllNotificationsRead } from '@/server/actions/notifications'
+import { getNavCounts, markAllNotificationsRead, setMyLocale } from '@/server/actions/notifications'
 
-beforeEach(() => { vi.clearAllMocks(); mockDb.user.findUnique.mockResolvedValue({ id: 'user-me' }) })
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockDb.user.findUnique.mockResolvedValue({ id: 'user-me' })
+  mockDb.user.update.mockResolvedValue({})
+})
 
 describe('getNavCounts', () => {
   it('returns pendingApprovals, myRequests and unreadNotifications', async () => {
@@ -47,5 +51,21 @@ describe('markAllNotificationsRead', () => {
     expect(mockDb.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'user-me', readAt: null } })
     )
+  })
+})
+
+describe('setMyLocale', () => {
+  it('updates the current user locale by keycloakId', async () => {
+    await setMyLocale('fr')
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { keycloakId: 'kc-me' }, data: { locale: 'fr' },
+    })
+  })
+
+  it('coerces unknown values to en and never throws', async () => {
+    await expect(setMyLocale('xx' as 'en' | 'fr')).resolves.toBeUndefined()
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { keycloakId: 'kc-me' }, data: { locale: 'en' },
+    })
   })
 })

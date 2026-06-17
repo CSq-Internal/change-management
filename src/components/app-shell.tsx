@@ -6,7 +6,7 @@ import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { getNavCounts } from "@/server/actions/notifications"
+import { getNavCounts, setMyLocale } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
@@ -566,7 +566,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <select
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value as "en" | "fr")}
+                  onChange={(event) => {
+                    const lang = event.target.value as "en" | "fr"
+                    setLanguage(lang)
+                    void setMyLocale(lang)
+                  }}
                   className="mt-2 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
                   aria-label="Language"
                 >

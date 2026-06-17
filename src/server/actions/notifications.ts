@@ -3,6 +3,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { listApprovableChanges } from "@/server/approval-authority"
+import { coerceLocale, type Language } from "@/lib/i18n"
 
 async function meId(): Promise<string> {
   const session = await getAppSession()
@@ -28,6 +29,18 @@ export async function markAllNotificationsRead() {
   const userId = await meId()
   const db = getPrisma()
   await db.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } })
+}
+
+// Best-effort: records the UI language choice for server-side notification copy.
+// Never throws — a failure must not block the instant client-side language switch.
+export async function setMyLocale(locale: Language): Promise<void> {
+  try {
+    const session = await getAppSession()
+    const db = getPrisma()
+    await db.user.update({ where: { keycloakId: session.keycloakId }, data: { locale: coerceLocale(locale) } })
+  } catch (err) {
+    console.warn("[setMyLocale] failed to persist locale:", err)
+  }
 }
 
 export async function getNavCounts() {
