@@ -73,13 +73,39 @@ describe('auth enrichment', () => {
     expect(userUpsert).toHaveBeenCalledWith({
       where: { email: 'devops@csquared.com' },
       update: { keycloakId: 'real-sub-123' },
-      create: { keycloakId: 'real-sub-123', email: 'devops@csquared.com', name: 'Dev Admin' },
+      create: { keycloakId: 'real-sub-123', email: 'devops@csquared.com', name: 'Dev Admin', locale: 'en' },
     })
     // assignments are then loaded by the (now-linked) sub
     expect(findMany).toHaveBeenCalledWith({
       where: { isActive: true, user: { keycloakId: 'real-sub-123' } },
       include: { opco: true },
     })
+  })
+
+  it('seeds User.locale from the profile.locale claim when creating/linking', async () => {
+    userFindUnique.mockResolvedValue(null)
+    findMany.mockResolvedValue([])
+    await enrichedJwt({
+      token: {}, user: {}, account,
+      profile: { sub: 'sub-fr', email: 'pierre@csquared.com', email_verified: true, name: 'Pierre', locale: 'fr' },
+    })
+    expect(userUpsert).toHaveBeenCalledWith({
+      where: { email: 'pierre@csquared.com' },
+      update: { keycloakId: 'sub-fr' },
+      create: { keycloakId: 'sub-fr', email: 'pierre@csquared.com', name: 'Pierre', locale: 'fr' },
+    })
+  })
+
+  it('defaults locale to en when the claim is absent', async () => {
+    userFindUnique.mockResolvedValue(null)
+    findMany.mockResolvedValue([])
+    await enrichedJwt({
+      token: {}, user: {}, account,
+      profile: { sub: 'sub-x', email: 'sam@csquared.com', email_verified: true, name: 'Sam' },
+    })
+    expect(userUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ locale: 'en' }) })
+    )
   })
 
   it('does NOT link/create when the email is not verified', async () => {
