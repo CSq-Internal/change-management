@@ -5,6 +5,8 @@ const mockDb = {
   notificationPreference: { findMany: vi.fn().mockResolvedValue([]) },
   notification: { create: vi.fn().mockResolvedValue({}) },
   chatWebhook: { findMany: vi.fn().mockResolvedValue([]) },
+  user: { findMany: vi.fn().mockResolvedValue([]) },
+  opCo: { findUnique: vi.fn().mockResolvedValue({ locale: 'en' }) },
 }
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
@@ -25,6 +27,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockDb.notificationPreference.findMany.mockResolvedValue([])
   mockDb.chatWebhook.findMany.mockResolvedValue([])
+  mockDb.user.findMany.mockResolvedValue([])
+  mockDb.opCo.findUnique.mockResolvedValue({ locale: 'en' })
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
 })
 
@@ -61,5 +65,31 @@ describe('notifyEvent', () => {
     vi.mocked(email.sendStatusChangeEmail).mockRejectedValueOnce(new Error('smtp down'))
     await expect(notifyEvent({ type: 'change_approved', recipients: [ada], change })).resolves.toBeUndefined()
     expect(mockDb.notification.create).toHaveBeenCalled()
+  })
+
+  it('uses the recipient User.locale (fr) even when the OpCo is en', async () => {
+    mockDb.user.findMany.mockResolvedValue([{ id: 'u1', locale: 'fr' }])
+    mockDb.opCo.findUnique.mockResolvedValue({ locale: 'en' })
+    await notifyEvent({ type: 'change_approved', recipients: [ada], change })
+    expect(mockDb.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ title: 'Changement approuvé' }) })
+    )
+  })
+
+  it('falls back to the OpCo locale when the user has none', async () => {
+    mockDb.user.findMany.mockResolvedValue([{ id: 'u1', locale: null }])
+    mockDb.opCo.findUnique.mockResolvedValue({ locale: 'fr' })
+    await notifyEvent({ type: 'change_approved', recipients: [ada], change })
+    expect(mockDb.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ title: 'Changement approuvé' }) })
+    )
+  })
+
+  it('broadcasts chat in the OpCo locale', async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ locale: 'fr' })
+    mockDb.chatWebhook.findMany.mockResolvedValue([{ url: 'https://chat.googleapis.com/x', opcoId: 'opco-1' }])
+    await notifyEvent({ type: 'change_approved', recipients: [ada], change })
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]!.body as string)
+    expect(body.text).toMatch(/Changement approuvé/)
   })
 })

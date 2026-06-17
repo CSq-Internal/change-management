@@ -1403,3 +1403,7 @@ export const translations: Record<Language, Record<string, string>> = {
 
 export const t = (language: Language, key: string) =>
   translations[language]?.[key as keyof (typeof translations)["en"]] ?? key
+
+export function coerceLocale(v: string | null | undefined): Language {
+  return v === "fr" ? "fr" : "en"
+}
