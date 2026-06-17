@@ -1,3 +1,7 @@
+"use client"
+import { t } from "@/lib/i18n"
+import { useStore } from "@/lib/store"
+
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200",
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
@@ -14,11 +18,13 @@ const RISK_COLORS: Record<string, string> = {
   high: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   emergency: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
 }
-const PILL = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
+const PILL = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
 
 export function StatusPill({ status }: { status: string }) {
-  return <span className={`${PILL} ${STATUS_COLORS[status] ?? "bg-muted text-muted-foreground"}`}>{status}</span>
+  const language = useStore((s) => s.language)
+  return <span className={`${PILL} ${STATUS_COLORS[status] ?? "bg-muted text-muted-foreground"}`}>{t(language, `status.${status}`)}</span>
 }
 export function RiskPill({ risk }: { risk: string }) {
-  return <span className={`${PILL} ${RISK_COLORS[risk] ?? "bg-muted text-muted-foreground"}`}>{risk}</span>
+  const language = useStore((s) => s.language)
+  return <span className={`${PILL} ${RISK_COLORS[risk] ?? "bg-muted text-muted-foreground"}`}>{t(language, `riskLevel.${risk}`)}</span>
 }
