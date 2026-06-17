@@ -8,6 +8,7 @@ import { recordAdminAction } from "@/server/audit"
 import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
 import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
 import { sendUserInvitationEmail } from "@/server/email"
+import { coerceLocale } from "@/lib/i18n"
 import type { Role, Prisma } from "@prisma/client"
 import type { SessionOrganization } from "@/types/next-auth"
 
@@ -90,6 +91,13 @@ export async function onboardUser(input: {
     return user
   })
 
+  let inviteLocale: "en" | "fr" = "en"
+  const firstSlug = input.assignments[0]?.opcoSlug
+  if (firstSlug) {
+    const opco = await db.opCo.findUnique({ where: { slug: firstSlug }, select: { locale: true } })
+    inviteLocale = coerceLocale(opco?.locale)
+  }
+
   try {
     await sendUserInvitationEmail({
       to: input.email,
@@ -97,6 +105,7 @@ export async function onboardUser(input: {
       tempPassword: input.tempPassword || "ChangeMe123!",
       existingIdentity: !!existing || !createdKeycloakIdentity,
       assignments: input.assignments,
+      locale: inviteLocale,
     })
   } catch (err) {
     console.warn(`[onboardUser] invitation email failed for ${input.email}:`, err)

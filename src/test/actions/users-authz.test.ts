@@ -108,6 +108,18 @@ describe("onboardUser — authorization & ceiling", () => {
     )
   })
 
+  it("localizes the invitation email by the first assignment's OpCo locale", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-gh", slug: "ghana", locale: "fr" })
+    await onboardUser({
+      name: "Fr User", email: "fr@csquared.com", tempPassword: "p",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
+    })
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "fr@csquared.com", locale: "fr" })
+    )
+  })
+
   it("links an existing email instead of creating a new identity", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     mockDb.user.findFirst.mockResolvedValueOnce({ id: "existing", keycloakId: "kc-existing" })
