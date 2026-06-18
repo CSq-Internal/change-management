@@ -69,28 +69,64 @@ Steps:
    then run `prisma migrate deploy` with `DATABASE_URL` exported from
    `gcloud secrets versions access latest --secret=cms-prod-database-url --project=${{ vars.GCP_PROJECT_ID }}`.
    The value is captured into the step's env (masked), never written to a file or logged.
-5. **Deploy:** `gcloud run deploy cms-prod` with the flags below.
+5. **Deploy:** `google-github-actions/deploy-cloudrun@v2` (see below).
 
-### `gcloud run deploy` invocation
+### Deploy step — `google-github-actions/deploy-cloudrun@v2`
 
-```
-gcloud run deploy cms-prod \
-  --project   ${{ vars.GCP_PROJECT_ID }} \
-  --region    ${{ vars.AR_REGION }} \
-  --image     ${{ env.IMAGE }}:${{ github.sha }} \
-  --service-account cms-run-prod@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-  --allow-unauthenticated \
-  --set-secrets DATABASE_URL=cms-prod-database-url:latest,NEXTAUTH_SECRET=cms-prod-nextauth-secret:latest,KEYCLOAK_CLIENT_SECRET=cms-prod-keycloak-client-secret:latest,KEYCLOAK_ADMIN_CLIENT_SECRET=cms-prod-keycloak-admin-client-secret:latest,RESEND_API_KEY=cms-prod-resend-api-key:latest,APP_PASSWORD=cms-prod-app-password:latest,GOOGLE_SERVICE_ACCOUNT_KEY=cms-prod-google-service-account-key:latest,CRON_SECRET=cms-prod-cron-secret:latest \
-  --set-env-vars NEXTAUTH_URL=${{ vars.PROD_NEXTAUTH_URL }},KEYCLOAK_ISSUER=${{ vars.PROD_KEYCLOAK_ISSUER }},KEYCLOAK_CLIENT_ID=${{ vars.PROD_KEYCLOAK_CLIENT_ID }},KEYCLOAK_ADMIN_CLIENT_ID=${{ vars.PROD_KEYCLOAK_ADMIN_CLIENT_ID }},EMAIL_FROM=${{ vars.PROD_EMAIL_FROM }},SMTP_USER=${{ vars.PROD_SMTP_USER }},GDRIVE_SHARED_DRIVE_ID=${{ vars.PROD_GDRIVE_SHARED_DRIVE_ID }},GDRIVE_ROOT_FOLDER_ID=${{ vars.PROD_GDRIVE_ROOT_FOLDER_ID }}
+Use the official action for the deploy itself (consistent with the `image` job's use of the
+`google-github-actions/*` family, structured inputs, pinned/maintained, and it exposes the
+service URL as an output). The action only deploys — it does not read Secret Manager values —
+so migrations stay a separate `gcloud` step (step 4).
+
+```yaml
+- name: Deploy to Cloud Run
+  id: deploy
+  uses: google-github-actions/deploy-cloudrun@v2
+  with:
+    service: cms-prod
+    project_id: ${{ vars.GCP_PROJECT_ID }}
+    region: ${{ vars.AR_REGION }}
+    image: ${{ env.IMAGE }}:${{ github.sha }}
+    service_account: cms-run-prod@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+    # Declarative: each deploy fully specifies env + secrets (no merge with prior revision).
+    env_vars_update_strategy: overwrite
+    secrets: |
+      DATABASE_URL=cms-prod-database-url:latest
+      NEXTAUTH_SECRET=cms-prod-nextauth-secret:latest
+      KEYCLOAK_CLIENT_SECRET=cms-prod-keycloak-client-secret:latest
+      KEYCLOAK_ADMIN_CLIENT_SECRET=cms-prod-keycloak-admin-client-secret:latest
+      RESEND_API_KEY=cms-prod-resend-api-key:latest
+      APP_PASSWORD=cms-prod-app-password:latest
+      GOOGLE_SERVICE_ACCOUNT_KEY=cms-prod-google-service-account-key:latest
+      CRON_SECRET=cms-prod-cron-secret:latest
+    env_vars: |
+      NEXTAUTH_URL=${{ vars.PROD_NEXTAUTH_URL }}
+      KEYCLOAK_ISSUER=${{ vars.PROD_KEYCLOAK_ISSUER }}
+      KEYCLOAK_CLIENT_ID=${{ vars.PROD_KEYCLOAK_CLIENT_ID }}
+      KEYCLOAK_ADMIN_CLIENT_ID=${{ vars.PROD_KEYCLOAK_ADMIN_CLIENT_ID }}
+      EMAIL_FROM=${{ vars.PROD_EMAIL_FROM }}
+      SMTP_USER=${{ vars.PROD_SMTP_USER }}
+      GDRIVE_SHARED_DRIVE_ID=${{ vars.PROD_GDRIVE_SHARED_DRIVE_ID }}
+      GDRIVE_ROOT_FOLDER_ID=${{ vars.PROD_GDRIVE_ROOT_FOLDER_ID }}
+    # No dedicated "allow unauthenticated" input — pass it through to gcloud:
+    flags: '--allow-unauthenticated'
 ```
 
 Notes:
-- `--region` reuses `vars.AR_REGION` (both AR and Cloud Run are `europe-west1`) to avoid a
-  redundant variable.
-- AR region for the registry host equals the Cloud Run region here; if they ever diverge, a
-  separate `RUN_REGION` variable would be introduced. Out of scope now.
-- Using `--set-env-vars` / `--set-secrets` (not `--update-*`) makes the deploy declarative:
-  the config block fully specifies env + secrets each deploy.
+- `service_account` here is the **runtime** SA (`cms-run-prod`) the service runs as — distinct
+  from the `auth` step's deploy identity (`github-ci`).
+- `region` reuses `vars.AR_REGION` (both AR and Cloud Run are `europe-west1`). If they ever
+  diverge, introduce a separate `RUN_REGION` variable. Out of scope now.
+- `env_vars_update_strategy: overwrite` makes the deploy declarative (the block fully
+  specifies env each deploy). Secrets are likewise fully specified.
+- The service URL is available as `steps.deploy.outputs.url` for an optional follow-up
+  smoke/log step.
+- `flags: '--allow-unauthenticated'` makes the service public; the app's own NextAuth/Keycloak
+  enforces authentication.
+
+The migrate step (step 4) remains raw `gcloud` because it must `gcloud secrets versions
+access latest --secret=cms-prod-database-url` to obtain the DB URL before running
+`prisma migrate deploy` — functionality the deploy action does not provide.
 
 ### IAM addition (provisioning, one-time)
 
@@ -136,9 +172,8 @@ optional integrations (SMTP/GDrive) and must be present for the Keycloak/NextAut
 ## Testing / verification
 
 CI workflow changes can't be unit-tested. Verification is operational:
-- `actionlint` (or a YAML lint) on the edited workflow to catch syntax errors before pushing.
-- A dry-run sanity check of the `gcloud run deploy` command shape (documented, not executed
-  in CI).
+- `actionlint` (or a YAML lint) on the edited workflow to catch syntax errors and validate the
+  `deploy-cloudrun` action inputs before pushing.
 - First real end-to-end validation happens on the first push to `prod` AFTER the manual
   prerequisites are met (secrets, variables, domain mapping, `dev→prod` merge). This first
   deploy is the acceptance test: service reachable at `cms.csquarednet.com`, login works,
