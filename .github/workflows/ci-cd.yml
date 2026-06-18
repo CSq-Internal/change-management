@@ -277,6 +277,7 @@ jobs:
             GOOGLE_SERVICE_ACCOUNT_KEY=cms-prod-google-service-account-key:latest
             CRON_SECRET=cms-prod-cron-secret:latest
           env_vars: |
+            AUTH_TRUST_HOST=true
             NEXTAUTH_URL=${{ vars.PROD_NEXTAUTH_URL }}
             KEYCLOAK_ISSUER=${{ vars.PROD_KEYCLOAK_ISSUER }}
             KEYCLOAK_CLIENT_ID=${{ vars.PROD_KEYCLOAK_CLIENT_ID }}

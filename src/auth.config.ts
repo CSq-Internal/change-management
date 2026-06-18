@@ -7,10 +7,6 @@ import Keycloak from "next-auth/providers/keycloak"
  * runs in the edge runtime. DB-backed enrichment lives in `src/auth.ts`.
  */
 const authConfig: NextAuthConfig = {
-  // Self-hosted behind Cloud Run (not Vercel): trust the platform-forwarded host so
-  // Auth.js derives the request URL from X-Forwarded-Host instead of rejecting it as
-  // UntrustedHost. Required for session/callback URLs to resolve in production.
-  trustHost: true,
   providers: [
     Keycloak({
       clientId: process.env.KEYCLOAK_CLIENT_ID!,
