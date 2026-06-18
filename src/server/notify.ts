@@ -7,6 +7,7 @@ import {
 import {
   sendApprovalRequestEmail, sendStatusChangeEmail, sendSlaEscalationEmail, sendEmergencyAlertEmail,
 } from "@/server/email"
+import { coerceLocale, type Language } from "@/lib/i18n"
 
 type Db = ReturnType<typeof getPrisma>
 export type NotifyRecipient = { userId: string; email: string; name: string | null }
@@ -19,18 +20,18 @@ async function loadPrefs(db: Db, userIds: string[], type: NotifyEventType): Prom
   return m
 }
 
-function emailFor(type: NotifyEventType, r: NotifyRecipient, change: { id: string; title: string }, ctx: NotifyContext): Promise<unknown> {
+function emailFor(type: NotifyEventType, r: NotifyRecipient, change: { id: string; title: string }, ctx: NotifyContext, locale: Language): Promise<unknown> {
   switch (type) {
     case "approval_requested":
-      return sendApprovalRequestEmail({ to: r.email, approverName: r.name ?? r.email, changeTitle: change.title, requesterName: ctx.requesterName ?? "", riskLevel: ctx.riskLevel ?? "", changeId: change.id })
+      return sendApprovalRequestEmail({ to: r.email, approverName: r.name ?? r.email, changeTitle: change.title, requesterName: ctx.requesterName ?? "", riskLevel: ctx.riskLevel ?? "", changeId: change.id, locale })
     case "change_approved":
-      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "approved" })
+      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "approved", locale })
     case "change_rejected":
-      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "rejected" })
+      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "rejected", locale })
     case "sla_escalated":
-      return sendSlaEscalationEmail({ to: r.email, changeTitle: change.title, changeId: change.id, level: ctx.level ?? 1, riskLevel: ctx.riskLevel ?? "" })
+      return sendSlaEscalationEmail({ to: r.email, changeTitle: change.title, changeId: change.id, level: ctx.level ?? 1, riskLevel: ctx.riskLevel ?? "", locale })
     case "emergency_submitted":
-      return sendEmergencyAlertEmail({ to: r.email, changeTitle: change.title, changeId: change.id, requesterName: ctx.requesterName ?? "" })
+      return sendEmergencyAlertEmail({ to: r.email, changeTitle: change.title, changeId: change.id, requesterName: ctx.requesterName ?? "", locale })
   }
 }
 
@@ -49,20 +50,31 @@ export async function notifyEvent(input: {
   const db = getPrisma()
   const prefs = await loadPrefs(db, recipients.map((r) => r.userId), type)
 
+  const recipientIds = recipients.map((r) => r.userId)
+  const [users, opco] = await Promise.all([
+    recipientIds.length
+      ? db.user.findMany({ where: { id: { in: recipientIds } }, select: { id: true, locale: true } })
+      : Promise.resolve([] as { id: string; locale: string | null }[]),
+    db.opCo.findUnique({ where: { id: change.opcoId }, select: { locale: true } }),
+  ])
+  const userLocale = new Map(users.map((u) => [u.id, u.locale]))
+  const opcoLocale = coerceLocale(opco?.locale)
+
   const tasks: Promise<unknown>[] = []
   for (const r of recipients) {
+    const locale = coerceLocale(userLocale.get(r.userId) ?? opco?.locale)
     if (isChannelEnabled(prefs, r.userId, type, "in_app")) {
-      const { title, body } = notificationContent(type, change.title, ctx)
+      const { title, body } = notificationContent(type, change.title, ctx, locale)
       tasks.push(db.notification.create({ data: { userId: r.userId, type, title, body, changeId: change.id } }))
     }
     if (isChannelEnabled(prefs, r.userId, type, "email")) {
-      tasks.push(emailFor(type, r, change, ctx))
+      tasks.push(emailFor(type, r, change, ctx, locale))
     }
   }
 
   if (CHAT_BROADCAST_TYPES.includes(type)) {
     const hooks = await db.chatWebhook.findMany({ where: { isActive: true, OR: [{ opcoId: change.opcoId }, { opcoId: null }] } })
-    const text = chatMessageText(type, change.title, ctx)
+    const text = chatMessageText(type, change.title, ctx, opcoLocale)
     for (const h of hooks) tasks.push(postToChat(h.url, text))
   }
 

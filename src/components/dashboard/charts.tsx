@@ -1,8 +1,12 @@
+"use client"
 import type { ChangeStatusName, NamedCount, RiskLevelName } from "@/lib/dashboard-metrics"
 import { RISK_ORDER } from "@/lib/dashboard-metrics"
+import { t } from "@/lib/i18n"
+import { useStore } from "@/lib/store"
 import { RISK_HEX, STATUS_HEX } from "./chart-colors"
 
 export function RiskDonut({ riskOpen }: { riskOpen: Record<RiskLevelName, number> }) {
+  const language = useStore((s) => s.language)
   const segs = RISK_ORDER.map((r) => ({ r, v: riskOpen[r] })).filter((s) => s.v > 0)
   const total = segs.reduce((a, s) => a + s.v, 0)
   const size = 120, R = 46, cx = size / 2, C = 2 * Math.PI * R
@@ -25,8 +29,8 @@ export function RiskDonut({ riskOpen }: { riskOpen: Record<RiskLevelName, number
       <ul className="flex-1 space-y-1">
         {segs.map((s) => (
           <li key={s.r} className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5 capitalize">
-              <i className="h-2.5 w-2.5 rounded-sm" style={{ background: RISK_HEX[s.r] }} />{s.r}
+            <span className="flex items-center gap-1.5">
+              <i className="h-2.5 w-2.5 rounded-sm" style={{ background: RISK_HEX[s.r] }} />{t(language, `riskLevel.${s.r}`)}
             </span>
             <b className="font-semibold tabular-nums text-foreground">{s.v}</b>
           </li>
@@ -54,6 +58,7 @@ export function OpcoBars({ data }: { data: NamedCount[] }) {
 }
 
 export function StatusDistribution({ counts }: { counts: Record<ChangeStatusName, number> }) {
+  const language = useStore((s) => s.language)
   const order: ChangeStatusName[] = ["pending", "approved", "implemented", "verified", "draft", "rejected", "closed"]
   const segs = order.map((s) => ({ s, n: counts[s] })).filter((x) => x.n > 0)
   const total = segs.reduce((a, x) => a + x.n, 0)
@@ -64,8 +69,8 @@ export function StatusDistribution({ counts }: { counts: Record<ChangeStatusName
       </div>
       <div className="flex flex-wrap gap-2.5 text-[11px] text-muted-foreground">
         {segs.map((x) => (
-          <span key={x.s} className="flex items-center gap-1.5 capitalize">
-            <i className="h-2 w-2 rounded-sm" style={{ background: STATUS_HEX[x.s] }} />{x.s}{" "}
+          <span key={x.s} className="flex items-center gap-1.5">
+            <i className="h-2 w-2 rounded-sm" style={{ background: STATUS_HEX[x.s] }} />{t(language, `status.${x.s}`)}{" "}
             <b className="font-semibold text-foreground tabular-nums">{x.n}</b>
           </span>
         ))}

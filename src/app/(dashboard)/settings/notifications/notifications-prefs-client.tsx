@@ -39,7 +39,7 @@ export default function NotificationsPrefsClient({ prefs }: { prefs: PrefCell[] 
       </div>
       <Card className="border-border/80 bg-card/95">
         <CardContent className="p-0">
-          <table className="w-full text-sm">
+          <table className="responsive-table w-full text-sm">
             <thead>
               <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
                 <th className="px-4 py-2 font-medium">{t(language, "notifPrefs.event")}</th>
@@ -50,9 +50,9 @@ export default function NotificationsPrefsClient({ prefs }: { prefs: PrefCell[] 
             <tbody>
               {NOTIFY_EVENT_TYPES.map((evt) => (
                 <tr key={evt} className="border-b border-border/40">
-                  <td className="px-4 py-2">{t(language, `notifEvent.${evt}`)}</td>
+                  <td className="px-4 py-2" data-label={t(language, "notifPrefs.event")}>{t(language, `notifEvent.${evt}`)}</td>
                   {CHANNELS.map((ch) => (
-                    <td key={ch} className="px-4 py-2 text-center">
+                    <td key={ch} className="px-4 py-2 text-center" data-label={t(language, ch === "email" ? "notifPrefs.email" : "notifPrefs.inApp")}>
                       <input
                         type="checkbox"
                         checked={cells.get(`${evt}:${ch}`) ?? true}

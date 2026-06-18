@@ -6,7 +6,7 @@ import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { getNavCounts } from "@/server/actions/notifications"
+import { getNavCounts, setMyLocale } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
 import { cn } from "@/lib/utils"
@@ -17,7 +17,6 @@ import {
   BarChart3,
   ClipboardList,
   FileClock,
-  GitCompare,
   Home,
   LogOut,
   Settings,
@@ -52,10 +51,9 @@ const navGroups = [
   {
     labelKey: "nav.core",
     items: [
-      { href: "/", labelKey: "nav.dashboard", icon: BarChart3, tour: "nav-dashboard" },
+      { href: "/", labelKey: "nav.dashboard", icon: BarChart3, gate: "dashboard", tour: "nav-dashboard" },
       { href: "/requests", labelKey: "nav.requests", icon: ClipboardList, tour: "nav-requests" },
       { href: "/approvals", labelKey: "nav.approvals", icon: ShieldCheck, tour: "nav-approvals" },
-      { href: "/changes", labelKey: "nav.changes", icon: GitCompare, tour: "nav-changes" },
       { href: "/audits", labelKey: "nav.audits", icon: FileClock },
     ],
   },
@@ -120,12 +118,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const anyAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
   const groupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
   const groupLevel = session ? isGroupLevel(session.user.realmRoles) : false
+  const anyApprover = session ? session.user.organizations.some((o) => o.roles.includes("approver")) : false
   const showAdminGroup = anyAdmin || groupLevel
 
   const itemAllowed = (gate?: string) => {
     if (gate === "groupAdmin") return groupAdmin
     if (gate === "adminOrAudit") return anyAdmin || groupLevel
     if (gate === "admin") return anyAdmin
+    if (gate === "dashboard") return anyAdmin || groupLevel || anyApprover
     return true
   }
 
@@ -133,22 +133,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     () =>
       navGroups
         .filter((group) => group.labelKey !== "nav.userManagement" || showAdminGroup)
-        .map((group) =>
-          group.labelKey === "nav.userManagement"
-            ? { ...group, items: group.items.filter((item) => itemAllowed((item as { gate?: string }).gate)) }
-            : group
-        ),
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => itemAllowed((item as { gate?: string }).gate)),
+        })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showAdminGroup, anyAdmin, groupAdmin, groupLevel]
+    [showAdminGroup, anyAdmin, groupAdmin, groupLevel, anyApprover]
   )
   const flatNavItems = effectiveNavGroups.flatMap((group) => group.items)
-  const currentNav = flatNavItems.find((item) => item.href === pathname)
-  const breadcrumbs = currentNav
-    ? [
-        { href: "/", labelKey: "nav.dashboard" },
-        ...(currentNav.href === "/" ? [] : [currentNav]),
-      ]
-    : [{ href: "/", labelKey: "nav.dashboard" }]
+  // Match the current path to a nav item — exact first, then the longest non-root
+  // prefix so dynamic routes (e.g. /changes/:id) resolve to their parent (Changes).
+  const activeNav =
+    flatNavItems.find((item) => item.href === pathname) ??
+    flatNavItems
+      .filter((item) => item.href !== "/" && pathname.startsWith(`${item.href}/`))
+      .sort((a, b) => b.href.length - a.href.length)[0]
+  const activeGroup = activeNav
+    ? effectiveNavGroups.find((group) => group.items.some((item) => item.href === activeNav.href))
+    : undefined
+  // Breadcrumb = the page's real section + the page. Primary (Core) pages stand alone;
+  // only grouped sections (Administration / Insights / Settings) prepend their section.
+  const breadcrumbs: { labelKey: string; href?: string }[] = activeNav
+    ? activeGroup && activeGroup.labelKey !== "nav.core"
+      ? [{ labelKey: activeGroup.labelKey }, { labelKey: activeNav.labelKey, href: activeNav.href }]
+      : [{ labelKey: activeNav.labelKey, href: activeNav.href }]
+    : [{ labelKey: "nav.dashboard", href: "/" }]
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -215,7 +224,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="sticky top-0 z-10 bg-card/90 px-6 py-6 backdrop-blur">
             <div className={cn("flex items-center gap-3", sidebarCollapsed ? "justify-center" : "justify-between")}>
               <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}>
-                <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} className="rounded-full" />
+                <Image src="/csquared-icon.png" alt="CSquared logo" width={36} height={36} unoptimized className="shrink-0 rounded-full" />
                 {!sidebarCollapsed && (
                   <div>
                     <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CSquared</div>
@@ -300,7 +309,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </aside>
 
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col min-w-0 overflow-x-clip">
           <header
             className={cn(
               "sticky top-0 z-20 border-b border-border bg-card/80 backdrop-blur",
@@ -447,20 +456,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="border-t border-slate-100">
               <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-                {breadcrumbs.map((crumb, index) => (
-                  <span key={crumb.href} className="flex items-center gap-2">
-                    <Link
-                      href={crumb.href}
-                      className={cn(
-                        "transition hover:text-foreground",
-                        index === breadcrumbs.length - 1 && "font-semibold text-foreground"
+                {breadcrumbs.map((crumb, index) => {
+                  const isLast = index === breadcrumbs.length - 1
+                  return (
+                    <span key={crumb.labelKey} className="flex items-center gap-2">
+                      {crumb.href ? (
+                        <Link
+                          href={crumb.href}
+                          className={cn("transition hover:text-foreground", isLast && "font-semibold text-foreground")}
+                        >
+                          {translate(crumb.labelKey)}
+                        </Link>
+                      ) : (
+                        // Section label (e.g. "Administration") — not a page, so not a link.
+                        <span>{translate(crumb.labelKey)}</span>
                       )}
-                    >
-                      {translate(crumb.labelKey)}
-                    </Link>
-                    {index < breadcrumbs.length - 1 && <span className="text-slate-300">/</span>}
-                  </span>
-                ))}
+                      {!isLast && <span className="text-slate-300">/</span>}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           </header>
@@ -470,7 +484,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="absolute left-0 top-0 h-full w-72 bg-card px-4 py-5 shadow-xl">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} className="rounded-full" />
+                    <Image src="/csquared-icon.png" alt="CSquared logo" width={32} height={32} unoptimized className="shrink-0 rounded-full" />
                     <div className="text-sm font-semibold">CSquared</div>
                   </div>
                   <button
@@ -552,7 +566,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <select
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value as "en" | "fr")}
+                  onChange={(event) => {
+                    const lang = event.target.value as "en" | "fr"
+                    setLanguage(lang)
+                    void setMyLocale(lang)
+                  }}
                   className="mt-2 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
                   aria-label="Language"
                 >

@@ -55,6 +55,11 @@ async function main() {
   }
   console.log('Seeded 6 OpCos');
 
+  if (process.env.SEED_DEMO !== '1') {
+    console.log('Skipping demo seed data (set SEED_DEMO=1 to include).');
+    return;
+  }
+
   await prisma.user.upsert({
     where: { email: 'devops@csquared.com' },
     update: {},

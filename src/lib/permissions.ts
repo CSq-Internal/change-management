@@ -99,3 +99,26 @@ export function canManageCab(
 ): boolean {
   return isGroupAdmin(realmRoles) || hasRoleInOpCo(organizations, opcoSlug, "admin")
 }
+
+/** OpCo slugs where the user holds an `admin` or `approver` role (deduped). */
+export function requestScopedSlugs(organizations: SessionOrganization[]): string[] {
+  const slugs = organizations
+    .filter((o) => o.roles.includes("admin") || o.roles.includes("approver"))
+    .map((o) => o.alias)
+  return [...new Set(slugs)]
+}
+
+/**
+ * Visibility tier for change-request data:
+ * - "group"  → group-level (sees all OpCos)
+ * - "opco"   → admin/approver in ≥1 OpCo (sees those OpCos)
+ * - "member" → everyone else (sees only their own requests)
+ */
+export function viewerTier(
+  organizations: SessionOrganization[],
+  realmRoles: string[]
+): "group" | "opco" | "member" {
+  if (isGroupLevel(realmRoles)) return "group"
+  if (requestScopedSlugs(organizations).length > 0) return "opco"
+  return "member"
+}

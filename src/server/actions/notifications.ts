@@ -3,6 +3,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { listApprovableChanges } from "@/server/approval-authority"
+import { coerceLocale, type Language } from "@/lib/i18n"
 
 async function meId(): Promise<string> {
   const session = await getAppSession()
@@ -30,6 +31,18 @@ export async function markAllNotificationsRead() {
   await db.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } })
 }
 
+// Best-effort: records the UI language choice for server-side notification copy.
+// Never throws — a failure must not block the instant client-side language switch.
+export async function setMyLocale(locale: Language): Promise<void> {
+  try {
+    const session = await getAppSession()
+    const db = getPrisma()
+    await db.user.update({ where: { keycloakId: session.keycloakId }, data: { locale: coerceLocale(locale) } })
+  } catch (err) {
+    console.warn("[setMyLocale] failed to persist locale:", err)
+  }
+}
+
 export async function getNavCounts() {
   const session = await getAppSession()
   const db = getPrisma()
@@ -37,7 +50,10 @@ export async function getNavCounts() {
   if (!u) return { pendingApprovals: 0, myRequests: 0, unreadNotifications: 0 }
   const [approvable, myRequests, unreadNotifications] = await Promise.all([
     listApprovableChanges({ userId: u.id, realmRoles: session.realmRoles }),
-    db.changeRequest.count({ where: { requesterId: u.id } }),
+    // Only requests that need the requester's action: drafts to finish/submit and
+    // rejected ones to rework. In-flight (pending/approved/implemented) and terminal
+    // (verified/closed) states need nothing from them, so they don't belong on the badge.
+    db.changeRequest.count({ where: { requesterId: u.id, status: { in: ["draft", "rejected"] } } }),
     db.notification.count({ where: { userId: u.id, readAt: null } }),
   ])
   return { pendingApprovals: approvable.length, myRequests, unreadNotifications }

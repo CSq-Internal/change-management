@@ -5,7 +5,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { notifyEvent } from "@/server/notify"
-import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
+import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { getRoutedApprovers, getNamedApprovers, canUserApproveChange } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
@@ -164,10 +164,12 @@ export async function submitChange(id: string) {
     throw new Error("Forbidden: only the requester or an admin can submit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be submitted")
 
-  const present = new Set(change.attachments.map((a) => a.kind))
-  const missing = REQUIRED_DOC_KINDS.filter((k) => !present.has(k))
-  if (missing.length > 0) {
-    throw new Error(`Cannot submit: required document(s) missing: ${missing.join(", ")}`)
+  if (documentsRequiredForRisk(change.riskLevel)) {
+    const present = new Set(change.attachments.map((a) => a.kind))
+    const missing = REQUIRED_DOC_KINDS.filter((k) => !present.has(k))
+    if (missing.length > 0) {
+      throw new Error(`Cannot submit: required document(s) missing: ${missing.join(", ")}`)
+    }
   }
   const requiredFields: [string, unknown][] = [
     ["title", change.title], ["description", change.description],

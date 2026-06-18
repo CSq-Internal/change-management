@@ -56,3 +56,25 @@ export async function createBlackoutPeriod(input: {
     },
   })
 }
+
+export async function deleteBlackoutPeriod(id: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const existing = await db.blackoutPeriod.findUnique({
+    where: { id },
+    include: { opco: { select: { slug: true } } },
+  })
+  if (!existing) throw new Error("Blackout period not found")
+
+  // Same authority model as creation: group-scoped blackouts require a group admin;
+  // OpCo-scoped ones allow a group admin or that OpCo's user-manager.
+  const authorized = existing.opco === null
+    ? isGroupAdmin(session.realmRoles)
+    : isGroupAdmin(session.realmRoles) ||
+      canManageUsers(session.organizations, session.realmRoles, existing.opco.slug)
+  if (!authorized) {
+    throw new Error("Forbidden: not authorized to remove this blackout period")
+  }
+
+  await db.blackoutPeriod.delete({ where: { id } })
+}

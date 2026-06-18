@@ -124,4 +124,22 @@ describe("listApprovableChanges", () => {
     const out = await listApprovableChanges({ userId: "cto", realmRoles: [] })
     expect(out.map((c) => c.id)).toEqual(["c1"])
   })
+  it("excludes the user's own requests from the queue (SoD)", async () => {
+    mockDb.changeRequest.findMany.mockResolvedValue([])
+    await listApprovableChanges({ userId: "me", realmRoles: ["group_admin"] })
+    expect(mockDb.changeRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ requesterId: { not: "me" } }) })
+    )
+  })
+  it("excludes changes the user has already approved (awaiting other approvers, not them)", async () => {
+    mockDb.changeRequest.findMany.mockResolvedValue([])
+    await listApprovableChanges({ userId: "me", realmRoles: ["group_admin"] })
+    expect(mockDb.changeRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          approvals: { none: { approverId: "me", decision: "approve" } },
+        }),
+      })
+    )
+  })
 })

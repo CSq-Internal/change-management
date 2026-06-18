@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupAdmin, isGroupLevel, hasRoleInOpCo } from "@/lib/permissions"
+import { isGroupAdmin, isGroupLevel, hasRoleInOpCo, canManageUsers } from "@/lib/permissions"
 import { computeConflicts, type CalChange, type CalBlackout, type RiskLevel } from "@/lib/calendar"
 import CalendarClient, { type CalDay, type CalChipData } from "./calendar-client"
 
@@ -37,7 +37,7 @@ export default async function CalendarPage({
 
   const meUser = await db.user.findUnique({ where: { keycloakId: me.keycloakId }, select: { id: true } })
 
-  const [changeRows, blackoutRows] = await Promise.all([
+  const [changeRows, blackoutRows, opcos] = await Promise.all([
     db.changeRequest.findMany({
       where: { ...opcoFilter, plannedStart: { lt: end }, plannedEnd: { gte: start } },
       select: {
@@ -53,7 +53,29 @@ export default async function CalendarPage({
       },
       select: { id: true, label: true, opcoId: true, startsAt: true, endsAt: true },
     }),
+    db.opCo.findMany({ select: { id: true, slug: true, name: true }, orderBy: { name: "asc" } }),
   ])
+
+  // Blackout management is gated like the createBlackoutPeriod action: group admins can
+  // manage any scope (including the group-wide null scope); OpCo user-managers can manage
+  // their own OpCos. Build the scope options the current user is allowed to set.
+  const groupAdmin = isGroupAdmin(me.realmRoles)
+  const manageableOpcos = opcos.filter((o) => groupAdmin || canManageUsers(me.organizations, me.realmRoles, o.slug))
+  const canManageBlackouts = groupAdmin || manageableOpcos.length > 0
+  const blackoutScopes = [
+    ...(groupAdmin ? [{ value: "", label: "Group (all OpCos)" }] : []),
+    ...manageableOpcos.map((o) => ({ value: o.slug, label: o.name })),
+  ]
+  const opcoNameById = new Map(opcos.map((o) => [o.id, o.name]))
+  const blackouts = blackoutRows
+    .map((b) => ({
+      id: b.id,
+      label: b.label,
+      scopeName: b.opcoId ? (opcoNameById.get(b.opcoId) ?? "OpCo") : "Group",
+      startMs: b.startsAt.getTime(),
+      endMs: b.endsAt.getTime(),
+    }))
+    .sort((a, b) => a.startMs - b.startMs)
 
   const calChanges: CalChange[] = changeRows.map((c) => ({
     id: c.id, opcoId: c.opcoId, infrastructureType: c.infrastructureType,
@@ -107,6 +129,9 @@ export default async function CalendarPage({
       nextMonth={fmtMonthParam(next)}
       cells={cells}
       chips={chips}
+      canManageBlackouts={canManageBlackouts}
+      blackoutScopes={blackoutScopes}
+      blackouts={blackouts}
     />
   )
 }

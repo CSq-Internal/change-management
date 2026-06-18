@@ -26,7 +26,7 @@ export default function CabTable({ members, language, showOpco, onRemove }: CabT
   return (
     <Card className="border-border/80 bg-card/95">
       <CardContent className="p-0">
-        <table className="w-full text-sm">
+        <table className="responsive-table w-full text-sm">
           <thead>
             <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
               <th className="px-4 py-2">{t(language, "cabAdmin.colMember")}</th>
@@ -37,9 +37,9 @@ export default function CabTable({ members, language, showOpco, onRemove }: CabT
           <tbody>
             {members.map((m) => (
               <tr key={m.id} className="border-b border-border/40">
-                <td className="px-4 py-2">{m.email}</td>
-                {showOpco && <td className="px-4 py-2">{m.opco?.slug ?? "—"}</td>}
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-label={t(language, "cabAdmin.colMember")}>{m.email}</td>
+                {showOpco && <td className="px-4 py-2" data-label={t(language, "cabAdmin.colOpco")}>{m.opco?.slug ?? "—"}</td>}
+                <td className="px-4 py-2" data-label="">
                   <div className="flex justify-end">
                     <Button variant="outline" onClick={() => onRemove(m)}>
                       {t(language, "cabAdmin.remove")}

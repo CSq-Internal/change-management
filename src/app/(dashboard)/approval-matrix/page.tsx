@@ -25,15 +25,17 @@ export default async function ApprovalMatrixPage() {
   if (!session) redirect("/login")
   const db = getPrisma()
 
-  const groupCtos = (await db.cABMembership.findMany({
-    where: { opcoId: null, isActive: true },
-    include: { user: { select: { name: true, email: true } } },
-  })).map((m) => m.user)
-  const groupCtoNames = groupCtos.map((c) => c.name ?? c.email)
-  const groupCtoLabel = groupCtoNames.length > 0 ? groupCtoNames.join(", ") : "—"
+  // Group CTO(s) sit on every OpCo CAB as secondee; exclude them from the per-OpCo
+  // resident lists so they show by role (secondee), not by name, against each OpCo.
+  const groupCtoIds = new Set(
+    (await db.cABMembership.findMany({
+      where: { opcoId: null, isActive: true },
+      select: { userId: true },
+    })).map((m) => m.userId)
+  )
 
   const opcoCab = await db.cABMembership.findMany({
-    where: { opcoId: { not: null }, isActive: true },
+    where: { opcoId: { not: null }, isActive: true, userId: { notIn: [...groupCtoIds] } },
     include: { user: { select: { name: true, email: true } }, opco: { select: { slug: true } } },
   })
   const approversBySlug: Record<string, string[]> = {}
@@ -79,8 +81,8 @@ export default async function ApprovalMatrixPage() {
               <span className="font-medium">{infra}</span>
               <span className="text-muted-foreground">
                 {isGroupLevelInfra(infra)
-                  ? `Group CTO — ${groupCtoLabel}`
-                  : `Resident OpCo approver + secondee ${groupCtoLabel}`}
+                  ? "Group CTO"
+                  : "Resident OpCo approver + Group CTO (secondee)"}
               </span>
             </div>
           ))}
@@ -90,7 +92,7 @@ export default async function ApprovalMatrixPage() {
       <Card className="border-border/80 bg-card/95">
         <CardHeader>
           <CardTitle className="text-base">Approvers per OpCo</CardTitle>
-          <CardDescription>Resident approvers for each operating company. Group CTO ({groupCtoLabel}) is secondee on all non-Equiano changes.</CardDescription>
+          <CardDescription>Resident approvers for each operating company. The Group CTO is secondee on all non-Equiano changes.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           {OPCO_SLUGS.map((slug) => (

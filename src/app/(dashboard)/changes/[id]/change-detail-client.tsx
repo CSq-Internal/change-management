@@ -10,7 +10,7 @@ import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { submitChange, updateChangeStatus, discardChange } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
-import { REQUIRED_DOC_KINDS } from "@/lib/attachment-kinds"
+import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { StatusPill, RiskPill } from "@/components/change-badges"
 import PirForm from "./pir-form"
 import AssigneesDialog from "./assignees-dialog"
@@ -177,7 +177,9 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
     // Pre-validate client-side so a missing-doc/field submit shows a clear reason
     // instead of a masked server 500. The server submitChange remains the backstop.
     const present = new Set(change.attachments.map((d) => d.kind))
-    const missingDocs = REQUIRED_DOC_KINDS.filter((k) => !present.has(k)).map((k) => DOC_LABEL[k] ?? k)
+    const missingDocs = documentsRequiredForRisk(change.riskLevel)
+      ? REQUIRED_DOC_KINDS.filter((k) => !present.has(k)).map((k) => DOC_LABEL[k] ?? k)
+      : []
     const missingFields = ([
       ["Title", change.title], ["Description", change.description],
       ["Contact email", change.contactEmail], ["Infrastructure type", change.infrastructureType],

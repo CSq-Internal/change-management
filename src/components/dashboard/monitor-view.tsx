@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Activity, Lock, Globe, TriangleAlert } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { t, type Language } from "@/lib/i18n"
@@ -9,7 +10,7 @@ const STATUS_DOT: Record<string, string> = {
   implemented: "bg-blue-500", verified: "bg-violet-500", closed: "bg-slate-500",
 }
 
-export interface FeedEvent { id: string; changeId: string; label: string; actor: string; ago: string; tone: string }
+export interface FeedEvent { id: string; changeId: string; changeTitle: string; label: string; actor: string; ago: string; tone: string }
 
 export function MonitorView({
   data, blackouts, feed, language,
@@ -66,7 +67,7 @@ export function MonitorView({
               <div key={e.id} className="flex gap-2.5 border-t border-border/60 py-2 first:border-t-0">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${e.tone}`} />
                 <div className="min-w-0">
-                  <div className="text-[12.5px] text-foreground"><span className="font-semibold text-primary">{e.changeId}</span> {e.label}</div>
+                  <div className="text-[12.5px] text-foreground"><Link href={`/changes/${e.changeId}`} className="font-semibold text-primary hover:underline">{e.changeTitle}</Link> {e.label}</div>
                   <div className="text-[11px] text-muted-foreground">{e.actor} · {e.ago}</div>
                 </div>
               </div>

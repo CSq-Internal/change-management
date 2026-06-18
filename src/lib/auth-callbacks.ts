@@ -1,4 +1,5 @@
 import authConfig from "@/auth.config"
+import { coerceLocale } from "@/lib/i18n"
 import { getPrisma } from "@/server/db"
 import type { Session } from "next-auth"
 import type { JWT } from "next-auth/jwt"
@@ -32,12 +33,13 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
         email_verified?: boolean
         name?: string
         preferred_username?: string
+        locale?: string
       }
       if (p.email && p.email_verified) {
         await db.user.upsert({
           where: { email: p.email },
           update: { keycloakId: sub },
-          create: { keycloakId: sub, email: p.email, name: p.name ?? p.preferred_username ?? null },
+          create: { keycloakId: sub, email: p.email, name: p.name ?? p.preferred_username ?? null, locale: coerceLocale(p.locale) },
         })
       }
     }
