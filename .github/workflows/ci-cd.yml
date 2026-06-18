@@ -263,9 +263,6 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           region: ${{ vars.AR_REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
-          # Runtime identity. Without this, Cloud Run defaults to the compute SA, which
-          # the deploy SA (github-ci) cannot actAs — it only has serviceAccountUser on cms-run-prod.
-          service_account: cms-run-prod@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
           env_vars_update_strategy: overwrite
           secrets: |
             DATABASE_URL=cms-prod-database-url:latest
@@ -285,7 +282,10 @@ jobs:
             SMTP_USER=${{ vars.PROD_SMTP_USER }}
             GDRIVE_SHARED_DRIVE_ID=${{ vars.PROD_GDRIVE_SHARED_DRIVE_ID }}
             GDRIVE_ROOT_FOLDER_ID=${{ vars.PROD_GDRIVE_ROOT_FOLDER_ID }}
-          flags: "--allow-unauthenticated"
+          # deploy-cloudrun@v3 has no `service_account` input — set the runtime SA via gcloud
+          # flags so the service runs as cms-run-prod (github-ci has serviceAccountUser on it),
+          # not the default compute SA (which github-ci cannot actAs).
+          flags: "--allow-unauthenticated --service-account=cms-run-prod@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
 
       - name: Show deployed URL
         run: echo "Deployed cms-prod -> ${{ steps.deploy.outputs.url }}"
