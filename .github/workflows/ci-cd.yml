@@ -108,7 +108,8 @@ jobs:
       # Fails on high-severity advisories by design (security signal). This job is
       # NOT a required status check (branch protection gates on quality + test only),
       # so a red audit surfaces vulnerabilities without blocking merges.
-      # Known: Next.js 16.1.4 carries high advisories fixed in >=16.2.5 — upgrade to clear.
+      # Highs are currently clear: vite pinned >=8.0.16 (devDep) and hono >=4.12.25
+      # (pnpm-workspace overrides). Remaining advisories are moderate/low only.
       - run: pnpm audit --audit-level=high
 
   image:
@@ -256,13 +257,12 @@ jobs:
 
       - name: Deploy to Cloud Run
         id: deploy
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: cms-prod
           project_id: ${{ vars.GCP_PROJECT_ID }}
           region: ${{ vars.AR_REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
-          service_account: cms-run-prod@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
           env_vars_update_strategy: overwrite
           secrets: |
             DATABASE_URL=cms-prod-database-url:latest
@@ -282,7 +282,7 @@ jobs:
             SMTP_USER=${{ vars.PROD_SMTP_USER }}
             GDRIVE_SHARED_DRIVE_ID=${{ vars.PROD_GDRIVE_SHARED_DRIVE_ID }}
             GDRIVE_ROOT_FOLDER_ID=${{ vars.PROD_GDRIVE_ROOT_FOLDER_ID }}
-          flags: '--allow-unauthenticated'
+          flags: "--allow-unauthenticated"
 
       - name: Show deployed URL
         run: echo "Deployed cms-prod -> ${{ steps.deploy.outputs.url }}"
