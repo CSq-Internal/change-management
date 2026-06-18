@@ -212,3 +212,77 @@ jobs:
           echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
             [ -n "$tag" ] && docker push "$tag"
           done
+
+  deploy:
+    name: Deploy to Cloud Run (prod)
+    runs-on: ubuntu-latest
+    # Prod only: build/scan/push happens for dev too, but only prod deploys.
+    if: github.event_name == 'push' && github.ref_name == 'prod'
+    needs: [image]
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token for Workload Identity Federation
+    env:
+      IMAGE: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO }}/csquared-cms
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Apply database migrations (prod)
+        # DB URL is fetched at runtime from Secret Manager and kept in-process — never
+        # written to a file or logged. A failed migration fails the job before any deploy.
+        run: |
+          DATABASE_URL="$(gcloud secrets versions access latest \
+            --secret=cms-prod-database-url --project=${{ vars.GCP_PROJECT_ID }})"
+          export DATABASE_URL
+          pnpm prisma migrate deploy
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: cms-prod
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          region: ${{ vars.AR_REGION }}
+          image: ${{ env.IMAGE }}:${{ github.sha }}
+          service_account: cms-run-prod@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          env_vars_update_strategy: overwrite
+          secrets: |
+            DATABASE_URL=cms-prod-database-url:latest
+            NEXTAUTH_SECRET=cms-prod-nextauth-secret:latest
+            KEYCLOAK_CLIENT_SECRET=cms-prod-keycloak-client-secret:latest
+            KEYCLOAK_ADMIN_CLIENT_SECRET=cms-prod-keycloak-admin-client-secret:latest
+            RESEND_API_KEY=cms-prod-resend-api-key:latest
+            APP_PASSWORD=cms-prod-app-password:latest
+            GOOGLE_SERVICE_ACCOUNT_KEY=cms-prod-google-service-account-key:latest
+            CRON_SECRET=cms-prod-cron-secret:latest
+          env_vars: |
+            NEXTAUTH_URL=${{ vars.PROD_NEXTAUTH_URL }}
+            KEYCLOAK_ISSUER=${{ vars.PROD_KEYCLOAK_ISSUER }}
+            KEYCLOAK_CLIENT_ID=${{ vars.PROD_KEYCLOAK_CLIENT_ID }}
+            KEYCLOAK_ADMIN_CLIENT_ID=${{ vars.PROD_KEYCLOAK_ADMIN_CLIENT_ID }}
+            EMAIL_FROM=${{ vars.PROD_EMAIL_FROM }}
+            SMTP_USER=${{ vars.PROD_SMTP_USER }}
+            GDRIVE_SHARED_DRIVE_ID=${{ vars.PROD_GDRIVE_SHARED_DRIVE_ID }}
+            GDRIVE_ROOT_FOLDER_ID=${{ vars.PROD_GDRIVE_ROOT_FOLDER_ID }}
+          flags: '--allow-unauthenticated'
+
+      - name: Show deployed URL
+        run: echo "Deployed cms-prod -> ${{ steps.deploy.outputs.url }}"
