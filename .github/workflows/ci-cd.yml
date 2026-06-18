@@ -270,7 +270,6 @@ jobs:
             KEYCLOAK_CLIENT_SECRET=cms-prod-keycloak-client-secret:latest
             KEYCLOAK_ADMIN_CLIENT_SECRET=cms-prod-keycloak-admin-client-secret:latest
             RESEND_API_KEY=cms-prod-resend-api-key:latest
-            APP_PASSWORD=cms-prod-app-password:latest
             GOOGLE_SERVICE_ACCOUNT_KEY=cms-prod-google-service-account-key:latest
             CRON_SECRET=cms-prod-cron-secret:latest
           env_vars: |
