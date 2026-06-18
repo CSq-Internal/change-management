@@ -264,6 +264,10 @@ jobs:
           region: ${{ vars.AR_REGION }}
           image: ${{ env.IMAGE }}:${{ github.sha }}
           env_vars_update_strategy: overwrite
+          # Replace the full secret set each deploy (--set-secrets, not merge) so a secret
+          # removed here (e.g. the optional APP_PASSWORD) doesn't linger on the service from
+          # a prior revision's spec and break the revision.
+          secrets_update_strategy: overwrite
           secrets: |
             DATABASE_URL=cms-prod-database-url:latest
             NEXTAUTH_SECRET=cms-prod-nextauth-secret:latest
