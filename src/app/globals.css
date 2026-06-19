@@ -156,7 +156,14 @@
   border-radius: 0.5rem;
 }
 .driver-popover.csq-tour button.driver-popover-prev-btn {
-  color: var(--foreground);
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  text-shadow: none;
+}
+.driver-popover.csq-tour button.driver-popover-close-btn {
+  color: var(--muted-foreground);
   text-shadow: none;
 }
 
