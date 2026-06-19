@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CSquared CMS — v2 Roadmap & Direction</title>
+<style>
+  :root{
+    --ink:#1a2233; --muted:#5b6677; --line:#e3e8ef; --bg:#ffffff;
+    --accent:#0f766e; --accent-soft:#ecfdf5; --accent-line:#99f6e4;
+    --warn:#92400e; --warn-soft:#fffbeb; --warn-line:#fde68a;
+    --chip:#eef2f7; --chip-ink:#374151;
+    --maxw:880px;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:#f6f8fa; color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; background:var(--bg); padding:56px 60px 80px;}
+  header.doc{border-bottom:3px solid var(--accent); padding-bottom:22px; margin-bottom:34px;}
+  .eyebrow{font-size:12.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700; margin:0 0 8px;}
+  h1{font-size:30px; line-height:1.2; margin:0 0 10px; letter-spacing:-.01em;}
+  .sub{color:var(--muted); font-size:16.5px; margin:0;}
+  .meta{margin-top:18px; font-size:13.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 22px;}
+  .meta b{color:var(--ink); font-weight:600;}
+  h2{font-size:21px; margin:42px 0 12px; padding-top:10px; letter-spacing:-.01em;}
+  h3{font-size:17px; margin:26px 0 6px;}
+  p{margin:0 0 14px;}
+  ul,ol{margin:0 0 14px; padding-left:22px;}
+  li{margin:6px 0;}
+  .lede{font-size:18px; color:var(--ink);}
+  .callout{background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:12px; padding:18px 20px; margin:18px 0;}
+  .callout .label{font-weight:700; color:var(--accent); font-size:13px; letter-spacing:.04em; text-transform:uppercase; margin-bottom:4px;}
+  .warn{background:var(--warn-soft); border:1px solid var(--warn-line); border-radius:10px; padding:14px 18px; margin:16px 0; font-size:15px; color:#5b4309;}
+  .work{border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:16px 0; background:#fff;}
+  .work h3{margin-top:0; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .work h3 .num{display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-size:13px; font-weight:700; flex:none;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px;}
+  .chip{background:var(--chip); color:var(--chip-ink); border-radius:999px; padding:3px 11px; font-size:12.5px; font-weight:600;}
+  .chip.size{background:#eef6ff; color:#1e40af;}
+  .chip.iso{background:#f3f0ff; color:#5b21b6;}
+  .chip.flag{background:#ecfdf5; color:#065f46;}
+  .ba{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:12px 0; font-size:14.5px;}
+  .ba>div{padding:12px 14px;}
+  .ba .h{font-weight:700; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-bottom:4px;}
+  .ba .now{background:#fbfcfe; border-right:1px solid var(--line);}
+  .ba .next{background:var(--accent-soft);}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14.5px;}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{font-size:12.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted);}
+  td .v{font-weight:700;}
+  .seq{counter-reset:step; list-style:none; padding-left:0;}
+  .seq li{position:relative; padding:4px 0 4px 42px; margin:10px 0;}
+  .seq li::before{counter-increment:step; content:counter(step); position:absolute; left:0; top:2px; width:28px; height:28px; border-radius:8px; background:var(--accent); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px;}
+  .gloss dt{font-weight:700; margin-top:12px;}
+  .gloss dd{margin:2px 0 0; color:var(--muted);}
+  footer.doc{margin-top:48px; padding-top:18px; border-top:1px solid var(--line); font-size:13px; color:var(--muted);}
+  a{color:var(--accent);}
+  @media print{
+    body{background:#fff;} .wrap{padding:0; max-width:none;}
+    .work,.callout,.ba,.warn{break-inside:avoid;}
+    h2{break-after:avoid;}
+  }
+  @media (max-width:640px){
+    .wrap{padding:32px 22px 56px;} .ba{grid-template-columns:1fr;} .ba .now{border-right:0; border-bottom:1px solid var(--line);}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">CSquared · Change Management System</p>
+  <h1>Version 2 — Roadmap &amp; Direction</h1>
+  <p class="sub">What v2 entails, why, and how we will approach it — following the completion of v1.0.</p>
+  <div class="meta">
+    <span><b>Status:</b> v1.0 complete &amp; in production</span>
+    <span><b>Live at:</b> cms.csquarednet.com</span>
+    <span><b>Document date:</b> 19 June 2026</span>
+    <span><b>Owner:</b> Christian Koranteng</span>
+  </div>
+</header>
+
+<h2>Executive summary</h2>
+<p class="lede"><strong>v1 was about breadth; v2 is about depth.</strong></p>
+<p>
+  v1.0 delivered the complete change-management process end-to-end — raising a change, routing it to
+  the right approval board, implementing it, verifying it, and closing it, all with the governance and
+  audit evidence ISO&nbsp;27001 expects. It is now live in production.
+</p>
+<p>
+  v2 does not add new <em>process</em>. Instead it <strong>deepens the data the system holds</strong>
+  (moving from free-text descriptions to structured, connected information) and
+  <strong>connects the system outward</strong> to the tools CSquared already runs as systems of record.
+  One strategic thread runs through it: <strong>give management visibility by routing reporting through
+  Odoo where we can.</strong>
+</p>
+<div class="callout">
+  <div class="label">The one-line direction</div>
+  Make each change record <em>understand</em> what it touches and <em>surface</em> that understanding to
+  the people and systems that need it — rather than relying on prose typed into a box.
+</div>
+
+<h2>Where we are today</h2>
+<p>v1.0 is feature-complete and deployed. In practical terms the system already does all of the following:</p>
+<ul>
+  <li>Secure single sign-on (company Google / Keycloak), role-based access, and full isolation between OpCos.</li>
+  <li>The full change lifecycle with separation-of-duties and risk-based approval boards (CAB).</li>
+  <li>Mandatory planning documents (impact, implementation, testing, backout, solution) before submission.</li>
+  <li>Immutable audit trail, per-change PDF evidence packs, compliance reporting, SLA escalation, blackout windows, a change calendar, and a systemic risk register.</li>
+  <li>In-app and email notifications, bilingual English / French.</li>
+</ul>
+<p>
+  Two things remain in the v1 <em>close-out</em> tail and are <strong>not</strong> v2 features — see
+  <a href="#tail">“Not part of v2”</a> below.
+</p>
+
+<h2>What v2 entails — the workstreams</h2>
+<p>Five workstreams, listed roughly by value. Each large item gets its own design cycle before any code is written.</p>
+
+<div class="work">
+  <h3><span class="num">1</span> Odoo integration — management visibility</h3>
+  <div class="chips">
+    <span class="chip size">Size: M → L</span>
+    <span class="chip flag">Flagship</span>
+    <span class="chip">Needs its own brainstorming cycle</span>
+  </div>
+  <p><strong>What it is:</strong> push change records, status changes, and audit events into <strong>Odoo</strong>
+  (CSquared’s primary ERP) so leadership can see what’s happening in change management without logging into the CMS.</p>
+  <p><strong>Why it matters:</strong> it’s the most valuable item in v2 and directly answers the “management visibility”
+  goal. It aligns with the organisational direction to route reporting through Odoo.</p>
+  <p><strong>Range:</strong> start with a one-way push of records and status (Medium); potentially grow to a deeper,
+  two-way sync (Large). The real questions to settle first are <em>what data management wants to see</em> and how we
+  access the Odoo API — which is exactly why this gets a dedicated design cycle.</p>
+</div>
+
+<div class="work">
+  <h3><span class="num">2</span> Structured risk &amp; impact assessment</h3>
+  <div class="chips">
+    <span class="chip size">Size: M</span>
+    <span class="chip iso">ISO A.8.32 · A.8.8</span>
+  </div>
+  <p><strong>What it is:</strong> replace today’s single risk dropdown plus free-text impact paragraph with a
+  proper <strong>likelihood × impact</strong> assessment and an explicit list of <strong>affected services</strong>.</p>
+  <div class="ba">
+    <div class="now"><div class="h">Today</div>Risk: <em>High</em> · Impact: “May affect Ghana backbone traffic during cutover.”</div>
+    <div class="next"><div class="h">v2</div>Likelihood: <em>Possible</em> × Impact: <em>Major</em> → computed risk. Affected services: <em>Ghana Transit</em>.</div>
+  </div>
+  <p><strong>Why it matters:</strong> consistent, comparable risk scoring across all changes and OpCos — and risk
+  the system can actually reason about, rather than words it can only display.</p>
+</div>
+
+<div class="work">
+  <h3><span class="num">3</span> Configuration items / CMDB</h3>
+  <div class="chips">
+    <span class="chip size">Size: M → L</span>
+    <span class="chip iso">ISO A.8.9</span>
+    <span class="chip">Foundational</span>
+  </div>
+  <p><strong>What it is:</strong> a <strong>Configuration Management Database</strong> — an inventory of the “things”
+  in our environment (landing stations, fibre links, routers, data centres, services, applications) and the
+  <strong>relationships between them</strong>. Each thing is a <em>Configuration Item (CI)</em>. A change would then
+  <strong>link to real CIs</strong> instead of a free-text “infrastructure” field.</p>
+  <p><strong>Why it matters — what it unlocks:</strong></p>
+  <ul>
+    <li><strong>Real impact analysis:</strong> “this change touches the Accra core router → which services depend on it → who is affected?”</li>
+    <li><strong>Conflict detection:</strong> two changes in the same window touching the same asset get flagged automatically.</li>
+    <li><strong>Sharper routing, risk &amp; audit:</strong> decisions key off <em>what</em> is changing; “show every change that touched this link” becomes a simple query.</li>
+  </ul>
+  <div class="warn">
+    <strong>Honest tradeoff:</strong> a CMDB is only as good as it is kept current. The payoff is real, but it adds an
+    ongoing maintenance commitment as the network evolves — that’s a process decision, not just a feature.
+  </div>
+</div>
+
+<div class="work">
+  <h3><span class="num">4</span> Google Workspace directory enrichment</h3>
+  <div class="chips">
+    <span class="chip size">Size: M</span>
+    <span class="chip flag">Tier 1 already shipped</span>
+  </div>
+  <p><strong>What it is:</strong> pull richer profile fields — job title, department, office/location, manager — from the
+  Google Workspace <strong>Directory</strong> into the user profile.</p>
+  <p><strong>Already done in v1:</strong> “Sign in with Google” and the restriction to <code>@csquared.com</code> accounts
+  shipped during the auth work. v2 only adds the directory <em>enrichment</em> on top, which requires Workspace
+  admin-level access (domain-wide delegation) — hence it is deferred.</p>
+</div>
+
+<div class="work">
+  <h3><span class="num">5</span> Smaller carried-forward improvements</h3>
+  <div class="chips">
+    <span class="chip size">Size: S–M each</span>
+    <span class="chip">Opportunistic</span>
+  </div>
+  <ul>
+    <li><strong>Workspace defaults</strong> — pre-fill a new change request with a user’s usual OpCo, risk level, and approvers. Small UX win.</li>
+    <li><strong>Severity / category routing policies</strong> — e.g. “critical changes also post to Chat and notify OpCo admins”, layered onto the existing notification settings. Build only if there is real demand.</li>
+    <li><strong>Dev / test / prod environment modelling</strong> — record which environment a change targets (ISO A.8.31).</li>
+  </ul>
+</div>
+
+<h2>Sequencing &amp; dependencies</h2>
+<p>The CMDB is foundational — both structured impact (#2) and richer Odoo reporting (#1) get better once
+configuration items exist. But the first Odoo push does not need it, and Odoo delivers the most visible value
+soonest. Suggested order:</p>
+<ol class="seq">
+  <li><strong>Odoo one-way push</strong> — fastest visible value to management; ships against data we already have.</li>
+  <li><strong>CMDB + structured risk/impact</strong> — built together (they share the “affected services” model).</li>
+  <li><strong>Directory enrichment + the smaller UX wins</strong> — fit in opportunistically.</li>
+</ol>
+
+<h2>What we deliberately left out</h2>
+<p>During the v1 review, three candidate pages were triaged and consciously <em>not</em> built — recorded here so the decisions are transparent:</p>
+<table>
+  <thead><tr><th>Candidate</th><th>Decision</th><th>Reason</th></tr></thead>
+  <tbody>
+    <tr><td><span class="v">Workflow “automation” rules engine</span></td><td>Dropped</td><td>Its valuable rules (risk-based routing, SLA escalation) already exist and work; a generic configurable engine is high cost for low marginal value.</td></tr>
+    <tr><td><span class="v">Multi-channel “alert manager”</span></td><td>Folded</td><td>Duplicates existing email + in-app + Google&nbsp;Chat notifications; most channels are tools we don’t run. Any real need becomes a policy layer on existing settings.</td></tr>
+    <tr><td><span class="v">Account-security page</span></td><td>Integrated</td><td>Identity, MFA and sessions belong to Keycloak; we deep-link to its Account Console instead of rebuilding it. (Already done.)</td></tr>
+  </tbody>
+</table>
+
+<h2 id="tail">Not part of v2 (the v1 close-out tail)</h2>
+<ul>
+  <li><strong>Production smoke testing &amp; UAT</strong> — finishing the rollout and feedback loop now under way.</li>
+  <li><strong>ISMS / compliance process</strong> — the written change procedure, evidence-of-operation, and a management-review cadence. These are organisational, owned <em>with the ISMS team</em>, not software features.</li>
+</ul>
+
+<h2>How we will work on v2</h2>
+<p>
+  Each major item (Odoo and the CMDB especially) follows the same disciplined path used in v1:
+  <strong>brainstorm → written spec → implementation plan → build with tests</strong>. Nothing schema-deepening
+  gets built before its design is agreed, because these changes have organisation-wide implications. The natural
+  starting point is a brainstorming cycle on the <strong>Odoo integration</strong> — the highest-value and
+  least-defined piece.
+</p>
+
+<h2>Glossary</h2>
+<dl class="gloss">
+  <dt>CMDB / CI</dt><dd>Configuration Management Database / Configuration Item — an inventory of IT assets and services and how they relate.</dd>
+  <dt>CAB</dt><dd>Change Advisory Board — the group that authorises changes; routing and quorum depend on risk and infrastructure type.</dd>
+  <dt>OpCo</dt><dd>Operating Company — a CSquared country/business unit; data is isolated per OpCo.</dd>
+  <dt>SoD</dt><dd>Separation of Duties — the requester cannot approve their own change; approver and implementer are distinct.</dd>
+  <dt>SLA</dt><dd>Service-Level Agreement — time targets for handling a change, with escalation when breached.</dd>
+  <dt>Odoo</dt><dd>CSquared’s primary ERP system — the intended destination for management-facing change reporting.</dd>
+  <dt>Keycloak / OIDC</dt><dd>The identity provider the app trusts for login (OpenID Connect); it owns passwords, MFA and sessions.</dd>
+  <dt>ISO 27001 (A.8.32 etc.)</dt><dd>The information-security standard; A.8.32 is its change-management control. Codes show which control each item supports.</dd>
+</dl>
+
+<footer class="doc">
+  CSquared Change Management System · v2 Roadmap &amp; Direction · Prepared 19 June 2026.
+  A living document — supersedes nothing in v1; pairs with the project work plan.
+</footer>
+
+</div>
+</body>
+</html>
