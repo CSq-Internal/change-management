@@ -24,8 +24,7 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // Reconcile the DB user with this Keycloak identity. Pre-provisioned/seeded users
     // (and brand-new Keycloak users) won't have a row matching the real `sub` yet, so
     // role lookups and admin-action auditing (which resolve the DB user by keycloakId)
-    // would fail. Link-or-create by verified email and backfill the sub. Gated on
-    // email_verified so we only trust Keycloak-asserted, verified addresses.
+    // would fail. Link-or-create by email and backfill the sub.
     const existing = await db.user.findUnique({ where: { keycloakId: sub } })
     if (!existing) {
       const p = (profile ?? {}) as {
@@ -35,7 +34,10 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
         preferred_username?: string
         locale?: string
       }
-      if (p.email && p.email_verified) {
+      // Trust boundary is Keycloak's @csquared.com realm restriction, not the OIDC
+      // email_verified claim (Google brokering doesn't reliably propagate it). Require
+      // only a present email so brokered sign-ins always produce a discoverable row.
+      if (p.email) {
         await db.user.upsert({
           where: { email: p.email },
           update: { keycloakId: sub },

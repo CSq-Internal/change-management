@@ -108,7 +108,7 @@ describe('auth enrichment', () => {
     )
   })
 
-  it('does NOT link/create when the email is not verified', async () => {
+  it('links/creates a row even when email_verified is false (brokered Google)', async () => {
     userFindUnique.mockResolvedValue(null)
     findMany.mockResolvedValue([])
 
@@ -116,7 +116,25 @@ describe('auth enrichment', () => {
       token: {},
       user: {},
       account,
-      profile: { sub: 'real-sub-123', email: 'devops@csquared.com', email_verified: false },
+      profile: { sub: 'real-sub-123', email: 'eessel@csquared.com', email_verified: false, name: 'E Essel' },
+    })
+
+    expect(userUpsert).toHaveBeenCalledWith({
+      where: { email: 'eessel@csquared.com' },
+      update: { keycloakId: 'real-sub-123' },
+      create: { keycloakId: 'real-sub-123', email: 'eessel@csquared.com', name: 'E Essel', locale: 'en' },
+    })
+  })
+
+  it('does NOT link/create when no email is present', async () => {
+    userFindUnique.mockResolvedValue(null)
+    findMany.mockResolvedValue([])
+
+    await enrichedJwt({
+      token: {},
+      user: {},
+      account,
+      profile: { sub: 'no-email-sub' },
     })
 
     expect(userUpsert).not.toHaveBeenCalled()
