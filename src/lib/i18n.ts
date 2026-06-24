@@ -699,6 +699,9 @@ export const translations: Record<Language, Record<string, string>> = {
     "riskLevel.medium": "Medium",
     "riskLevel.high": "High",
     "riskLevel.emergency": "Emergency",
+    "notif.access.requested.title": "New access request",
+    "notif.access.approved.title": "Access request approved",
+    "notif.access.denied.title": "Access request denied",
   },
   fr: {
     "nav.core": "Noyau",
@@ -1398,6 +1401,9 @@ export const translations: Record<Language, Record<string, string>> = {
     "riskLevel.medium": "Moyen",
     "riskLevel.high": "Élevé",
     "riskLevel.emergency": "Urgence",
+    "notif.access.requested.title": "Nouvelle demande d'accès",
+    "notif.access.approved.title": "Demande d'accès approuvée",
+    "notif.access.denied.title": "Demande d'accès refusée",
   },
 }
 
