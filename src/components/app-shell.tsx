@@ -43,6 +43,7 @@ import {
   ArrowLeftRight,
   Building2,
   ScrollText,
+  UserPlus,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import ProductTour from "@/components/tour/product-tour"
@@ -61,6 +62,7 @@ const navGroups = [
     labelKey: "nav.userManagement",
     items: [
       { href: "/users", labelKey: "nav.users", icon: Users, gate: "admin", tour: "nav-users" },
+      { href: "/access-requests", labelKey: "nav.accessRequests", icon: UserPlus, gate: "admin" },
       { href: "/teams", labelKey: "nav.teams", icon: UsersRound, gate: "admin" },
       { href: "/cab", labelKey: "nav.cab", icon: Gavel, gate: "admin", tour: "nav-cab" },
       { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight, gate: "admin" },
