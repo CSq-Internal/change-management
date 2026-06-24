@@ -80,6 +80,8 @@ model User {
   chatWebhooks         ChatWebhook[]              @relation("ChatWebhookAuthor")
   approverAssignments  ApproverAssignment[]       @relation("ApproverAssignments")
   changeAssignments    ChangeAssignee[]           @relation("ChangeAssignments")
+  accessRequests        AccessRequest[]            @relation("AccessRequestRequester")
+  accessRequestsDecided AccessRequest[]            @relation("AccessRequestDecider")
 }
 
 model OpCo {
@@ -99,6 +101,7 @@ model OpCo {
   chatWebhooks ChatWebhook[]
   archivedAt DateTime?
   approverAssignments ApproverAssignment[]
+  accessRequests AccessRequest[]
 }
 
 model UserOpCoAssignment {
@@ -429,4 +432,30 @@ model ChatWebhook {
   createdAt   DateTime @default(now())
 
   @@index([opcoId])
+}
+
+enum AccessRequestStatus {
+  pending
+  approved
+  denied
+}
+
+model AccessRequest {
+  id             String              @id @default(cuid())
+  userId         String
+  opcoId         String
+  role           Role
+  note           String?
+  status         AccessRequestStatus @default(pending)
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionReason String?
+  createdAt      DateTime            @default(now())
+
+  user      User  @relation("AccessRequestRequester", fields: [userId], references: [id])
+  opco      OpCo  @relation(fields: [opcoId], references: [id])
+  decidedBy User? @relation("AccessRequestDecider", fields: [decidedById], references: [id])
+
+  @@index([opcoId, status])
+  @@index([userId, status])
 }
