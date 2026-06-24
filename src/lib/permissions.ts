@@ -47,6 +47,14 @@ export function isGroupLevel(realmRoles: string[]): boolean {
   return realmRoles.includes("group_admin") || realmRoles.includes("group_auditor")
 }
 
+/** True if the user has any standing access — a group-level role or ≥1 OpCo assignment. */
+export function hasAnyAccess(
+  organizations: SessionOrganization[],
+  realmRoles: string[]
+): boolean {
+  return isGroupLevel(realmRoles) || organizations.length > 0
+}
+
 export function isMemberOfOpCo(organizations: SessionOrganization[], slug: string): boolean {
   return organizations.some((o) => o.alias === slug)
 }
