@@ -80,3 +80,23 @@ export async function notifyEvent(input: {
 
   await Promise.allSettled(tasks)
 }
+
+/**
+ * Change-free notifications (e.g. access-request workflow). Writes Notification rows
+ * directly with changeId: null so they surface in the bell feed. Unlike notifyEvent,
+ * this bypasses the change-oriented preference matrix — these events are always in-app.
+ */
+export async function notifyUsers(
+  recipients: { userId: string }[],
+  msg: { type: string; title: string; body: string }
+): Promise<void> {
+  if (recipients.length === 0) return
+  const db = getPrisma()
+  await Promise.allSettled(
+    recipients.map((r) =>
+      db.notification.create({
+        data: { userId: r.userId, type: msg.type, title: msg.title, body: msg.body, changeId: null },
+      })
+    )
+  )
+}
