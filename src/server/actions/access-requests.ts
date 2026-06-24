@@ -93,3 +93,101 @@ export async function listAccessRequests() {
     requesterEmail: r.user.email,
   }))
 }
+
+// Loads a pending request and asserts the caller can assign its role in its OpCo.
+// Returns the request and the actor's DB user id (nullable — used for decidedById).
+async function loadDecidableRequest(id: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+
+  const req = await db.accessRequest.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      userId: true,
+      role: true,
+      opco: { select: { id: true, slug: true, name: true } },
+      user: { select: { keycloakId: true, locale: true } },
+    },
+  })
+  if (!req) throw new Error("Access request not found")
+  if (req.status !== "pending") throw new Error("Access request already decided")
+  if (!canAssignRole(session.organizations, session.realmRoles, req.opco.slug, req.role)) {
+    throw new Error(`Forbidden: cannot grant ${req.role} in ${req.opco.slug}`)
+  }
+
+  const actor = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
+  return { session, db, req, actorId: actor?.id ?? null }
+}
+
+export async function approveAccessRequest(id: string) {
+  const { session, db, req, actorId } = await loadDecidableRequest(id)
+
+  await db.$transaction(async (tx) => {
+    await tx.userOpCoAssignment.upsert({
+      where: { userId_opcoId: { userId: req.userId, opcoId: req.opco.id } },
+      update: { role: req.role, isActive: true, endedAt: null },
+      create: { userId: req.userId, opcoId: req.opco.id, role: req.role },
+    })
+    await tx.accessRequest.update({
+      where: { id: req.id },
+      data: { status: "approved", decidedById: actorId, decidedAt: new Date() },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
+      action: "access.approve",
+      summary: `Approved ${req.role} access to ${req.opco.name}`,
+      opcoId: req.opco.id,
+      targetUserId: req.userId,
+      metadata: { accessRequestId: req.id },
+    })
+  })
+
+  try {
+    await assignToOrganization(req.user.keycloakId, req.opco.slug)
+  } catch (err) {
+    console.warn(`[keycloak] org assignment skipped for ${req.opco.slug}:`, err)
+  }
+
+  const locale = coerceLocale(req.user.locale)
+  await notifyUsers([{ userId: req.userId }], {
+    type: "access.approved",
+    title: t(locale, "notif.access.approved.title"),
+    body: req.opco.name,
+  })
+
+  return { ok: true as const }
+}
+
+export async function denyAccessRequest(id: string, reason?: string) {
+  const { session, db, req, actorId } = await loadDecidableRequest(id)
+
+  await db.$transaction(async (tx) => {
+    await tx.accessRequest.update({
+      where: { id: req.id },
+      data: { status: "denied", decidedById: actorId, decidedAt: new Date(), decisionReason: reason ?? null },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
+      action: "access.deny",
+      summary: `Denied ${req.role} access to ${req.opco.name}`,
+      opcoId: req.opco.id,
+      targetUserId: req.userId,
+      metadata: { accessRequestId: req.id, reason: reason ?? null },
+    })
+  })
+
+  const locale = coerceLocale(req.user.locale)
+  await notifyUsers([{ userId: req.userId }], {
+    type: "access.denied",
+    title: t(locale, "notif.access.denied.title"),
+    body: req.opco.name,
+  })
+
+  return { ok: true as const }
+}

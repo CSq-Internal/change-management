@@ -92,3 +92,71 @@ describe("listAccessRequests", () => {
     )
   })
 })
+
+import { approveAccessRequest, denyAccessRequest } from "@/server/actions/access-requests"
+import { assignToOrganization } from "@/server/keycloak"
+
+const pendingReq = {
+  id: "ar-1",
+  status: "pending",
+  userId: "bob-db",
+  role: "requester",
+  opco: { id: "opco-ghana", slug: "ghana", name: "CSquared Ghana" },
+  user: { keycloakId: "kc-bob", locale: "en" },
+}
+
+describe("approveAccessRequest", () => {
+  it("grants the requester assignment, flips status, and notifies the requester", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
+    mockDb.user.findUnique.mockResolvedValue({ id: "ga-db" })
+
+    const res = await approveAccessRequest("ar-1")
+    expect(res).toEqual({ ok: true })
+    expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledWith({
+      where: { userId_opcoId: { userId: "bob-db", opcoId: "opco-ghana" } },
+      update: { role: "requester", isActive: true, endedAt: null },
+      create: { userId: "bob-db", opcoId: "opco-ghana", role: "requester" },
+    })
+    expect(mockDb.accessRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "ar-1" }, data: expect.objectContaining({ status: "approved", decidedById: "ga-db" }) })
+    )
+    expect(assignToOrganization).toHaveBeenCalledWith("kc-bob", "ghana")
+    expect(notifyUsers).toHaveBeenCalledWith([{ userId: "bob-db" }], expect.objectContaining({ type: "access.approved" }))
+  })
+
+  it("rejects when the caller cannot assign requester in that OpCo", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(member) // no roles
+    mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
+    await expect(approveAccessRequest("ar-1")).rejects.toThrow(/Forbidden/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+  })
+
+  it("rejects a non-pending request", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue({ ...pendingReq, status: "approved" })
+    await expect(approveAccessRequest("ar-1")).rejects.toThrow(/already decided/i)
+  })
+})
+
+describe("denyAccessRequest", () => {
+  it("flips status to denied with the reason and notifies the requester", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
+    mockDb.user.findUnique.mockResolvedValue({ id: "ga-db" })
+
+    const res = await denyAccessRequest("ar-1", "Not needed")
+    expect(res).toEqual({ ok: true })
+    expect(mockDb.accessRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "denied", decisionReason: "Not needed", decidedById: "ga-db" }) })
+    )
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+    expect(notifyUsers).toHaveBeenCalledWith([{ userId: "bob-db" }], expect.objectContaining({ type: "access.denied" }))
+  })
+
+  it("rejects when the caller cannot assign requester in that OpCo", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(member)
+    mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
+    await expect(denyAccessRequest("ar-1")).rejects.toThrow(/Forbidden/i)
+  })
+})
