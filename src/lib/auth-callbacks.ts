@@ -24,7 +24,7 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // Reconcile the DB user with this Keycloak identity. Pre-provisioned/seeded users
     // (and brand-new Keycloak users) won't have a row matching the real `sub` yet, so
     // role lookups and admin-action auditing (which resolve the DB user by keycloakId)
-    // would fail. Link-or-create by email and backfill the sub.
+    // would fail.
     const existing = await db.user.findUnique({ where: { keycloakId: sub } })
     if (!existing) {
       const p = (profile ?? {}) as {
@@ -34,15 +34,21 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
         preferred_username?: string
         locale?: string
       }
-      // Trust boundary is Keycloak's @csquared.com realm restriction, not the OIDC
-      // email_verified claim (Google brokering doesn't reliably propagate it). Require
-      // only a present email so brokered sign-ins always produce a discoverable row.
       if (p.email) {
-        await db.user.upsert({
-          where: { email: p.email },
-          update: { keycloakId: sub },
-          create: { keycloakId: sub, email: p.email, name: p.name ?? p.preferred_username ?? null, locale: coerceLocale(p.locale) },
-        })
+        const byEmail = await db.user.findUnique({ where: { email: p.email }, select: { id: true } })
+        if (!byEmail) {
+          // Brand-new identity (e.g. first brokered Google sign-in). A fresh row carries
+          // zero OpCo assignments — no standing access — so creating it needs no verified
+          // email. This is what makes self-registered users discoverable to admins.
+          await db.user.create({
+            data: { keycloakId: sub, email: p.email, name: p.name ?? p.preferred_username ?? null, locale: coerceLocale(p.locale) },
+          })
+        } else if (p.email_verified) {
+          // Re-link a pre-provisioned/seeded row to this Keycloak identity. Gated on
+          // email_verified so an UNVERIFIED email can never repoint an existing (possibly
+          // privileged) row to a different sub — closing the account-takeover vector.
+          await db.user.update({ where: { email: p.email }, data: { keycloakId: sub } })
+        }
       }
     }
 

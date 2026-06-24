@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const userFindUnique = vi.fn()
-const userUpsert = vi.fn()
+const userCreate = vi.fn()
+const userUpdate = vi.fn()
 const findMany = vi.fn()
 
 vi.mock('@/server/db', () => ({
   getPrisma: () => ({
-    user: { findUnique: userFindUnique, upsert: userUpsert },
+    user: { findUnique: userFindUnique, create: userCreate, update: userUpdate },
     userOpCoAssignment: { findMany },
   }),
 }))
@@ -15,16 +16,26 @@ import { enrichedJwt, sessionFromToken } from '@/lib/auth-callbacks'
 
 const account = { provider: 'keycloak', type: 'oidc', providerAccountId: 'x', access_token: 'at' } as const
 
+// The reconcile block makes two findUnique calls: first by keycloakId (the incoming sub),
+// then — only if that misses — by email. Route the mock by which key the query uses.
+function mockUsers({ bySub = null, byEmail = null }: { bySub?: unknown; byEmail?: unknown }) {
+  userFindUnique.mockImplementation(async ({ where }: { where: { keycloakId?: string; email?: string } }) =>
+    where.keycloakId ? bySub : byEmail
+  )
+}
+
 describe('auth enrichment', () => {
   beforeEach(() => {
     process.env.KEYCLOAK_CLIENT_ID = 'csquared-cms'
     userFindUnique.mockReset()
-    userUpsert.mockReset()
+    userCreate.mockReset()
+    userUpdate.mockReset()
     findMany.mockReset()
+    mockUsers({})
   })
 
   it('maps DB OpCo assignments into session.user.organizations on sign-in', async () => {
-    userFindUnique.mockResolvedValue({ id: 'u1', keycloakId: 'kc-sub-1' })
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
     findMany.mockResolvedValue([
       { role: 'admin', opco: { id: 'opco-ghana', name: 'CSquared Ghana', slug: 'ghana' } },
     ])
@@ -41,7 +52,8 @@ describe('auth enrichment', () => {
     expect(token.organizations).toEqual([
       { id: 'opco-ghana', name: 'CSquared Ghana', alias: 'ghana', roles: ['admin'] },
     ])
-    expect(userUpsert).not.toHaveBeenCalled() // already linked by sub
+    expect(userCreate).not.toHaveBeenCalled() // already linked by sub
+    expect(userUpdate).not.toHaveBeenCalled()
     expect(findMany).toHaveBeenCalledWith({
       where: { isActive: true, user: { keycloakId: 'kc-sub-1' } },
       include: { opco: true },
@@ -59,8 +71,8 @@ describe('auth enrichment', () => {
     expect(session.user.realmRoles).toEqual(['group_admin'])
   })
 
-  it('links a pre-provisioned user to the real Keycloak sub by verified email', async () => {
-    userFindUnique.mockResolvedValue(null) // no row matches the real sub yet (seed placeholder)
+  it('relinks a pre-provisioned row to the real Keycloak sub by verified email', async () => {
+    mockUsers({ bySub: null, byEmail: { id: 'seed-row' } }) // seed placeholder row exists by email
     findMany.mockResolvedValue([])
 
     await enrichedJwt({
@@ -70,11 +82,11 @@ describe('auth enrichment', () => {
       profile: { sub: 'real-sub-123', email: 'devops@csquared.com', email_verified: true, name: 'Dev Admin' },
     })
 
-    expect(userUpsert).toHaveBeenCalledWith({
+    expect(userUpdate).toHaveBeenCalledWith({
       where: { email: 'devops@csquared.com' },
-      update: { keycloakId: 'real-sub-123' },
-      create: { keycloakId: 'real-sub-123', email: 'devops@csquared.com', name: 'Dev Admin', locale: 'en' },
+      data: { keycloakId: 'real-sub-123' },
     })
+    expect(userCreate).not.toHaveBeenCalled()
     // assignments are then loaded by the (now-linked) sub
     expect(findMany).toHaveBeenCalledWith({
       where: { isActive: true, user: { keycloakId: 'real-sub-123' } },
@@ -82,34 +94,32 @@ describe('auth enrichment', () => {
     })
   })
 
-  it('seeds User.locale from the profile.locale claim when creating/linking', async () => {
-    userFindUnique.mockResolvedValue(null)
+  it('seeds User.locale from the profile.locale claim when creating a new row', async () => {
+    mockUsers({ bySub: null, byEmail: null })
     findMany.mockResolvedValue([])
     await enrichedJwt({
       token: {}, user: {}, account,
       profile: { sub: 'sub-fr', email: 'pierre@csquared.com', email_verified: true, name: 'Pierre', locale: 'fr' },
     })
-    expect(userUpsert).toHaveBeenCalledWith({
-      where: { email: 'pierre@csquared.com' },
-      update: { keycloakId: 'sub-fr' },
-      create: { keycloakId: 'sub-fr', email: 'pierre@csquared.com', name: 'Pierre', locale: 'fr' },
+    expect(userCreate).toHaveBeenCalledWith({
+      data: { keycloakId: 'sub-fr', email: 'pierre@csquared.com', name: 'Pierre', locale: 'fr' },
     })
   })
 
   it('defaults locale to en when the claim is absent', async () => {
-    userFindUnique.mockResolvedValue(null)
+    mockUsers({ bySub: null, byEmail: null })
     findMany.mockResolvedValue([])
     await enrichedJwt({
       token: {}, user: {}, account,
       profile: { sub: 'sub-x', email: 'sam@csquared.com', email_verified: true, name: 'Sam' },
     })
-    expect(userUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ create: expect.objectContaining({ locale: 'en' }) })
+    expect(userCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ locale: 'en' }) })
     )
   })
 
-  it('links/creates a row even when email_verified is false (brokered Google)', async () => {
-    userFindUnique.mockResolvedValue(null)
+  it('creates a brand-new row even when email_verified is false (brokered Google)', async () => {
+    mockUsers({ bySub: null, byEmail: null }) // no row by sub, none by email → brand-new identity
     findMany.mockResolvedValue([])
 
     await enrichedJwt({
@@ -119,15 +129,29 @@ describe('auth enrichment', () => {
       profile: { sub: 'real-sub-123', email: 'eessel@csquared.com', email_verified: false, name: 'E Essel' },
     })
 
-    expect(userUpsert).toHaveBeenCalledWith({
-      where: { email: 'eessel@csquared.com' },
-      update: { keycloakId: 'real-sub-123' },
-      create: { keycloakId: 'real-sub-123', email: 'eessel@csquared.com', name: 'E Essel', locale: 'en' },
+    expect(userCreate).toHaveBeenCalledWith({
+      data: { keycloakId: 'real-sub-123', email: 'eessel@csquared.com', name: 'E Essel', locale: 'en' },
     })
+    expect(userUpdate).not.toHaveBeenCalled()
+  })
+
+  it('does NOT relink an existing row when the email is unverified (takeover guard)', async () => {
+    mockUsers({ bySub: null, byEmail: { id: 'victim-row' } }) // a privileged row already owns this email
+    findMany.mockResolvedValue([])
+
+    await enrichedJwt({
+      token: {},
+      user: {},
+      account,
+      profile: { sub: 'attacker-sub', email: 'admin@csquared.com', email_verified: false },
+    })
+
+    expect(userUpdate).not.toHaveBeenCalled()
+    expect(userCreate).not.toHaveBeenCalled()
   })
 
   it('does NOT link/create when no email is present', async () => {
-    userFindUnique.mockResolvedValue(null)
+    mockUsers({ bySub: null, byEmail: null })
     findMany.mockResolvedValue([])
 
     await enrichedJwt({
@@ -137,11 +161,12 @@ describe('auth enrichment', () => {
       profile: { sub: 'no-email-sub' },
     })
 
-    expect(userUpsert).not.toHaveBeenCalled()
+    expect(userCreate).not.toHaveBeenCalled()
+    expect(userUpdate).not.toHaveBeenCalled()
   })
 
   it('reads group roles from the csquared-cms client roles and ignores realm roles', async () => {
-    userFindUnique.mockResolvedValue({ id: 'u1', keycloakId: 'kc-sub-1' })
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
     findMany.mockResolvedValue([])
 
     const token = await enrichedJwt({
@@ -170,7 +195,8 @@ describe('auth enrichment', () => {
     })
 
     expect(userFindUnique).not.toHaveBeenCalled()
-    expect(userUpsert).not.toHaveBeenCalled()
+    expect(userCreate).not.toHaveBeenCalled()
+    expect(userUpdate).not.toHaveBeenCalled()
     expect(findMany).not.toHaveBeenCalled()
     expect(token.organizations).toEqual([])
   })
