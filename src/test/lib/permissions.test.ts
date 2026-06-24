@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole, canManageTeams, canManageCab } from '@/lib/permissions'
+import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole, canManageTeams, canManageCab, hasAnyAccess } from '@/lib/permissions'
 import { viewerTier, requestScopedSlugs } from '@/lib/permissions'
 import type { SessionOrganization } from '@/types/next-auth'
 
@@ -170,6 +170,18 @@ describe('viewerTier', () => {
   })
   it('no orgs, no realm roles → member', () => {
     expect(viewerTier([], [])).toBe('member')
+  })
+})
+
+describe("hasAnyAccess", () => {
+  it("is false for a user with no roles and no assignments", () => {
+    expect(hasAnyAccess([], [])).toBe(false)
+  })
+  it("is true for a group-level user with no OpCo assignments", () => {
+    expect(hasAnyAccess([], ["group_auditor"])).toBe(true)
+  })
+  it("is true for a user with at least one OpCo assignment", () => {
+    expect(hasAnyAccess([{ id: "o", name: "Ghana", alias: "ghana", roles: ["requester"] }], [])).toBe(true)
   })
 })
 
