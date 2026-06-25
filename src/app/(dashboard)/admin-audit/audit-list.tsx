@@ -23,6 +23,7 @@ export default function AuditList({ rows, language }: AuditListProps) {
   return (
     <Card className="border-border/80 bg-card/95">
       <CardContent className="p-0">
+        <div className="overflow-x-auto">
         <table className="responsive-table w-full text-sm">
           <thead>
             <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
@@ -47,6 +48,7 @@ export default function AuditList({ rows, language }: AuditListProps) {
             ))}
           </tbody>
         </table>
+        </div>
       </CardContent>
     </Card>
   )

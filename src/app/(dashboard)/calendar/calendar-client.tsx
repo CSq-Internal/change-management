@@ -220,7 +220,7 @@ export default function CalendarClient({
               <p className="text-xs text-muted-foreground">{t(language, "calendar.blackout.subtitle")}</p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 {t(language, "calendar.blackout.label")}
                 <input
