@@ -15,8 +15,9 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     // Brokered Google sign-in: kc_idp_hint tells Keycloak to skip its own login
-    // screen and redirect straight to the Google identity provider.
-    await signIn("keycloak", { callbackUrl: "/" }, { kc_idp_hint: "google" })
+    // screen and redirect straight to the dedicated, hosted-domain-restricted
+    // (csquared.com) Google identity provider for this app.
+    await signIn("keycloak", { callbackUrl: "/" }, { kc_idp_hint: "google-csquared" })
   }
 
   return (
