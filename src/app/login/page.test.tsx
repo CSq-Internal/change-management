@@ -17,13 +17,13 @@ describe("LoginPage", () => {
     expect(signIn).toHaveBeenCalledWith("keycloak", { callbackUrl: "/" })
   })
 
-  it("Google button signs in via keycloak with kc_idp_hint=google", () => {
+  it("Google button signs in via keycloak with kc_idp_hint=google-csquared", () => {
     render(<LoginPage />)
     fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }))
     expect(signIn).toHaveBeenCalledWith(
       "keycloak",
       { callbackUrl: "/" },
-      { kc_idp_hint: "google" }
+      { kc_idp_hint: "google-csquared" }
     )
   })
 })
