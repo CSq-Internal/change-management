@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const userFindUnique = vi.fn()
 const userCreate = vi.fn()
 const userUpdate = vi.fn()
+const userUpdateMany = vi.fn()
 const findMany = vi.fn()
 
 vi.mock('@/server/db', () => ({
   getPrisma: () => ({
-    user: { findUnique: userFindUnique, create: userCreate, update: userUpdate },
+    user: { findUnique: userFindUnique, create: userCreate, update: userUpdate, updateMany: userUpdateMany },
     userOpCoAssignment: { findMany },
   }),
 }))
@@ -30,6 +31,7 @@ describe('auth enrichment', () => {
     userFindUnique.mockReset()
     userCreate.mockReset()
     userUpdate.mockReset()
+    userUpdateMany.mockReset()
     findMany.mockReset()
     mockUsers({})
   })
@@ -184,6 +186,26 @@ describe('auth enrichment', () => {
     })
 
     expect(token.realmRoles).toEqual(['group_auditor'])
+  })
+
+  it('marks isGroupAdmin true when the token carries the group_admin client role', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([])
+    await enrichedJwt({
+      token: {}, user: {}, account,
+      profile: { sub: 'kc-sub-1', email: 'ga@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: ['group_admin'] } } },
+    })
+    expect(userUpdateMany).toHaveBeenCalledWith({ where: { keycloakId: 'kc-sub-1' }, data: { isGroupAdmin: true } })
+  })
+
+  it('clears isGroupAdmin (false) when the token has no group_admin role', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-2' } })
+    findMany.mockResolvedValue([])
+    await enrichedJwt({
+      token: {}, user: {}, account,
+      profile: { sub: 'kc-sub-2', email: 'member@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: [] } } },
+    })
+    expect(userUpdateMany).toHaveBeenCalledWith({ where: { keycloakId: 'kc-sub-2' }, data: { isGroupAdmin: false } })
   })
 
   it('does not query the DB when account is absent (token refresh)', async () => {
