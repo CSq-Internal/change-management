@@ -161,7 +161,7 @@ export async function sendAccessRequestEmail(opts: {
   const opcoName = escapeHtml(opts.opcoName)
   await dispatchEmail(
     opts.to,
-    fr ? `Nouvelle demande d'accès : ${opcoName}` : `New access request: ${opcoName}`,
+    fr ? `Nouvelle demande d'accès : ${opts.opcoName}` : `New access request: ${opts.opcoName}`,
     fr
       ? `<p>Bonjour ${adminName},</p>
 <p><strong>${requesterName}</strong> a demandé l'accès à <strong>${opcoName}</strong>.</p>
