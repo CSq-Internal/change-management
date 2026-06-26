@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { canApprove, canAudit, canManageUsers, isGroupAdmin, canManageAnyOpCo, manageableOpCoSlugs, canAssignRole, canManageTeams, canManageCab, hasAnyAccess } from '@/lib/permissions'
-import { viewerTier, requestScopedSlugs } from '@/lib/permissions'
+import { viewerTier, requestScopedSlugs, shouldRedirectToRequestAccess } from '@/lib/permissions'
 import type { SessionOrganization } from '@/types/next-auth'
 
 const ghanaApprover: SessionOrganization = { id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['approver'] }
@@ -182,6 +182,32 @@ describe("hasAnyAccess", () => {
   })
   it("is true for a user with at least one OpCo assignment", () => {
     expect(hasAnyAccess([{ id: "o", name: "Ghana", alias: "ghana", roles: ["requester"] }], [])).toBe(true)
+  })
+})
+
+describe('shouldRedirectToRequestAccess', () => {
+  const noAccess = { organizations: [], realmRoles: [] }
+  const groupAccess = { organizations: [], realmRoles: ['group_admin'] }
+  const opcoAccess = { organizations: [ghanaApprover], realmRoles: [] }
+
+  it('does not redirect when there is no token (unauthenticated)', () => {
+    expect(shouldRedirectToRequestAccess('/approvals', null)).toBe(false)
+  })
+  it('redirects an authenticated no-access user on a protected route', () => {
+    expect(shouldRedirectToRequestAccess('/approvals', noAccess)).toBe(true)
+    expect(shouldRedirectToRequestAccess('/calendar', noAccess)).toBe(true)
+    expect(shouldRedirectToRequestAccess('/', noAccess)).toBe(true)
+  })
+  it('does not redirect a user with a group role', () => {
+    expect(shouldRedirectToRequestAccess('/approvals', groupAccess)).toBe(false)
+  })
+  it('does not redirect a user with an OpCo assignment', () => {
+    expect(shouldRedirectToRequestAccess('/approvals', opcoAccess)).toBe(false)
+  })
+  it('never redirects exempt routes even with no access', () => {
+    for (const p of ['/login', '/request-access', '/api/auth', '/api/auth/callback/keycloak']) {
+      expect(shouldRedirectToRequestAccess(p, noAccess)).toBe(false)
+    }
   })
 })
 

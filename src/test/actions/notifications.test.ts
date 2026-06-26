@@ -16,6 +16,7 @@ const mockDb = {
     count: vi.fn().mockResolvedValue(2),
   },
   changeRequest: { count: vi.fn().mockResolvedValue(5) },
+  accessRequest: { count: vi.fn().mockResolvedValue(0) },
 }
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 vi.mock('@/server/approval-authority', () => ({
@@ -34,13 +35,20 @@ describe('getNavCounts', () => {
   it('returns pendingApprovals, myRequests and unreadNotifications', async () => {
     mockDb.changeRequest.count.mockResolvedValue(5)
     mockDb.notification.count.mockResolvedValue(2)
+    mockDb.accessRequest.count.mockResolvedValue(4)
     const counts = await getNavCounts()
-    expect(counts).toEqual({ pendingApprovals: 2, myRequests: 5, unreadNotifications: 2 })
+    expect(counts).toEqual({ pendingApprovals: 2, myRequests: 5, unreadNotifications: 2, pendingAccessRequests: 4 })
   })
   it('counts only requests needing the requester action (draft + rejected)', async () => {
     await getNavCounts()
     expect(mockDb.changeRequest.count).toHaveBeenCalledWith({
       where: { requesterId: 'user-me', status: { in: ['draft', 'rejected'] } },
+    })
+  })
+  it('scopes pendingAccessRequests to manageable OpCos', async () => {
+    await getNavCounts()
+    expect(mockDb.accessRequest.count).toHaveBeenCalledWith({
+      where: { status: 'pending', opco: { slug: { in: [] } } },
     })
   })
 })

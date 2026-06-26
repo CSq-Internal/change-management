@@ -62,6 +62,16 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
       alias: a.opco.slug,
       roles: [a.role],
     }))
+
+    // Mirror the group_admin client role onto the DB row so group-level admins
+    // (whose role lives only in Keycloak) are enumerable for notifications.
+    // Writes both true and false so a demotion clears the marker. updateMany is a
+    // no-op when no row matches (e.g. an unverified email that wasn't created/relinked).
+    const realmRoles = (token.realmRoles as string[] | undefined) ?? []
+    await db.user.updateMany({
+      where: { keycloakId: sub },
+      data: { isGroupAdmin: realmRoles.includes("group_admin") },
+    })
   }
   return token
 }

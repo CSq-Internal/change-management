@@ -152,6 +152,26 @@ export async function sendSlaEscalationEmail(opts: {
   )
 }
 
+export async function sendAccessRequestEmail(opts: {
+  to: string; adminName: string; requesterName: string; opcoName: string; locale?: Language
+}) {
+  const fr = opts.locale === "fr"
+  const adminName = escapeHtml(opts.adminName)
+  const requesterName = escapeHtml(opts.requesterName)
+  const opcoName = escapeHtml(opts.opcoName)
+  await dispatchEmail(
+    opts.to,
+    fr ? `Nouvelle demande d'accès : ${opts.opcoName}` : `New access request: ${opts.opcoName}`,
+    fr
+      ? `<p>Bonjour ${adminName},</p>
+<p><strong>${requesterName}</strong> a demandé l'accès à <strong>${opcoName}</strong>.</p>
+<p><a href="${BASE}/access-requests">Examiner la demande</a></p>`
+      : `<p>Hi ${adminName},</p>
+<p><strong>${requesterName}</strong> requested access to <strong>${opcoName}</strong>.</p>
+<p><a href="${BASE}/access-requests">Review the request</a></p>`
+  )
+}
+
 export async function sendEmergencyAlertEmail(opts: {
   to: string; changeTitle: string; changeId: string; requesterName: string; locale?: Language
 }) {

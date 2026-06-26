@@ -112,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setTheme,
   } = useStore()
   const translate = (key: string) => t(language, key)
-  const [navCounts, setNavCounts] = useState({ pendingApprovals: 0, myRequests: 0, unreadNotifications: 0 })
+  const [navCounts, setNavCounts] = useState({ pendingApprovals: 0, myRequests: 0, unreadNotifications: 0, pendingAccessRequests: 0 })
   useEffect(() => {
     if (!currentUser) return
     getNavCounts().then(setNavCounts).catch(() => {})
@@ -296,6 +296,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 )}
                               >
                                 {navCounts.pendingApprovals}
+                              </span>
+                            )}
+                            {item.href === "/access-requests" && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs",
+                                  active ? "bg-white/20" : "bg-muted"
+                                )}
+                              >
+                                {navCounts.pendingAccessRequests}
                               </span>
                             )}
                           </>
