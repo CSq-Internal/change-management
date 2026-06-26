@@ -4,10 +4,11 @@ vi.mock("@/lib/session", () => ({ getAppSession: vi.fn() }))
 vi.mock("@/server/audit", () => ({ recordAdminAction: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/server/notify", () => ({ notifyUsers: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/server/keycloak", () => ({ assignToOrganization: vi.fn().mockResolvedValue(undefined) }))
+vi.mock("@/server/email", () => ({ sendAccessRequestEmail: vi.fn().mockResolvedValue(undefined) }))
 
 const mockDb = {
   $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
-  user: { findUnique: vi.fn() },
+  user: { findUnique: vi.fn(), findMany: vi.fn() },
   opCo: { findUnique: vi.fn() },
   userOpCoAssignment: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn().mockResolvedValue({}) },
   accessRequest: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue({}) },
@@ -17,6 +18,7 @@ vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 import { requestAccess, listAccessRequests } from "@/server/actions/access-requests"
 import { getAppSession } from "@/lib/session"
 import { notifyUsers } from "@/server/notify"
+import { sendAccessRequestEmail } from "@/server/email"
 
 const member = { keycloakId: "kc-bob", email: "bob@csquared.com", name: "Bob", organizations: [], realmRoles: [] }
 const groupAdmin = { keycloakId: "kc-ga", email: "ga@csquared.com", name: "GA", organizations: [], realmRoles: ["group_admin"] }
@@ -31,12 +33,13 @@ beforeEach(() => {
   mockDb.accessRequest.findFirst.mockResolvedValue(null)
   mockDb.accessRequest.create.mockResolvedValue({ id: "ar-1" })
   mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
+  mockDb.user.findMany.mockResolvedValue([])
 })
 
 describe("requestAccess", () => {
   it("creates a pending requester request and notifies OpCo admins", async () => {
     mockDb.userOpCoAssignment.findMany.mockResolvedValue([
-      { userId: "admin-1", user: { isActive: true } },
+      { userId: "admin-1", user: { email: "admin1@csquared.com", name: "Admin One", locale: "en" } },
     ])
     const res = await requestAccess({ opcoSlug: "ghana", note: "Need access" })
     expect(res).toEqual({ id: "ar-1" })
@@ -47,6 +50,25 @@ describe("requestAccess", () => {
       [{ userId: "admin-1" }],
       expect.objectContaining({ type: "access.requested" })
     )
+    expect(sendAccessRequestEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "admin1@csquared.com", opcoName: "CSquared Ghana", requesterName: "Bob" })
+    )
+  })
+
+  it("notifies group admins and the target OpCo's admins, deduped and excluding the requester", async () => {
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
+      { userId: "admin-1", user: { email: "admin1@csquared.com", name: "Admin One", locale: "en" } },
+    ])
+    mockDb.user.findMany.mockResolvedValue([
+      { id: "admin-1", email: "admin1@csquared.com", name: "Admin One", locale: "en" }, // also a group admin → dedup
+      { id: "ga-2", email: "ga2@csquared.com", name: "Group Admin Two", locale: "fr" },
+      { id: "bob-db", email: "bob@csquared.com", name: "Bob", locale: "en" }, // the requester → excluded
+    ])
+    await requestAccess({ opcoSlug: "ghana" })
+    const notified = vi.mocked(notifyUsers).mock.calls[0][0]
+    expect(notified).toEqual(expect.arrayContaining([{ userId: "admin-1" }, { userId: "ga-2" }]))
+    expect(notified).toHaveLength(2) // deduped admin-1, excluded bob-db
+    expect(sendAccessRequestEmail).toHaveBeenCalledTimes(2)
   })
 
   it("rejects when the user is already an active requester there", async () => {

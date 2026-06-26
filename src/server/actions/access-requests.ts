@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { canAssignRole, manageableOpCoSlugs } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import { notifyUsers } from "@/server/notify"
+import { sendAccessRequestEmail } from "@/server/email"
 import { assignToOrganization } from "@/server/keycloak"
 import { coerceLocale, t } from "@/lib/i18n"
 
@@ -48,17 +49,43 @@ export async function requestAccess(input: { opcoSlug: string; note?: string }) 
     metadata: { accessRequestId: created.id, opcoSlug: input.opcoSlug },
   })
 
-  const admins = await db.userOpCoAssignment.findMany({
-    where: { opcoId: opco.id, role: "admin", isActive: true },
-    select: { userId: true, user: { select: { isActive: true } } },
-  })
-  const recipients = admins.filter((a) => a.user.isActive).map((a) => ({ userId: a.userId }))
-  const locale = coerceLocale(opco.locale)
-  await notifyUsers(recipients, {
-    type: "access.requested",
-    title: t(locale, "notif.access.requested.title"),
-    body: `${session.name ?? session.email} → ${opco.name}`,
-  })
+  // Recipients: active admins of the target OpCo PLUS all active group-level admins
+  // (group_admin lives only in Keycloak, mirrored to User.isGroupAdmin at sign-in).
+  // Dedup by user id; never notify the requester themselves.
+  const [opAdmins, groupAdmins] = await Promise.all([
+    db.userOpCoAssignment.findMany({
+      where: { opcoId: opco.id, role: "admin", isActive: true, user: { isActive: true } },
+      select: { userId: true, user: { select: { email: true, name: true, locale: true } } },
+    }),
+    db.user.findMany({
+      where: { isGroupAdmin: true, isActive: true },
+      select: { id: true, email: true, name: true, locale: true },
+    }),
+  ])
+
+  const byId = new Map<string, { userId: string; email: string; name: string | null; locale: string | null }>()
+  for (const a of opAdmins) byId.set(a.userId, { userId: a.userId, email: a.user.email, name: a.user.name, locale: a.user.locale })
+  for (const g of groupAdmins) byId.set(g.id, { userId: g.id, email: g.email, name: g.name, locale: g.locale })
+  byId.delete(me.id)
+  const recipients = [...byId.values()]
+
+  const requesterName = session.name ?? session.email
+  const opcoLocale = coerceLocale(opco.locale)
+  await Promise.allSettled([
+    notifyUsers(
+      recipients.map((r) => ({ userId: r.userId })),
+      { type: "access.requested", title: t(opcoLocale, "notif.access.requested.title"), body: `${requesterName} → ${opco.name}` }
+    ),
+    ...recipients.map((r) =>
+      sendAccessRequestEmail({
+        to: r.email,
+        adminName: r.name ?? r.email,
+        requesterName,
+        opcoName: opco.name,
+        locale: coerceLocale(r.locale),
+      })
+    ),
+  ])
 
   return { id: created.id }
 }
