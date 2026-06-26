@@ -55,6 +55,23 @@ export function hasAnyAccess(
   return isGroupLevel(realmRoles) || organizations.length > 0
 }
 
+const ACCESS_GATE_EXEMPT = ["/login", "/request-access", "/api/auth"]
+
+/**
+ * Middleware gate decision: should this request be redirected to /request-access?
+ * True only for an authenticated session that has no standing access and is on a
+ * non-exempt route. Unauthenticated (null token) requests are left to the normal
+ * login flow. Pure + edge-safe so it can run in middleware and be unit-tested.
+ */
+export function shouldRedirectToRequestAccess(
+  pathname: string,
+  token: { organizations?: SessionOrganization[]; realmRoles?: string[] } | null
+): boolean {
+  if (!token) return false
+  if (ACCESS_GATE_EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) return false
+  return !hasAnyAccess(token.organizations ?? [], token.realmRoles ?? [])
+}
+
 export function isMemberOfOpCo(organizations: SessionOrganization[], slug: string): boolean {
   return organizations.some((o) => o.alias === slug)
 }

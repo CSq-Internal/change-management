@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { viewerTier, hasAnyAccess } from "@/lib/permissions"
+import { viewerTier } from "@/lib/permissions"
 import { requestScope } from "@/server/request-scope"
 import RequestsTableClient, { type RequestRow } from "./requests-table-client"
 
@@ -12,7 +12,6 @@ export default async function RequestsPage({
 }) {
   const session = await auth()
   if (!session) redirect("/login")
-  if (!hasAnyAccess(session.user.organizations, session.user.realmRoles)) redirect("/request-access")
   const db = getPrisma()
 
   const tier = viewerTier(session.user.organizations, session.user.realmRoles)

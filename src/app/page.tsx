@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { viewerTier, requestScopedSlugs, hasAnyAccess } from "@/lib/permissions"
+import { viewerTier, requestScopedSlugs } from "@/lib/permissions"
 import { requestScope } from "@/server/request-scope"
 import { runDueEscalations } from "@/server/sla"
 import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
@@ -23,9 +23,6 @@ const BLACKOUT_ENDING_SOON_MS = 12 * 3600_000
 export default async function Home() {
   const session = await auth()
   if (!session) redirect("/login")
-  // No standing access yet (e.g. fresh Google sign-in) → self-service request page.
-  if (!hasAnyAccess(session.user.organizations, session.user.realmRoles)) redirect("/request-access")
-
   const db = getPrisma()
   // Members have no ops dashboard — send them to their requests.
   const tier = viewerTier(session.user.organizations, session.user.realmRoles)
