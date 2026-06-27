@@ -38,11 +38,17 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
   const [comments, setComments] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Optimistically hide a card the moment it's acted on — both approve and reject
+  // remove it from this user's queue server-side (already-approved is filtered out;
+  // reject leaves the `pending` status), so the refresh confirms the removal. On
+  // failure we add the id back so the card returns.
+  const [removed, setRemoved] = useState<Set<string>>(new Set())
 
   async function handleDecision(changeId: string, decision: "approve" | "reject") {
     const comment = comments[changeId]
     setError(null)
     setBusyId(changeId)
+    setRemoved((prev) => new Set(prev).add(changeId))
     try {
       await submitApproval(changeId, decision, comment, isCabMember)
       toast({
@@ -57,6 +63,11 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
       startTransition(() => router.refresh())
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred"
+      setRemoved((prev) => {
+        const next = new Set(prev)
+        next.delete(changeId)
+        return next
+      })
       setError(message)
       toast({ title: "Error", description: message, variant: "error" })
     } finally {
@@ -74,6 +85,8 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
         .map((a) => a.approverId)
     ).size
 
+  const visible = changes.filter((c) => !removed.has(c.id))
+
   return (
     <div className="grid gap-4">
       {error && (
@@ -82,7 +95,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
         </div>
       )}
 
-      {changes.map((c) => {
+      {visible.map((c) => {
         const requesterLabel = c.requester.name ?? c.requester.email
         const isHigh = needsCabQuorum(c.riskLevel)
         const cabCount = cabApprovedCount(c.approvals)
@@ -142,7 +155,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
         )
       })}
 
-      {changes.length === 0 && (
+      {visible.length === 0 && (
         <p className="text-sm text-muted-foreground">{t(language, "approvals.none")}</p>
       )}
     </div>
