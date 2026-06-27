@@ -3,6 +3,8 @@ export type DbUser = {
   name: string | null
   email: string
   isActive: boolean
+  isGroupAdmin: boolean
+  accessStatus: "pending" | "approved" | "denied" | null
   opcoAssignments: {
     role: string
     isActive: boolean

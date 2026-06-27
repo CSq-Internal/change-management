@@ -25,6 +25,23 @@ const SEVERITY_RING: Record<string, string> = {
   low: "ring-emerald-400", medium: "ring-amber-400", high: "ring-orange-500", emergency: "ring-rose-500",
 }
 
+// Chip background by risk level (the overlap conflict stays a separate ring signal).
+const RISK_BG: Record<string, string> = {
+  low: "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-100 dark:hover:bg-emerald-900/60",
+  medium: "bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60",
+  high: "bg-orange-100 text-orange-900 hover:bg-orange-200 dark:bg-orange-900/40 dark:text-orange-100 dark:hover:bg-orange-900/60",
+  emergency: "bg-rose-100 text-rose-900 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-100 dark:hover:bg-rose-900/60",
+}
+const RISK_FALLBACK = "bg-muted hover:bg-muted/70"
+// Left-border accent for the mobile agenda rows.
+const RISK_BORDER: Record<string, string> = {
+  low: "border-l-emerald-400", medium: "border-l-amber-400", high: "border-l-orange-500", emergency: "border-l-rose-500",
+}
+const RISK_DOT: Record<string, string> = {
+  low: "bg-emerald-400", medium: "bg-amber-400", high: "bg-orange-500", emergency: "bg-rose-500",
+}
+const RISK_LEVELS = ["low", "medium", "high", "emergency"] as const
+
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 function formatDayLabel(key: string, language: string): string {
@@ -134,6 +151,16 @@ export default function CalendarClient({
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="font-medium">{t(language, "calendar.legend")}</span>
+        {RISK_LEVELS.map((r) => (
+          <span key={r} className="flex items-center gap-1.5">
+            <span className={`inline-block size-2.5 rounded-full ${RISK_DOT[r]}`} />
+            {t(language, `riskLevel.${r}`)}
+          </span>
+        ))}
+      </div>
+
       <Card className="hidden border-border/80 bg-card/95 sm:block">
         <CardContent className="p-3">
           <div className="grid grid-cols-7 gap-px text-xs font-medium text-muted-foreground">
@@ -164,7 +191,7 @@ export default function CalendarClient({
                           chip.overlap ? t(language, "calendar.conflict.overlap") : "",
                           chip.blackout ? `${t(language, "calendar.conflict.blackout")}: ${chip.blackoutLabels.join(", ")}` : "",
                         ].filter(Boolean).join("\n")}
-                        className={`block truncate rounded px-1.5 py-0.5 text-[11px] leading-tight bg-muted hover:bg-muted/70 ${chip.canReschedule ? "cursor-grab" : ""} ${chip.overlap && chip.severity ? `ring-2 ${SEVERITY_RING[chip.severity]}` : ""}`}
+                        className={`block truncate rounded px-1.5 py-0.5 text-[11px] leading-tight ${RISK_BG[chip.riskLevel] ?? RISK_FALLBACK} ${chip.canReschedule ? "cursor-grab" : ""} ${chip.overlap && chip.severity ? `ring-2 ${SEVERITY_RING[chip.severity]}` : ""}`}
                       >
                         {chip.blackout && <span title={t(language, "calendar.conflict.blackout")}>🚫 </span>}
                         {chip.overlap && <span title={t(language, "calendar.conflict.overlap")}>⚠ </span>}
@@ -194,7 +221,7 @@ export default function CalendarClient({
                   <Link
                     key={chip.id}
                     href={`/changes/${chip.id}`}
-                    className="block rounded-md border border-border bg-card p-2.5 hover:bg-muted/40"
+                    className={`block rounded-md border border-l-4 border-border bg-card p-2.5 hover:bg-muted/40 ${RISK_BORDER[chip.riskLevel] ?? ""}`}
                   >
                     <div className="flex items-center gap-2 text-sm">
                       {chip.blackout && <span title={t(language, "calendar.conflict.blackout")}>🚫</span>}
