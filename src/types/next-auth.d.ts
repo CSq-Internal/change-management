@@ -27,5 +27,6 @@ declare module "next-auth/jwt" {
     organizations?: SessionOrganization[]
     realmRoles?: string[]
     accessToken?: string
+    orgsRefreshedAt?: number // epoch ms of the last DB org load (Part A TTL re-enrichment)
   }
 }

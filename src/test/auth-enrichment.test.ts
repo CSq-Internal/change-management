@@ -239,7 +239,7 @@ describe('auth enrichment', () => {
 
   it('does not query the DB when account is absent (token refresh)', async () => {
     const token = await enrichedJwt({
-      token: { keycloakId: 'kc-sub-1', organizations: [], realmRoles: ['group_admin'] },
+      token: { keycloakId: 'kc-sub-1', organizations: [], realmRoles: ['group_admin'], orgsRefreshedAt: Date.now() },
       user: {},
       account: null,
       profile: undefined,
@@ -250,5 +250,54 @@ describe('auth enrichment', () => {
     expect(userUpdate).not.toHaveBeenCalled()
     expect(findMany).not.toHaveBeenCalled()
     expect(token.organizations).toEqual([])
+  })
+
+  it('re-enriches organizations from the DB when the token is stale and there is no account', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([
+      { role: 'approver', opco: { id: 'opco-ghana', name: 'CSquared Ghana', slug: 'ghana' } },
+    ])
+
+    const token = await enrichedJwt({
+      // no account → token-refresh path
+      token: { keycloakId: 'kc-sub-1', organizations: [], orgsRefreshedAt: 1 }, // stale (epoch 1ms)
+      user: {},
+      account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { isActive: true, user: { keycloakId: 'kc-sub-1' } },
+      include: { opco: true },
+    })
+    expect(token.organizations).toEqual([
+      { id: 'opco-ghana', name: 'CSquared Ghana', alias: 'ghana', roles: ['approver'] },
+    ])
+    expect(typeof token.orgsRefreshedAt).toBe('number')
+    expect(token.orgsRefreshedAt).toBeGreaterThan(1)
+  })
+
+  it('does NOT hit the DB on a fresh token refresh (within TTL)', async () => {
+    const token = await enrichedJwt({
+      token: { keycloakId: 'kc-sub-1', organizations: [], orgsRefreshedAt: Date.now() },
+      user: {},
+      account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+
+    expect(findMany).not.toHaveBeenCalled()
+    expect(token.keycloakId).toBe('kc-sub-1')
+  })
+
+  it('stamps orgsRefreshedAt on sign-in', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([])
+
+    const token = await enrichedJwt({
+      token: {},
+      user: {},
+      account,
+      profile: { sub: 'kc-sub-1', email: 'devops@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: [] } } },
+    })
+
+    expect(typeof token.orgsRefreshedAt).toBe('number')
   })
 })
