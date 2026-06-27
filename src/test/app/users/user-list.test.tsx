@@ -5,20 +5,25 @@ import type { DbUser } from '@/app/(dashboard)/users/types'
 
 const users: DbUser[] = [
   {
-    id: 'u1', name: 'Ada', email: 'ada@csquared.com', isActive: true, accessStatus: 'approved',
+    id: 'u1', name: 'Ada', email: 'ada@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: 'approved',
     opcoAssignments: [{ role: 'admin', isActive: true, opco: { name: 'Ghana', slug: 'ghana' } }],
   },
   {
-    id: 'u2', name: 'Bo', email: 'bo@csquared.com', isActive: false, accessStatus: 'approved',
+    id: 'u2', name: 'Bo', email: 'bo@csquared.com', isActive: false, isGroupAdmin: false, accessStatus: 'approved',
     opcoAssignments: [{ role: 'requester', isActive: false, opco: { name: 'Uganda', slug: 'uganda' } }],
   },
 ]
 
 const noAccessUsers: DbUser[] = [
-  { id: 'p1', name: 'Pia', email: 'pia@csquared.com', isActive: true, accessStatus: 'pending', opcoAssignments: [] },
-  { id: 'd1', name: 'Dex', email: 'dex@csquared.com', isActive: true, accessStatus: 'denied', opcoAssignments: [] },
-  { id: 'n1', name: 'Nan', email: 'nan@csquared.com', isActive: true, accessStatus: null, opcoAssignments: [] },
+  { id: 'p1', name: 'Pia', email: 'pia@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: 'pending', opcoAssignments: [] },
+  { id: 'd1', name: 'Dex', email: 'dex@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: 'denied', opcoAssignments: [] },
+  { id: 'n1', name: 'Nan', email: 'nan@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: null, opcoAssignments: [] },
 ]
+
+// A group admin's authority is the Keycloak role, not an OpCo assignment.
+const groupAdmin: DbUser = {
+  id: 'g1', name: 'Gail', email: 'gail@csquared.com', isActive: true, isGroupAdmin: true, accessStatus: null, opcoAssignments: [],
+}
 
 function renderList(list: DbUser[]) {
   return render(
@@ -51,6 +56,13 @@ describe('UserList', () => {
 
   it('omits the No access section when every user has an assignment', () => {
     renderList(users)
+    expect(screen.queryByText('No access / Pending')).not.toBeInTheDocument()
+  })
+
+  it('keeps a zero-assignment group admin out of the No access section', () => {
+    renderList([groupAdmin])
+    expect(screen.getByText('gail@csquared.com')).toBeInTheDocument()
+    expect(screen.getByText('Group admin')).toBeInTheDocument()
     expect(screen.queryByText('No access / Pending')).not.toBeInTheDocument()
   })
 })
