@@ -22,6 +22,8 @@ export default async function UsersPage() {
         : { opcoAssignments: { some: { opco: { slug: { in: scope } } } } },
     include: {
       opcoAssignments: { include: { opco: true } },
+      // Latest request drives the status tag on access-less (zero-assignment) users.
+      accessRequests: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
     },
   })
 
@@ -30,6 +32,7 @@ export default async function UsersPage() {
     name: u.name,
     email: u.email,
     isActive: u.isActive,
+    accessStatus: u.accessRequests[0]?.status ?? null,
     opcoAssignments: u.opcoAssignments.map((a) => ({
       role: a.role,
       isActive: a.isActive,
