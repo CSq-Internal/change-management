@@ -81,5 +81,6 @@ export function sessionFromToken({ session, token }: SessionParams): Session {
   session.user.keycloakId = (token.keycloakId as string) ?? ""
   session.user.organizations = token.organizations ?? []
   session.user.realmRoles = (token.realmRoles as string[]) ?? []
+  session.user.image = (token.picture as string | null | undefined) ?? null
   return session
 }

@@ -73,6 +73,35 @@ describe('auth enrichment', () => {
     expect(session.user.realmRoles).toEqual(['group_admin'])
   })
 
+  it('inherits the profile picture claim into session.user.image', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([])
+
+    const token = await enrichedJwt({
+      token: {},
+      user: {},
+      account,
+      profile: { sub: 'kc-sub-1', email: 'devops@csquared.com', email_verified: true, picture: 'https://lh3.googleusercontent.com/a/abc', resource_access: { 'csquared-cms': { roles: [] } } },
+    })
+    expect(token.picture).toBe('https://lh3.googleusercontent.com/a/abc')
+
+    const session = sessionFromToken({
+      // @ts-expect-error partial session shape is sufficient for the callback
+      session: { user: {} },
+      token,
+    })
+    expect(session.user.image).toBe('https://lh3.googleusercontent.com/a/abc')
+  })
+
+  it('sets session.user.image to null when the picture claim is absent', () => {
+    const session = sessionFromToken({
+      // @ts-expect-error partial session shape is sufficient for the callback
+      session: { user: {} },
+      token: { keycloakId: 'kc-sub-1', organizations: [], realmRoles: [] },
+    })
+    expect(session.user.image).toBeNull()
+  })
+
   it('relinks a pre-provisioned row to the real Keycloak sub by verified email', async () => {
     mockUsers({ bySub: null, byEmail: { id: 'seed-row' } }) // seed placeholder row exists by email
     findMany.mockResolvedValue([])

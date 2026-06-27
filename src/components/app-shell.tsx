@@ -103,6 +103,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light")
   const { data: session } = useSession()
   const currentUser = session?.user ?? null
+  // A locally-uploaded blob wins; otherwise the inherited profile image (Google
+  // `picture`, once Keycloak maps it); otherwise initials from name/email.
+  const displayAvatar = avatarUrl ?? currentUser?.image ?? null
+  const initials = (() => {
+    const src = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || ""
+    const parts = src.split(/[\s._-]+/).filter(Boolean)
+    if (parts.length === 0) return "?"
+    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase()
+  })()
   const {
     language,
     fontScale,
@@ -355,9 +364,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
                 <OpCoSwitcher />
                 <label className="flex cursor-pointer items-center gap-2 rounded-full bg-card px-2 py-1">
-                  <span className="relative h-8 w-8 overflow-hidden rounded-full bg-muted">
-                    {avatarUrl ? (
-                      <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
+                  <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                    {displayAvatar ? (
+                      <Image src={displayAvatar} alt="Profile" fill unoptimized className="object-cover" />
+                    ) : currentUser ? (
+                      <span>{initials}</span>
                     ) : (
                       <UserCircle2 className="h-8 w-8 text-slate-400" />
                     )}
