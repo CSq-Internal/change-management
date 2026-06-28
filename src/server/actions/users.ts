@@ -5,7 +5,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
-import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser } from "@/server/keycloak"
+import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser, getFederatedIdentities, resetKeycloakPassword, ensureKeycloakUserEnabledVerified } from "@/server/keycloak"
 import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
 import { sendUserInvitationEmail } from "@/server/email"
 import { coerceLocale } from "@/lib/i18n"
@@ -45,6 +45,8 @@ export async function onboardUser(input: {
   // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
   let keycloakId: string
   let createdKeycloakIdentity = false
+  let isFederated = false
+
   if (existing) {
     keycloakId = existing.keycloakId
   } else {
@@ -52,6 +54,23 @@ export async function onboardUser(input: {
     keycloakId = identity.id
     createdKeycloakIdentity = identity.created
   }
+
+  // Reconcile an ADOPTED Keycloak account (not freshly created) so a re-invite after a
+  // DB wipe yields a working login: ensure it's enabled + verified, then either keep
+  // the federated (Google) login or reset the password for password users.
+  if (!createdKeycloakIdentity) {
+    try {
+      const links = await getFederatedIdentities(keycloakId)
+      isFederated = links.length > 0
+      await ensureKeycloakUserEnabledVerified(keycloakId)
+      if (!isFederated) {
+        await resetKeycloakPassword(keycloakId, input.tempPassword || "ChangeMe123!")
+      }
+    } catch (err) {
+      console.warn(`[onboardUser] Keycloak reconcile skipped for ${input.email}:`, err)
+    }
+  }
+
   for (const { opcoSlug } of input.assignments) {
     try {
       await assignToOrganization(keycloakId, opcoSlug)
@@ -104,6 +123,7 @@ export async function onboardUser(input: {
       name: input.name,
       tempPassword: input.tempPassword || "ChangeMe123!",
       existingIdentity: !!existing || !createdKeycloakIdentity,
+      federated: isFederated,
       assignments: input.assignments,
       locale: inviteLocale,
     })

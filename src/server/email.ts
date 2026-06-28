@@ -63,6 +63,7 @@ export async function sendUserInvitationEmail(opts: {
   name: string
   tempPassword?: string
   existingIdentity: boolean
+  federated?: boolean
   assignments: Array<{ opcoSlug: string; role: string }>
   locale?: Language
 }) {
@@ -70,7 +71,11 @@ export async function sendUserInvitationEmail(opts: {
   const assignmentList = opts.assignments
     .map((a) => `<li>${escapeHtml(a.role)} ${fr ? "dans" : "in"} ${escapeHtml(a.opcoSlug)}</li>`)
     .join("")
-  const passwordCopy = opts.existingIdentity
+  const passwordCopy = opts.federated
+    ? (fr
+        ? "<p>Connectez-vous avec Google (« Se connecter avec Google ») en utilisant votre adresse @csquared.com. Aucun mot de passe n'est requis.</p>"
+        : "<p>Sign in with Google (\"Sign in with Google\") using your @csquared.com address. No password is required.</p>")
+    : opts.existingIdentity
     ? (fr
         ? "<p>Utilisez votre mot de passe Keycloak existant. Si vous ne le connaissez pas, demandez à un administrateur de le réinitialiser dans Keycloak.</p>"
         : "<p>Use your existing Keycloak password. If you do not know it, ask an administrator to reset it in Keycloak.</p>")

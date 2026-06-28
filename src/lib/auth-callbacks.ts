@@ -8,6 +8,27 @@ type Callbacks = NonNullable<typeof authConfig.callbacks>
 type JwtParams = Parameters<NonNullable<Callbacks["jwt"]>>[0]
 type SessionParams = Parameters<NonNullable<Callbacks["session"]>>[0]
 
+// How long an enriched token's `organizations` is trusted before a refresh. Keeps
+// access grants / role edits propagating to a live session without re-login, while
+// bounding DB reads to ~1 per window per active user.
+const ORGS_TTL_MS = 60_000
+
+type Db = ReturnType<typeof getPrisma>
+
+/** Load the user's active OpCo assignments as session organizations. */
+async function loadOrganizations(db: Db, keycloakId: string) {
+  const assignments = await db.userOpCoAssignment.findMany({
+    where: { isActive: true, user: { keycloakId } },
+    include: { opco: true },
+  })
+  return assignments.map((a) => ({
+    id: a.opco.id,
+    name: a.opco.name,
+    alias: a.opco.slug,
+    roles: [a.role],
+  }))
+}
+
 /**
  * Node-only enriched jwt callback. Runs the edge-safe base extraction first,
  * then — only on sign-in (account present) — sources OpCo memberships+roles
@@ -52,16 +73,8 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
       }
     }
 
-    const assignments = await db.userOpCoAssignment.findMany({
-      where: { isActive: true, user: { keycloakId: sub } },
-      include: { opco: true },
-    })
-    token.organizations = assignments.map((a) => ({
-      id: a.opco.id,
-      name: a.opco.name,
-      alias: a.opco.slug,
-      roles: [a.role],
-    }))
+    token.organizations = await loadOrganizations(db, sub)
+    token.orgsRefreshedAt = Date.now()
 
     // Mirror the group_admin client role onto the DB row so group-level admins
     // (whose role lives only in Keycloak) are enumerable for notifications.
@@ -72,6 +85,16 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
       where: { keycloakId: sub },
       data: { isGroupAdmin: realmRoles.includes("group_admin") },
     })
+  } else if (
+    token.keycloakId &&
+    Date.now() - (token.orgsRefreshedAt ?? 0) > ORGS_TTL_MS
+  ) {
+    // No fresh sign-in, but the cached orgs are stale: reload OpCo assignments so an
+    // access grant / role edit reaches the live session without re-login. Group roles
+    // (realmRoles) are Keycloak-sourced and intentionally not refreshed here.
+    const db = getPrisma()
+    token.organizations = await loadOrganizations(db, token.keycloakId as string)
+    token.orgsRefreshedAt = Date.now()
   }
   return token
 }
