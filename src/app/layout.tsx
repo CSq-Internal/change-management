@@ -1,21 +1,31 @@
-import type { Metadata, Viewport } from "next"
-import { Space_Grotesk } from "next/font/google"
-import "./globals.css"
-import { SessionProvider } from "next-auth/react"
-import { AppShell } from "@/components/app-shell"
-import { cn } from "@/lib/utils"
+import type { Metadata, Viewport } from 'next';
+import { Space_Grotesk } from 'next/font/google';
+import './globals.css';
+import { SessionProvider } from 'next-auth/react';
+import { AppShell } from '@/components/app-shell';
+import { cn } from '@/lib/utils';
 
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" })
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+});
 
-export const metadata: Metadata = { title: "CSquared • Change Management", description: "ISO 27001 Internal CMS" }
+export const metadata: Metadata = {
+  title: 'CSquared • Change Management',
+  description: 'ISO 27001 Internal CMS',
+};
 export const viewport: Viewport = {
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
-  viewportFit: "cover",
+  viewportFit: 'cover',
   userScalable: false,
-}
+};
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -25,21 +35,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         {/* Feedbucket — in-app feedback widget for internal colleagues */}
-        <script
+        {/* <script
           dangerouslySetInnerHTML={{
             __html: `(function(k){let s=document.createElement('script');s.defer=true;s.src="https://cdn.feedbucket.app/assets/feedbucket.js";s.dataset.feedbucket=k;document.head.appendChild(s);})('a81mhdiblDzizKH1geLp')`,
           }}
-        />
+        /> */}
       </head>
-      <body className={cn(spaceGrotesk.variable, "min-h-dvh bg-background font-sans antialiased")}> 
+      <body
+        className={cn(
+          spaceGrotesk.variable,
+          'min-h-dvh bg-background font-sans antialiased',
+        )}
+      >
         <SessionProvider>
           <div className="flex min-h-dvh flex-col">
             <AppShell>
-              <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 md:px-6 lg:px-8">{children}</div>
+              <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 md:px-6 lg:px-8">
+                {children}
+              </div>
             </AppShell>
           </div>
         </SessionProvider>
       </body>
     </html>
-  )
+  );
 }
