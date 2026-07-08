@@ -247,11 +247,24 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Apply database migrations (prod)
-        # DB URL is fetched at runtime from Secret Manager and kept in-process — never
-        # written to a file or logged. A failed migration fails the job before any deploy.
+        # The prod DB is a public-IP Cloud SQL instance (csq-cms-prod) with no authorized
+        # networks, so the runner cannot connect over the public IP directly. Tunnel through
+        # the Cloud SQL Auth Proxy instead — IAM-authed via the WIF session above, no IP
+        # allowlisting. The DB URL is fetched at runtime from Secret Manager, kept in-process
+        # (never written to a file or logged), and its host is rewritten to the local proxy.
+        # A failed migration fails the job before any deploy.
         run: |
-          DATABASE_URL="$(gcloud secrets versions access latest \
+          curl -sSfo cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --port 5432 \
+            "${{ vars.GCP_PROJECT_ID }}:${{ vars.AR_REGION }}:csq-cms-prod" &
+          for i in $(seq 1 15); do nc -z 127.0.0.1 5432 && break; sleep 1; done
+
+          RAW_URL="$(gcloud secrets versions access latest \
             --secret=cms-prod-database-url --project=${{ vars.GCP_PROJECT_ID }})"
+          # Repoint host:port at the local proxy; keep the secret's user/password/db/params.
+          DATABASE_URL="$(printf '%s' "$RAW_URL" | sed -E 's#@[^/@:]+(:[0-9]+)?/#@127.0.0.1:5432/#')"
           export DATABASE_URL
           pnpm prisma migrate deploy
 
