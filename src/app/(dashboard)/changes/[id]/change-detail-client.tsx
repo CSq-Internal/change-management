@@ -140,10 +140,13 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
     approve: canDecide && caps.canApprove && !caps.isRequester,
     reject: canDecide && caps.canApprove && !caps.isRequester,
     // approved → normal implement; an emergency may be implemented straight from
-    // pending (expedited), obtaining its approval retrospectively.
+    // pending (expedited), obtaining its approval retrospectively. Hidden from the
+    // sole approver — implementer SoD forbids them implementing (server enforces it
+    // too, changes.ts); the handleStatusChange guard + toast remain as backstop.
     implement:
       (change.status === "approved" || (change.status === "pending" && change.isEmergency)) &&
-      (caps.canApprove || caps.isAdmin),
+      (caps.canApprove || caps.isAdmin) &&
+      !caps.soleApproverIsMe,
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
     discard: change.status === "draft" && (caps.isRequester || caps.isAdmin),
