@@ -68,8 +68,8 @@ New `attachLink({ changeId, kind, url })`, mirroring `attachDocument`'s guards:
 - Reject when `isGoogleWorkspaceUrl(url)` is false.
 - `upsert` on `changeId_kind` with `externalUrl: url`, `storageKey: null`,
   `mimeType: null`, `sizeBytes: null`, `uploadedById` = the actor, and
-  `filename` = the pasted URL (schema requires `filename` non-null; the URL is a
-  meaningful, always-available anchor text for the detail page).
+  `filename` = the pasted URL (schema requires `filename` non-null; kept as a raw
+  record of what was linked, though the detail page shows the kind label — see below).
 - Write an audit row `action: "document_linked"`, metadata `{ kind, url }`.
 
 `getDocumentForDownload` gains a guard: a link attachment has no bytes, so it throws
@@ -99,9 +99,9 @@ New `attachLink({ changeId, kind, url })`, mirroring `attachDocument`'s guards:
     success.
 - Change-detail (`change-detail-client.tsx`): the attachment shape gains
   `externalUrl?: string | null`. A link attachment renders as an external
-  `<a href={externalUrl} target="_blank" rel="noopener">` with a "Google Doc ↗"
-  affordance instead of the `/api/changes/[id]/documents/[attachmentId]` proxy link used
-  for files.
+  `<a href={externalUrl} target="_blank" rel="noopener">` whose text is the document
+  **kind label** (e.g. "Implementation Plan ↗"), instead of the
+  `/api/changes/[id]/documents/[attachmentId]` proxy link used for files.
 
 ### 5. Error handling & i18n
 
