@@ -113,6 +113,7 @@ export async function getDocumentForDownload(input: { changeId: string; attachme
   const attachment = await db.attachment.findUnique({ where: { id: input.attachmentId } })
   if (!attachment || attachment.changeId !== change.id) throw new Error("Attachment not found")
 
+  if (!attachment.storageKey) throw new Error("Cannot download external URL attachments")
   const buffer = await getDownloadBuffer(attachment.storageKey)
 
   await db.auditLog.create({
