@@ -4,6 +4,7 @@ import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import { formatDateTime } from "@/lib/dates"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { markNotificationRead, markAllNotificationsRead } from "@/server/actions/notifications"
@@ -54,7 +55,7 @@ export default function HistoryClient({ rows }: { rows: NotifRow[] }) {
                       {n.title}
                     </span>
                     <span className="text-xs text-muted-foreground">{n.body}</span>
-                    <span className="text-[11px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</span>
+                    <span className="text-[11px] text-muted-foreground">{formatDateTime(n.createdAt)}</span>
                   </button>
                 </li>
               ))}

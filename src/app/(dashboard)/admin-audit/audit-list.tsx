@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { t, type Language } from "@/lib/i18n"
+import { formatDateTime } from "@/lib/dates"
 import type { AuditRow } from "./types"
 
 interface AuditListProps {
@@ -38,7 +39,7 @@ export default function AuditList({ rows, language }: AuditListProps) {
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-border/40 align-top">
                 <td className="px-4 py-2 whitespace-nowrap text-xs text-muted-foreground" data-label={t(language, "auditAdmin.colWhen")}>
-                  {new Date(r.at).toLocaleString()}
+                  {formatDateTime(r.at)}
                 </td>
                 <td className="px-4 py-2" data-label={t(language, "auditAdmin.colActor")}>{r.actorEmail}</td>
                 <td className="px-4 py-2 font-mono text-xs" data-label={t(language, "auditAdmin.colAction")}>{r.action}</td>

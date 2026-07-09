@@ -416,7 +416,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
             {change.expedited && !change.retroApprovedAt && change.retroApprovalDueAt && (
               <div className="mt-2">
                 <span className="rounded-md bg-rose-100 px-2 py-1 text-xs text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                  {t(language, "detail.retroDue")}: {new Date(change.retroApprovalDueAt).toLocaleString()}
+                  {t(language, "detail.retroDue")}: {fmt(change.retroApprovalDueAt)}
                 </span>
               </div>
             )}

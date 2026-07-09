@@ -46,15 +46,20 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // (and brand-new Keycloak users) won't have a row matching the real `sub` yet, so
     // role lookups and admin-action auditing (which resolve the DB user by keycloakId)
     // would fail.
+    const p = (profile ?? {}) as {
+      email?: string
+      email_verified?: boolean
+      name?: string
+      preferred_username?: string
+      locale?: string
+    }
+    // Names are IdP-sourced (the profile page states so). Keep the DB row's name in
+    // sync so it can't drift from Keycloak (e.g. a seeded "Dev Admin" row adopting a
+    // Keycloak identity named "DevOps Admin").
+    const profileName = p.name ?? p.preferred_username ?? null
+
     const existing = await db.user.findUnique({ where: { keycloakId: sub } })
     if (!existing) {
-      const p = (profile ?? {}) as {
-        email?: string
-        email_verified?: boolean
-        name?: string
-        preferred_username?: string
-        locale?: string
-      }
       if (p.email) {
         const byEmail = await db.user.findUnique({ where: { email: p.email }, select: { id: true } })
         if (!byEmail) {
@@ -62,7 +67,7 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
           // zero OpCo assignments — no standing access — so creating it needs no verified
           // email. This is what makes self-registered users discoverable to admins.
           await db.user.create({
-            data: { keycloakId: sub, email: p.email, name: p.name ?? p.preferred_username ?? null, locale: coerceLocale(p.locale) },
+            data: { keycloakId: sub, email: p.email, name: profileName, locale: coerceLocale(p.locale) },
           })
         } else if (p.email_verified) {
           // Re-link a pre-provisioned/seeded row to this Keycloak identity. Gated on
@@ -80,10 +85,14 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // (whose role lives only in Keycloak) are enumerable for notifications.
     // Writes both true and false so a demotion clears the marker. updateMany is a
     // no-op when no row matches (e.g. an unverified email that wasn't created/relinked).
+    // Also re-sync the IdP-sourced name when the token carries one.
     const realmRoles = (token.realmRoles as string[] | undefined) ?? []
     await db.user.updateMany({
       where: { keycloakId: sub },
-      data: { isGroupAdmin: realmRoles.includes("group_admin") },
+      data: {
+        isGroupAdmin: realmRoles.includes("group_admin"),
+        ...(profileName ? { name: profileName } : {}),
+      },
     })
   } else if (
     token.keycloakId &&
