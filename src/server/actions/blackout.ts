@@ -4,6 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, isGroupLevel, isMemberOfOpCo, canManageUsers } from "@/lib/permissions"
+import { recordAdminAction } from "@/server/audit"
 
 export async function getActiveBlackouts(opcoSlug: string) {
   const session = await getAppSession()
@@ -39,21 +40,32 @@ export async function createBlackoutPeriod(input: {
   }
 
   const db = getPrisma()
-  const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
-
   const opco = input.opcoSlug
     ? await db.opCo.findUnique({ where: { slug: input.opcoSlug } })
     : null
 
-  return db.blackoutPeriod.create({
-    data: {
+  return db.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { keycloakId: session.keycloakId } })
+    if (!user) throw new Error("User not found")
+
+    const created = await tx.blackoutPeriod.create({
+      data: {
+        opcoId: opco?.id ?? null,
+        label: input.label,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        createdById: user.id,
+      },
+    })
+    // Blackout windows are a change-governance control; their creation/removal belongs on
+    // the ISO admin trail alongside CAB/delegation/risk changes.
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name,
+      action: "blackout_created",
       opcoId: opco?.id ?? null,
-      label: input.label,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      createdById: user.id,
-    },
+      summary: `Created blackout "${input.label}"`,
+    })
+    return created
   })
 }
 
@@ -76,5 +88,13 @@ export async function deleteBlackoutPeriod(id: string) {
     throw new Error("Forbidden: not authorized to remove this blackout period")
   }
 
-  await db.blackoutPeriod.delete({ where: { id } })
+  await db.$transaction(async (tx) => {
+    await tx.blackoutPeriod.delete({ where: { id } })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name,
+      action: "blackout_removed",
+      opcoId: existing.opcoId ?? null,
+      summary: `Removed blackout "${existing.label}"`,
+    })
+  })
 }

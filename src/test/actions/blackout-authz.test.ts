@@ -9,27 +9,40 @@ vi.mock('@/lib/session', () => ({
   }),
 }))
 
-const mockDb = {
-  opCo: { findUnique: vi.fn().mockResolvedValue({ id: 'opco-gh', slug: 'ghana' }) },
+const tx = {
   user: { findUnique: vi.fn().mockResolvedValue({ id: 'user-1', keycloakId: 'kc-1' }) },
   blackoutPeriod: {
-    findMany: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ id: 'bo-1' }),
+    delete: vi.fn().mockResolvedValue({ id: 'bo-1' }),
   },
+  adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
+}
+const mockDb = {
+  opCo: { findUnique: vi.fn().mockResolvedValue({ id: 'opco-gh', slug: 'ghana' }) },
+  blackoutPeriod: {
+    findMany: vi.fn().mockResolvedValue([]),
+    findUnique: vi.fn().mockResolvedValue({
+      id: 'bo-1', label: 'X', opcoId: 'opco-gh', opco: { slug: 'ghana' },
+    }),
+  },
+  $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
 }
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
-import { createBlackoutPeriod, getActiveBlackouts } from '@/server/actions/blackout'
+import { createBlackoutPeriod, deleteBlackoutPeriod, getActiveBlackouts } from '@/server/actions/blackout'
 import { getAppSession } from '@/lib/session'
 
 const start = new Date('2026-12-24T00:00:00Z')
 const end = new Date('2026-12-27T00:00:00Z')
 
 describe('createBlackoutPeriod — authorization', () => {
-  it('allows a ghana admin to create a ghana blackout', async () => {
+  it('allows a ghana admin to create a ghana blackout and writes an admin-audit row', async () => {
     const result = await createBlackoutPeriod({ opcoSlug: 'ghana', label: 'X', startsAt: start, endsAt: end })
     expect(result).toHaveProperty('id', 'bo-1')
+    expect(tx.adminAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'blackout_created' }) })
+    )
   })
 
   it('rejects a ghana admin creating a blackout for another OpCo (uganda)', async () => {
@@ -51,6 +64,16 @@ describe('createBlackoutPeriod — authorization', () => {
     })
     const result = await createBlackoutPeriod({ opcoSlug: null, label: 'X', startsAt: start, endsAt: end })
     expect(result).toHaveProperty('id', 'bo-1')
+  })
+})
+
+describe('deleteBlackoutPeriod — audit', () => {
+  it('allows a ghana admin to remove a ghana blackout and writes an admin-audit row', async () => {
+    await deleteBlackoutPeriod('bo-1')
+    expect(tx.blackoutPeriod.delete).toHaveBeenCalledWith({ where: { id: 'bo-1' } })
+    expect(tx.adminAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'blackout_removed' }) })
+    )
   })
 })
 
