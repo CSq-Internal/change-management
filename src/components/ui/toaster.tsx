@@ -19,11 +19,23 @@ interface ToastState {
   remove: (id: string) => void
 }
 
-const useToastStore = create<ToastState>((set) => ({
-  toasts: [],
-  add: (toast) => set((state) => ({ toasts: [toast, ...state.toasts] })),
-  remove: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
-}))
+function createToastStore() {
+  return create<ToastState>((set) => ({
+    toasts: [],
+    add: (toast) => set((state) => ({ toasts: [toast, ...state.toasts] })),
+    remove: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  }))
+}
+
+// Next.js/Turbopack can hand this "use client" module a SEPARATE copy to each
+// route chunk, so a module-scoped `create()` yields multiple stores — the chunk
+// that mounts <Toaster> reads one store while a page's useToast() writes to
+// another, and no toast ever renders. Pin the store to globalThis so every copy
+// shares the one instance.
+const globalForToast = globalThis as unknown as {
+  __toastStore?: ReturnType<typeof createToastStore>
+}
+const useToastStore = (globalForToast.__toastStore ??= createToastStore())
 
 function randomId() {
   return Math.random().toString(36).slice(2, 10)
