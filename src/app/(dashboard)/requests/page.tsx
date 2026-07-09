@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { viewerTier } from "@/lib/permissions"
 import { requestScope } from "@/server/request-scope"
+import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
 import RequestsTableClient, { type RequestRow } from "./requests-table-client"
 
 export default async function RequestsPage({
@@ -15,7 +16,7 @@ export default async function RequestsPage({
   const db = getPrisma()
 
   const tier = viewerTier(session.user.organizations, session.user.realmRoles)
-  const where = requestScope(session.user)
+  const where = withActiveOpCo(requestScope(session.user), await activeOpCoSlug(session.user))
 
   const changes = await db.changeRequest.findMany({
     where,

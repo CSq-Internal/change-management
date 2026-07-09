@@ -4,6 +4,7 @@ import { getPrisma } from "@/server/db"
 import { isGroupLevel } from "@/lib/permissions"
 import { runDueEscalations } from "@/server/sla"
 import { listApprovableChanges } from "@/server/approval-authority"
+import { activeOpCoSlug } from "@/server/active-opco"
 import ApprovalsClient from "./approvals-client"
 
 export default async function Approvals() {
@@ -20,7 +21,11 @@ export default async function Approvals() {
 
   const changes = await listApprovableChanges({ userId: me.id, realmRoles: session.user.realmRoles })
 
-  const serializable = changes.map((c) => ({
+  // Header OpCo switcher: narrow the approvals queue to the active OpCo when set.
+  const active = await activeOpCoSlug(session.user)
+  const scopedChanges = active ? changes.filter((c) => c.opco.slug === active) : changes
+
+  const serializable = scopedChanges.map((c) => ({
     id: c.id,
     title: c.title,
     description: c.description,

@@ -7,6 +7,8 @@ const session = {
   realmRoles: [],
 }
 vi.mock('@/lib/session', () => ({ getAppSession: vi.fn(async () => session) }))
+// listRisks now reads the active-OpCo cookie; default to none set (no narrowing).
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
 
 const tx = {
   user: { findUnique: vi.fn(async () => ({ id: 'user-admin' })) },

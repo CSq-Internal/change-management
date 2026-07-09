@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupAdmin, isGroupLevel, hasRoleInOpCo, canManageUsers } from "@/lib/permissions"
+import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
 import { computeConflicts, type CalChange, type CalBlackout, type RiskLevel } from "@/lib/calendar"
 import CalendarClient, { type CalDay, type CalChipData } from "./calendar-client"
 
@@ -33,13 +34,20 @@ export default async function CalendarPage({
   const me = session.user
   const groupLevel = isGroupLevel(me.realmRoles)
   const opcoSlugs = me.organizations.map((o) => o.alias)
-  const opcoFilter = groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }
+  // Header OpCo switcher: narrow the calendar to the active OpCo when set.
+  const active = await activeOpCoSlug(me)
+  const changeScope = withActiveOpCo(groupLevel ? {} : { opco: { slug: { in: opcoSlugs } } }, active)
+  const blackoutScope = active
+    ? { OR: [{ opcoId: null }, { opco: { slug: active } }] }
+    : groupLevel
+      ? {}
+      : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }
 
   const meUser = await db.user.findUnique({ where: { keycloakId: me.keycloakId }, select: { id: true } })
 
   const [changeRows, blackoutRows, opcos] = await Promise.all([
     db.changeRequest.findMany({
-      where: { ...opcoFilter, plannedStart: { lt: end }, plannedEnd: { gte: start } },
+      where: { AND: [changeScope, { plannedStart: { lt: end }, plannedEnd: { gte: start } }] },
       select: {
         id: true, title: true, opcoId: true, infrastructureType: true, riskLevel: true,
         isEmergency: true, status: true, plannedStart: true, plannedEnd: true, requesterId: true,
@@ -49,7 +57,7 @@ export default async function CalendarPage({
     db.blackoutPeriod.findMany({
       where: {
         startsAt: { lt: end }, endsAt: { gte: start },
-        ...(groupLevel ? {} : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }),
+        ...blackoutScope,
       },
       select: { id: true, label: true, opcoId: true, startsAt: true, endsAt: true },
     }),
