@@ -276,6 +276,37 @@ describe('auth enrichment', () => {
     expect(token.orgsRefreshedAt).toBeGreaterThan(1)
   })
 
+  it('flags the token orphaned (not null) when the stale sub maps to no DB user', async () => {
+    mockUsers({ bySub: null }) // no row for this sub anymore
+    findMany.mockResolvedValue([])
+
+    const token = await enrichedJwt({
+      token: { keycloakId: 'kc-gone', organizations: [{ id: 'o', name: 'x', alias: 'x', roles: ['admin'] }], orgsRefreshedAt: 1 },
+      user: {},
+      account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+
+    // must NOT return null (that loops against the edge proxy); flags instead
+    expect(token).not.toBeNull()
+    expect(token.orphaned).toBe(true)
+    expect(token.organizations).toEqual([])
+    expect(findMany).not.toHaveBeenCalled() // no point loading orgs for a gone user
+  })
+
+  it('clears the orphaned flag when the stale sub still maps to a DB user', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([])
+
+    const token = await enrichedJwt({
+      token: { keycloakId: 'kc-sub-1', organizations: [], orgsRefreshedAt: 1, orphaned: true },
+      user: {},
+      account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+
+    expect(token.orphaned).toBe(false)
+    expect(findMany).toHaveBeenCalled()
+  })
+
   it('does NOT hit the DB on a fresh token refresh (within TTL)', async () => {
     const token = await enrichedJwt({
       token: { keycloakId: 'kc-sub-1', organizations: [], orgsRefreshedAt: Date.now() },

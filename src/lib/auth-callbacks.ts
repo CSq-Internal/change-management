@@ -41,6 +41,7 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
   if (account) {
     const db = getPrisma()
     const sub = token.keycloakId as string
+    token.orphaned = false // a fresh sign-in is authoritative; clear any stale flag
 
     // Reconcile the DB user with this Keycloak identity. Pre-provisioned/seeded users
     // (and brand-new Keycloak users) won't have a row matching the real `sub` yet, so
@@ -102,7 +103,26 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // access grant / role edit reaches the live session without re-login. Group roles
     // (realmRoles) are Keycloak-sourced and intentionally not refreshed here.
     const db = getPrisma()
-    token.organizations = await loadOrganizations(db, token.keycloakId as string)
+    const sub = token.keycloakId as string
+
+    // Broken-link hardening: if this token's identity no longer maps to a DB user (row
+    // deleted, DB reset, keycloakId relinked elsewhere), flag it as orphaned so the
+    // client guard signs the user out instead of serving a silent no-access session.
+    // We flag rather than return null: returning null can't clear the session cookie
+    // during an RSC render, so the edge proxy keeps seeing a valid session and its
+    // /login → / redirect fights the page's / → /login redirect (infinite loop). Client
+    // signOut goes through the route handler, which DOES clear the cookie. Checks row
+    // EXISTENCE, not org count — an access-less user (self-registered) still has a row.
+    const stillLinked = await db.user.findUnique({ where: { keycloakId: sub }, select: { id: true } })
+    if (!stillLinked) {
+      token.orphaned = true
+      token.organizations = []
+      token.orgsRefreshedAt = Date.now()
+      return token
+    }
+
+    token.orphaned = false
+    token.organizations = await loadOrganizations(db, sub)
     token.orgsRefreshedAt = Date.now()
   }
   return token
@@ -114,5 +134,6 @@ export function sessionFromToken({ session, token }: SessionParams): Session {
   session.user.organizations = token.organizations ?? []
   session.user.realmRoles = (token.realmRoles as string[]) ?? []
   session.user.image = (token.picture as string | null | undefined) ?? null
+  session.user.orphaned = token.orphaned === true
   return session
 }
