@@ -1,15 +1,13 @@
 import { describe, it, expect } from "vitest"
 import { render } from "@react-email/render"
-import * as React from "react"
 import { EmailLayout, CtaButton, Pill } from "@/emails/layout"
 
 describe("EmailLayout", () => {
   it("renders the logo, children, CTA and footer (en)", async () => {
     const html = await render(
-      React.createElement(EmailLayout, {
-        lang: "en", previewText: "Hi",
-        children: React.createElement(CtaButton, { href: "https://example.com/go", children: "Go" }),
-      })
+      <EmailLayout lang="en" previewText="Hi">
+        <CtaButton href="https://example.com/go">Go</CtaButton>
+      </EmailLayout>
     )
     expect(html).toMatch(/csquared-icon\.png/)
     expect(html).toMatch(/https:\/\/example\.com\/go/)
@@ -18,13 +16,13 @@ describe("EmailLayout", () => {
 
   it("localizes the footer in French", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { lang: "fr", previewText: "Bonjour", children: "x" })
+      <EmailLayout lang="fr" previewText="Bonjour">x</EmailLayout>
     )
     expect(html).toMatch(/message automatique/i)
   })
 
   it("renders a toned Pill", async () => {
-    const html = await render(React.createElement(Pill, { tone: "emergency", children: "Emergency" }))
+    const html = await render(<Pill tone="emergency">Emergency</Pill>)
     expect(html).toMatch(/Emergency/)
   })
 })
