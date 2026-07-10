@@ -7,6 +7,7 @@ import ApprovalRequestEmail from "@/emails/approval-request"
 import StatusChangeEmail from "@/emails/status-change"
 import SlaEscalationEmail from "@/emails/sla-escalation"
 import AccessRequestEmail from "@/emails/access-request"
+import EmergencyAlertEmail from "@/emails/emergency-alert"
 import type { Language } from "@/lib/i18n"
 
 const apiKey = process.env.RESEND_API_KEY
@@ -53,15 +54,6 @@ async function dispatchEmail(to: string, subject: string, html: string, text?: s
   } else {
     console.warn(`[email] no transport configured — set RESEND_API_KEY (and a verified EMAIL_FROM) or SMTP_USER+APP_PASSWORD. Mocked send to ${recipient}: ${subject}`)
   }
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
 }
 
 export async function sendUserInvitationEmail(opts: {
@@ -183,13 +175,18 @@ export async function sendEmergencyAlertEmail(opts: {
   to: string; changeTitle: string; changeId: string; requesterName: string; locale?: Language
 }) {
   const fr = opts.locale === "fr"
-  await dispatchEmail(
-    opts.to,
-    fr ? `Changement d'urgence soumis : « ${opts.changeTitle} »` : `Emergency change submitted: "${opts.changeTitle}"`,
-    fr
-      ? `<p><strong>${opts.requesterName}</strong> a soumis un changement <strong>d'urgence</strong> : <strong>${opts.changeTitle}</strong>.</p>
-<p><a href="${BASE}/changes/${opts.changeId}">Examiner le changement</a></p>`
-      : `<p><strong>${opts.requesterName}</strong> submitted an <strong>emergency</strong> change: <strong>${opts.changeTitle}</strong>.</p>
-<p><a href="${BASE}/changes/${opts.changeId}">Review the change</a></p>`
+  const subject = fr
+    ? `Changement d'urgence soumis : « ${opts.changeTitle} »`
+    : `Emergency change submitted: "${opts.changeTitle}"`
+  const el = (
+    <EmergencyAlertEmail
+      changeTitle={opts.changeTitle}
+      changeId={opts.changeId}
+      requesterName={opts.requesterName}
+      lang={opts.locale ?? "en"}
+    />
   )
+  const html = await render(el)
+  const text = await render(el, { plainText: true })
+  await dispatchEmail(opts.to, subject, html, text)
 }
