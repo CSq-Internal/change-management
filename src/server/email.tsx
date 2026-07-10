@@ -4,6 +4,7 @@ import nodemailer from "nodemailer"
 import { render } from "@react-email/render"
 import InvitationEmail from "@/emails/invitation"
 import ApprovalRequestEmail from "@/emails/approval-request"
+import StatusChangeEmail from "@/emails/status-change"
 import type { Language } from "@/lib/i18n"
 
 const apiKey = process.env.RESEND_API_KEY
@@ -115,17 +116,22 @@ export async function sendStatusChangeEmail(opts: {
   const fr = opts.locale === "fr"
   const statusFr: Record<string, string> = { approved: "approuvé", rejected: "rejeté" }
   const status = fr ? (statusFr[opts.newStatus] ?? opts.newStatus) : opts.newStatus
-  await dispatchEmail(
-    opts.to,
-    fr ? `Changement « ${opts.changeTitle} » mis à jour : ${status}` : `Change "${opts.changeTitle}" updated: ${status}`,
-    fr
-      ? `<p>Bonjour ${opts.name},</p>
-<p>Votre demande de changement <strong>${opts.changeTitle}</strong> est maintenant : <strong>${status}</strong>.</p>
-<p><a href="${BASE}/changes">Voir les changements</a></p>`
-      : `<p>Hi ${opts.name},</p>
-<p>Your change request <strong>${opts.changeTitle}</strong> is now: <strong>${status}</strong>.</p>
-<p><a href="${BASE}/changes">View Changes</a></p>`
+  const tone = opts.newStatus === "approved" ? "approved" : opts.newStatus === "rejected" ? "rejected" : "info"
+  const subject = fr
+    ? `Changement « ${opts.changeTitle} » mis à jour : ${status}`
+    : `Change "${opts.changeTitle}" updated: ${status}`
+  const el = (
+    <StatusChangeEmail
+      name={opts.name}
+      changeTitle={opts.changeTitle}
+      status={status}
+      tone={tone}
+      lang={opts.locale ?? "en"}
+    />
   )
+  const html = await render(el)
+  const text = await render(el, { plainText: true })
+  await dispatchEmail(opts.to, subject, html, text)
 }
 
 export async function sendSlaEscalationEmail(opts: {
