@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import { formatDateTime } from "@/lib/dates"
 import { submitApproval } from "@/server/actions/approvals"
 
 type Requester = { name: string | null; email: string }
@@ -114,7 +115,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
               <p className="text-sm text-muted-foreground">{c.description}</p>
               <div className="mt-2 text-xs text-muted-foreground">
                 {t(language, "approvals.requestedBy")} {requesterLabel} •{" "}
-                {new Date(c.createdAt).toLocaleString()}
+                {formatDateTime(c.createdAt)}
               </div>
               {isHigh && (
                 <div className="mt-2 text-xs text-muted-foreground">

@@ -126,6 +126,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!currentUser) return
     getNavCounts().then(setNavCounts).catch(() => {})
   }, [currentUser, pathname])
+  // Broken-link guard: the server flags a session whose keycloakId no longer maps to a
+  // DB user (row deleted / DB reset). Sign out so the cookie is cleared via the route
+  // handler and the user re-authenticates, rather than being served a silent no-access
+  // session. Done client-side because returning null from the jwt callback can't clear
+  // the cookie during an RSC render and loops against the edge proxy's /login redirect.
+  useEffect(() => {
+    if (session?.user?.orphaned && pathname !== "/login") {
+      nextAuthSignOut({ callbackUrl: "/login" })
+    }
+  }, [session, pathname])
   const anyAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
   const groupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
   const groupLevel = session ? isGroupLevel(session.user.realmRoles) : false

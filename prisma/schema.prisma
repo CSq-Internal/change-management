@@ -279,7 +279,8 @@ model Attachment {
   change       ChangeRequest  @relation(fields: [changeId], references: [id])
   kind         AttachmentKind
   filename     String
-  storageKey   String         // Google Drive file ID
+  storageKey   String?        // Google Drive file ID (null when this slot is an external link)
+  externalUrl  String?        // Google Workspace link (null when this slot is an uploaded file)
   mimeType     String?
   sizeBytes    Int?
   uploadedById String

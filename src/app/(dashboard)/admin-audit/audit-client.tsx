@@ -15,6 +15,7 @@ const ACTIONS = [
   "team.create", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
   "cab.add", "cab.remove", "opco.create", "opco.rename", "opco.archive", "opco.unarchive",
   "delegation.create", "delegation.revoke",
+  "risk_created", "risk_updated", "risk_closed", "blackout_created", "blackout_removed",
 ]
 
 interface AuditClientProps {

@@ -28,9 +28,12 @@ export function MonitorView({
         <span className="mx-1 h-6 w-px bg-rose-200 dark:bg-rose-900/50" />
         <span className="text-2xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">{data.counts.atRisk}</span>
         <span className="text-sm font-medium text-amber-700 dark:text-amber-300">{t(language, "dashboard.status.atRisk")}</span>
-        <span className="ml-auto flex items-center gap-2 text-xs text-rose-700/80 dark:text-rose-300/70">
-          <TriangleAlert className="h-4 w-4" /> Both overdue items are high-risk network work
-        </span>
+        {data.counts.breached + data.counts.atRisk > 0 && (
+          <span className="ml-auto flex items-center gap-2 text-xs text-rose-700/80 dark:text-rose-300/70">
+            <TriangleAlert className="h-4 w-4" />
+            {data.counts.breached + data.counts.atRisk} {t(language, "dashboard.monitor.slaAttention")}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">

@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { t, type Language } from "@/lib/i18n"
+import { formatDate } from "@/lib/dates"
 import type { DbDelegation } from "./types"
 
 interface DelegationListProps {
@@ -41,7 +42,7 @@ export default function DelegationList({ delegations, language, onRevoke }: Dele
                 <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colFrom")}>{d.fromUser.email}</td>
                 <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colTo")}>{d.toUser.email}</td>
                 <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colOpco")}>{d.opco.slug}</td>
-                <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colUntil")}>{new Date(d.validUntil).toLocaleDateString()}</td>
+                <td className="px-4 py-2" data-label={t(language, "delegationsAdmin.colUntil")}>{formatDate(d.validUntil)}</td>
                 <td className="px-4 py-2" data-label="">
                   <div className="flex justify-end">
                     <Button variant="outline" onClick={() => onRevoke(d)}>

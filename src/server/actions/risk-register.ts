@@ -3,6 +3,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, isGroupLevel, hasRoleInOpCo } from "@/lib/permissions"
+import { activeOpCoSlug } from "@/server/active-opco"
 import { recordAdminAction } from "@/server/audit"
 import type { RiskCategory, RiskStatus } from "@prisma/client"
 
@@ -40,8 +41,15 @@ export async function listRisks() {
   const db = getPrisma()
   const groupLevel = isGroupLevel(session.realmRoles)
   const opcoSlugs = session.organizations.map((o) => o.alias)
+  // Header OpCo switcher: narrow to the active OpCo's risks plus group-wide ones.
+  const active = await activeOpCoSlug(session)
+  const where = active
+    ? { OR: [{ opcoId: null }, { opco: { slug: active } }] }
+    : groupLevel
+      ? {}
+      : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }
   return db.riskRegister.findMany({
-    where: groupLevel ? {} : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] },
+    where,
     include: { opco: { select: { name: true, slug: true } } },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   })

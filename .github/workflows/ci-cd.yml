@@ -95,6 +95,37 @@ jobs:
           path: coverage/
           retention-days: 30
 
+  migrate-dev:
+    name: Migrate dev DB (Neon)
+    runs-on: ubuntu-latest
+    # Push to dev only: apply pending migrations to the Neon database that the
+    # Vercel dev deployment serves. Vercel's build runs `next build` only (no
+    # migrate), and the prod migrate lives in the prod-only deploy job below —
+    # so without this step the dev DB drifts behind the schema on every migration.
+    if: github.event_name == 'push' && github.ref_name == 'dev'
+    needs: [quality, test]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm prisma generate
+
+      - name: Apply database migrations (dev / Neon)
+        # DEV_DATABASE_URL must be Neon's DIRECT (unpooled) connection string — the
+        # pooled/PgBouncer endpoint can reject DDL. A failed migration fails this job
+        # (surfaced on the dev push) but does not block Vercel's independent deploy.
+        run: pnpm prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DEV_DATABASE_URL }}
+
   dependency-audit:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest

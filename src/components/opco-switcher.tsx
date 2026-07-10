@@ -12,6 +12,11 @@ function setActiveOpCo(slug: string) {
   window.location.reload()
 }
 
+function readActiveOpCoCookie(): string | null {
+  if (typeof document === "undefined") return null
+  return document.cookie.split("; ").find((c) => c.startsWith("csq-active-opco="))?.split("=")[1] ?? null
+}
+
 export function OpCoSwitcher() {
   const { data: session } = useSession()
 
@@ -31,9 +36,19 @@ export function OpCoSwitcher() {
   if (!session) return null
   if (options.length <= 1) return null
 
+  // Reflect the persisted active OpCo (cookie) so the dropdown shows the current
+  // selection after the reload. A ref callback sets it when the <select> actually
+  // mounts (the session/options aren't ready on the first render), which keeps SSR
+  // rendering the neutral fallback with no hydration mismatch or setState-in-effect.
+  const fallback = userIsGroupAdmin ? "all" : (userOpCos[0] ?? "all")
+
   return (
     <select
-      defaultValue={userOpCos[0] ?? "all"}
+      ref={(el) => {
+        const active = readActiveOpCoCookie()
+        if (el && active) el.value = active
+      }}
+      defaultValue={fallback}
       onChange={(e) => setActiveOpCo(e.target.value)}
       className="rounded border bg-background px-2 py-1 text-sm"
     >

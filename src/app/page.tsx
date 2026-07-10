@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { viewerTier, requestScopedSlugs } from "@/lib/permissions"
 import { requestScope } from "@/server/request-scope"
+import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
 import { runDueEscalations } from "@/server/sla"
 import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
@@ -33,7 +34,15 @@ export default async function Home() {
   const groupLevel = tier === "group"
   // Managed OpCos for an OpCo admin/approver (admin OR approver); group sees all.
   const opcoSlugs = groupLevel ? [] : requestScopedSlugs(session.user.organizations)
-  const opcoFilter = requestScope(session.user)
+  // Header OpCo switcher: narrow the whole dashboard to the active OpCo when set.
+  const active = await activeOpCoSlug(session.user)
+  const opcoFilter = withActiveOpCo(requestScope(session.user), active)
+  // Blackouts: an active OpCo shows that OpCo's freezes plus group-wide (opcoId null) ones.
+  const blackoutScope = active
+    ? { OR: [{ opcoId: null }, { opco: { slug: active } }] }
+    : groupLevel
+      ? {}
+      : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }
 
   // Fire-and-forget SLA escalation sweep — never block render.
   void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})
@@ -49,7 +58,7 @@ export default async function Home() {
       },
     }),
     db.blackoutPeriod.findMany({
-      where: { startsAt: { lte: new Date(now) }, endsAt: { gte: new Date(now) }, ...(groupLevel ? {} : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }) },
+      where: { startsAt: { lte: new Date(now) }, endsAt: { gte: new Date(now) }, ...blackoutScope },
       select: { id: true, label: true, endsAt: true, opco: { select: { name: true } } },
     }),
     db.auditLog.findMany({

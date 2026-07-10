@@ -33,7 +33,7 @@ export type SerializedChange = {
   implementationPlan: string | null
   testingPlan: string | null
   backoutPlan: string | null
-  attachments: { id: string; kind: string; filename: string }[]
+  attachments: { id: string; kind: string; filename: string; externalUrl?: string | null }[]
   changeWindow: string | null
   plannedStart: string | null
   plannedEnd: string | null
@@ -88,6 +88,14 @@ const DOC_LABEL: Record<string, string> = {
   solution_document: "Solution Document",
 }
 
+const DOC_LABEL_KEY: Record<string, string> = {
+  impact_scope: "requests.impactScope",
+  implementation_plan: "requests.implementationPlan",
+  testing_plan: "requests.testingPlan",
+  backout_plan: "requests.backoutPlan",
+  solution_document: "requests.solutionDocument",
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(iso: string | null): string {
@@ -140,10 +148,13 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
     approve: canDecide && caps.canApprove && !caps.isRequester,
     reject: canDecide && caps.canApprove && !caps.isRequester,
     // approved → normal implement; an emergency may be implemented straight from
-    // pending (expedited), obtaining its approval retrospectively.
+    // pending (expedited), obtaining its approval retrospectively. Hidden from the
+    // sole approver — implementer SoD forbids them implementing (server enforces it
+    // too, changes.ts); the handleStatusChange guard + toast remain as backstop.
     implement:
       (change.status === "approved" || (change.status === "pending" && change.isEmergency)) &&
-      (caps.canApprove || caps.isAdmin),
+      (caps.canApprove || caps.isAdmin) &&
+      !caps.soleApproverIsMe,
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
     discard: change.status === "draft" && (caps.isRequester || caps.isAdmin),
@@ -346,12 +357,25 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
                   <ul className="space-y-1">
                     {change.attachments.map((a) => (
                       <li key={a.id}>
-                        <a
-                          className="text-sm text-primary underline"
-                          href={`/api/changes/${change.id}/documents/${a.id}`}
-                        >
-                          {a.filename} — {t(language, "detail.documents.download")}
-                        </a>
+                        {a.externalUrl ? (
+                          <a
+                            className="text-sm text-primary underline"
+                            href={a.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {DOC_LABEL_KEY[a.kind] ? t(language, DOC_LABEL_KEY[a.kind]) : a.filename}
+                            {" — "}
+                            {t(language, "detail.documents.openInGoogle")} ↗
+                          </a>
+                        ) : (
+                          <a
+                            className="text-sm text-primary underline"
+                            href={`/api/changes/${change.id}/documents/${a.id}`}
+                          >
+                            {a.filename} — {t(language, "detail.documents.download")}
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -413,7 +437,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
             {change.expedited && !change.retroApprovedAt && change.retroApprovalDueAt && (
               <div className="mt-2">
                 <span className="rounded-md bg-rose-100 px-2 py-1 text-xs text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                  {t(language, "detail.retroDue")}: {new Date(change.retroApprovalDueAt).toLocaleString()}
+                  {t(language, "detail.retroDue")}: {fmt(change.retroApprovalDueAt)}
                 </span>
               </div>
             )}

@@ -48,7 +48,7 @@ type Initial = {
   opcoSlug: string
 }
 
-type AttachmentSlot = { id: string; kind: string; filename: string }
+type AttachmentSlot = { id: string; kind: string; filename: string; externalUrl?: string | null }
 
 interface Props {
   opcoOptions: string[]
@@ -96,6 +96,14 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   const [uploadedByKind, setUploadedByKind] = useState<Partial<Record<AttachmentKind, string>>>(
     () => Object.fromEntries(attachments.map((a) => [a.kind, a.filename]))
   )
+  // Links entered this session but not yet saved (saved on submit).
+  const [stagedLinks, setStagedLinks] = useState<Partial<Record<AttachmentKind, string>>>({})
+  // Links already saved for each slot (seeded from props, updated after each save).
+  const [linkedByKind, setLinkedByKind] = useState<Partial<Record<AttachmentKind, string>>>(
+    () => Object.fromEntries(
+      attachments.filter((a) => a.externalUrl).map((a) => [a.kind, a.externalUrl as string])
+    )
+  )
 
   const DOC_LABEL_KEY: Record<AttachmentKind, string> = {
     impact_scope: "requests.impactScope",
@@ -130,7 +138,9 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
     }
     if (submit) {
       const missingDocs = documentsRequiredForRisk(riskLevel)
-        ? REQUIRED_DOC_KINDS.filter((k) => !stagedFiles[k] && !uploadedByKind[k])
+        ? REQUIRED_DOC_KINDS.filter(
+            (k) => !stagedFiles[k] && !uploadedByKind[k] && !stagedLinks[k] && !linkedByKind[k]
+          )
         : []
       if (missingDocs.length > 0 || !plannedStart || !plannedEnd) {
         toast({
@@ -181,6 +191,26 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
         const att = await res.json()
         setUploadedByKind((prev) => ({ ...prev, [kind]: att.filename }))
         setStagedFiles((prev) => {
+          const next = { ...prev }
+          delete next[kind]
+          return next
+        })
+      }
+
+      // Save any staged links; clear each from staging as it succeeds (idempotent on retry).
+      for (const [kind, url] of Object.entries(stagedLinks) as [AttachmentKind, string][]) {
+        const res = await fetch(`/api/changes/${id}/documents`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind, url }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? "Link failed")
+        }
+        const att = await res.json()
+        setLinkedByKind((prev) => ({ ...prev, [kind]: att.externalUrl }))
+        setStagedLinks((prev) => {
           const next = { ...prev }
           delete next[kind]
           return next
@@ -404,11 +434,21 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
                 summaryPlaceholder={summary?.placeholder}
                 onSummaryChange={summary?.set}
                 existingFilename={uploadedByKind[kind]}
+                existingLink={linkedByKind[kind]}
                 stagedFile={stagedFiles[kind] ?? null}
+                stagedLink={stagedLinks[kind] ?? null}
                 onFileChange={(file) =>
                   setStagedFiles((prev) => {
                     const next = { ...prev }
                     if (file) next[kind] = file
+                    else delete next[kind]
+                    return next
+                  })
+                }
+                onLinkChange={(url) =>
+                  setStagedLinks((prev) => {
+                    const next = { ...prev }
+                    if (url) next[kind] = url
                     else delete next[kind]
                     return next
                   })
