@@ -25,4 +25,13 @@ describe("EmailLayout", () => {
     const html = await render(<Pill tone="emergency">Emergency</Pill>)
     expect(html).toMatch(/Emergency/)
   })
+
+  it("colors medium and low risk pills (not the grey fallback)", async () => {
+    const medium = await render(<Pill tone="medium">medium risk</Pill>)
+    expect(medium).toMatch(/amber/)
+    const low = await render(<Pill tone="low">low risk</Pill>)
+    expect(low).toMatch(/green/)
+    const unknown = await render(<Pill tone="mystery">x</Pill>)
+    expect(unknown).toMatch(/slate/)
+  })
 })
