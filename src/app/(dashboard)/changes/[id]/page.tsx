@@ -25,7 +25,7 @@ function serialize(
     implementationPlan: change.implementationPlan ?? null,
     testingPlan: change.testingPlan ?? null,
     backoutPlan: change.backoutPlan ?? null,
-    attachments: change.attachments.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename })),
+    attachments: change.attachments.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename, externalUrl: a.externalUrl })),
     changeWindow: change.changeWindow ?? null,
     plannedStart: change.plannedStart?.toISOString() ?? null,
     plannedEnd: change.plannedEnd?.toISOString() ?? null,

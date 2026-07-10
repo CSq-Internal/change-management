@@ -33,7 +33,7 @@ export type SerializedChange = {
   implementationPlan: string | null
   testingPlan: string | null
   backoutPlan: string | null
-  attachments: { id: string; kind: string; filename: string }[]
+  attachments: { id: string; kind: string; filename: string; externalUrl?: string | null }[]
   changeWindow: string | null
   plannedStart: string | null
   plannedEnd: string | null
@@ -86,6 +86,14 @@ const DOC_LABEL: Record<string, string> = {
   testing_plan: "Testing & Validation",
   backout_plan: "Backout Plan",
   solution_document: "Solution Document",
+}
+
+const DOC_LABEL_KEY: Record<string, string> = {
+  impact_scope: "requests.impactScope",
+  implementation_plan: "requests.implementationPlan",
+  testing_plan: "requests.testingPlan",
+  backout_plan: "requests.backoutPlan",
+  solution_document: "requests.solutionDocument",
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -349,12 +357,25 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
                   <ul className="space-y-1">
                     {change.attachments.map((a) => (
                       <li key={a.id}>
-                        <a
-                          className="text-sm text-primary underline"
-                          href={`/api/changes/${change.id}/documents/${a.id}`}
-                        >
-                          {a.filename} — {t(language, "detail.documents.download")}
-                        </a>
+                        {a.externalUrl ? (
+                          <a
+                            className="text-sm text-primary underline"
+                            href={a.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {DOC_LABEL_KEY[a.kind] ? t(language, DOC_LABEL_KEY[a.kind]) : a.filename}
+                            {" — "}
+                            {t(language, "detail.documents.openInGoogle")} ↗
+                          </a>
+                        ) : (
+                          <a
+                            className="text-sm text-primary underline"
+                            href={`/api/changes/${change.id}/documents/${a.id}`}
+                          >
+                            {a.filename} — {t(language, "detail.documents.download")}
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ul>
