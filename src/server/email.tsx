@@ -3,6 +3,7 @@ import { Resend } from "resend"
 import nodemailer from "nodemailer"
 import { render } from "@react-email/render"
 import InvitationEmail from "@/emails/invitation"
+import ApprovalRequestEmail from "@/emails/approval-request"
 import type { Language } from "@/lib/i18n"
 
 const apiKey = process.env.RESEND_API_KEY
@@ -91,17 +92,21 @@ export async function sendApprovalRequestEmail(opts: {
   requesterName: string; riskLevel: string; changeId: string; locale?: Language
 }) {
   const fr = opts.locale === "fr"
-  await dispatchEmail(
-    opts.to,
-    fr ? `Action requise : approuver « ${opts.changeTitle} »` : `Action Required: Approve "${opts.changeTitle}"`,
-    fr
-      ? `<p>Bonjour ${opts.approverName},</p>
-<p><strong>${opts.requesterName}</strong> a soumis un changement à <strong>risque ${opts.riskLevel}</strong> : <strong>${opts.changeTitle}</strong>.</p>
-<p><a href="${BASE}/approvals">Examiner et approuver</a></p>`
-      : `<p>Hi ${opts.approverName},</p>
-<p><strong>${opts.requesterName}</strong> submitted a <strong>${opts.riskLevel} risk</strong> change: <strong>${opts.changeTitle}</strong>.</p>
-<p><a href="${BASE}/approvals">Review &amp; Approve</a></p>`
+  const subject = fr
+    ? `Action requise : approuver « ${opts.changeTitle} »`
+    : `Action Required: Approve "${opts.changeTitle}"`
+  const el = (
+    <ApprovalRequestEmail
+      approverName={opts.approverName}
+      changeTitle={opts.changeTitle}
+      requesterName={opts.requesterName}
+      riskLevel={opts.riskLevel}
+      lang={opts.locale ?? "en"}
+    />
   )
+  const html = await render(el)
+  const text = await render(el, { plainText: true })
+  await dispatchEmail(opts.to, subject, html, text)
 }
 
 export async function sendStatusChangeEmail(opts: {
