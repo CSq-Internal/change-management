@@ -26,12 +26,12 @@ export function EmailLayout({
             </Section>
             <Section className="rounded-b-lg border border-t-0 border-slate-200 bg-white px-6 py-6">
               {children}
-              <Text className="mt-8 text-xs text-slate-400">
-                {lang === "fr"
-                  ? "Système de gestion des changements CSquared · message automatique, merci de ne pas répondre."
-                  : "CSquared Change Management System · automated message — please do not reply."}
-              </Text>
             </Section>
+            <Text className="mt-4 px-6 text-center text-xs text-slate-400">
+              {lang === "fr"
+                ? "Système de gestion des changements CSquared · message automatique, merci de ne pas répondre."
+                : "CSquared Change Management System · automated message — please do not reply."}
+            </Text>
           </Container>
         </Body>
       </Tailwind>
@@ -54,6 +54,8 @@ export function CtaButton({ href, children }: { href: string; children: React.Re
 const PILL_TONES: Record<string, string> = {
   emergency: "bg-red-100 text-red-700",
   high: "bg-red-100 text-red-700",
+  medium: "bg-amber-100 text-amber-800",
+  low: "bg-green-100 text-green-700",
   sla: "bg-amber-100 text-amber-800",
   approved: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-700",
