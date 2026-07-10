@@ -66,4 +66,29 @@ describe("DocumentSection", () => {
     fireEvent.change(input, { target: { files: [pdf] } })
     expect(onFileChange).toHaveBeenCalledWith(pdf)
   })
+
+  it("shows both source toggles (upload file / link a Google Doc)", () => {
+    render(<DocumentSection kind="impact_scope" label="Impact & Scope" onFileChange={() => {}} onLinkChange={() => {}} />)
+    expect(screen.getByRole("button", { name: /upload file/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /link a google doc/i })).toBeInTheDocument()
+  })
+
+  it("stages a valid Google link", () => {
+    const onLinkChange = vi.fn()
+    render(<DocumentSection kind="impact_scope" label="Impact & Scope" onFileChange={() => {}} onLinkChange={onLinkChange} />)
+    fireEvent.click(screen.getByRole("button", { name: /link a google doc/i }))
+    const input = screen.getByPlaceholderText(/paste a google/i)
+    fireEvent.change(input, { target: { value: "https://docs.google.com/document/d/abc/edit" } })
+    expect(onLinkChange).toHaveBeenCalledWith("https://docs.google.com/document/d/abc/edit")
+  })
+
+  it("rejects a non-Google link and does not stage it", () => {
+    const onLinkChange = vi.fn()
+    render(<DocumentSection kind="impact_scope" label="Impact & Scope" onFileChange={() => {}} onLinkChange={onLinkChange} />)
+    fireEvent.click(screen.getByRole("button", { name: /link a google doc/i }))
+    const input = screen.getByPlaceholderText(/paste a google/i)
+    fireEvent.change(input, { target: { value: "https://example.com/doc" } })
+    expect(onLinkChange).toHaveBeenLastCalledWith(null)
+    expect(screen.getByText(/valid google/i)).toBeInTheDocument()
+  })
 })
