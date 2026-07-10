@@ -5,6 +5,7 @@ import { render } from "@react-email/render"
 import InvitationEmail from "@/emails/invitation"
 import ApprovalRequestEmail from "@/emails/approval-request"
 import StatusChangeEmail from "@/emails/status-change"
+import SlaEscalationEmail from "@/emails/sla-escalation"
 import type { Language } from "@/lib/i18n"
 
 const apiKey = process.env.RESEND_API_KEY
@@ -141,15 +142,22 @@ export async function sendSlaEscalationEmail(opts: {
   const tier = fr
     ? (opts.level >= 2 ? "groupe" : "administrateur OpCo")
     : (opts.level >= 2 ? "group" : "OpCo admin")
-  await dispatchEmail(
-    opts.to,
-    fr ? `Dépassement de SLA (niveau ${opts.level}) : « ${opts.changeTitle} »` : `SLA breach (level ${opts.level}): "${opts.changeTitle}"`,
-    fr
-      ? `<p>Le changement à <strong>risque ${opts.riskLevel}</strong> <strong>${opts.changeTitle}</strong> a dépassé son SLA d'approbation et a été escaladé au niveau <strong>${tier}</strong>.</p>
-<p><a href="${BASE}/changes/${opts.changeId}">Examiner le changement</a></p>`
-      : `<p>The <strong>${opts.riskLevel} risk</strong> change <strong>${opts.changeTitle}</strong> has breached its approval SLA and was escalated to <strong>${tier}</strong> level.</p>
-<p><a href="${BASE}/changes/${opts.changeId}">Review the change</a></p>`
+  const subject = fr
+    ? `Dépassement de SLA (niveau ${opts.level}) : « ${opts.changeTitle} »`
+    : `SLA breach (level ${opts.level}): "${opts.changeTitle}"`
+  const el = (
+    <SlaEscalationEmail
+      changeTitle={opts.changeTitle}
+      changeId={opts.changeId}
+      level={opts.level}
+      riskLevel={opts.riskLevel}
+      tier={tier}
+      lang={opts.locale ?? "en"}
+    />
   )
+  const html = await render(el)
+  const text = await render(el, { plainText: true })
+  await dispatchEmail(opts.to, subject, html, text)
 }
 
 export async function sendAccessRequestEmail(opts: {
