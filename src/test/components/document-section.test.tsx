@@ -91,4 +91,20 @@ describe("DocumentSection", () => {
     expect(onLinkChange).toHaveBeenLastCalledWith(null)
     expect(screen.getByText(/valid google/i)).toBeInTheDocument()
   })
+
+  it("re-stages a retained valid link after toggling to file mode and back", () => {
+    const onLinkChange = vi.fn()
+    render(<DocumentSection kind="impact_scope" label="Impact & Scope" onFileChange={() => {}} onLinkChange={onLinkChange} />)
+    fireEvent.click(screen.getByRole("button", { name: /link a google doc/i }))
+    const input = screen.getByPlaceholderText(/paste a google/i)
+    const url = "https://docs.google.com/document/d/abc/edit"
+    fireEvent.change(input, { target: { value: url } })
+    expect(onLinkChange).toHaveBeenLastCalledWith(url)
+
+    fireEvent.click(screen.getByRole("button", { name: /upload file/i }))
+    expect(onLinkChange).toHaveBeenLastCalledWith(null)
+
+    fireEvent.click(screen.getByRole("button", { name: /link a google doc/i }))
+    expect(onLinkChange).toHaveBeenLastCalledWith(url)
+  })
 })

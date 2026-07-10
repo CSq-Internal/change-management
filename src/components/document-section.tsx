@@ -101,6 +101,7 @@ export default function DocumentSection({
     setLinkMode(true)
     setError(null)
     onFileChange(null)
+    handleLink(linkValue)
   }
 
   const currentName = stagedFile?.name ?? existingFilename

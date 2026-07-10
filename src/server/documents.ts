@@ -77,11 +77,11 @@ export async function attachDocument(input: AttachInput) {
     where: { changeId_kind: { changeId: change.id, kind: input.kind } },
     create: {
       changeId: change.id, kind: input.kind, filename: input.filename,
-      storageKey: driveFileId, mimeType: input.mimeType, sizeBytes: input.buffer.length,
+      storageKey: driveFileId, externalUrl: null, mimeType: input.mimeType, sizeBytes: input.buffer.length,
       uploadedById: user.id,
     },
     update: {
-      filename: input.filename, storageKey: driveFileId,
+      filename: input.filename, storageKey: driveFileId, externalUrl: null,
       mimeType: input.mimeType, sizeBytes: input.buffer.length, uploadedById: user.id,
     },
   })

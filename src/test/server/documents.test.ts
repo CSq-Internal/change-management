@@ -79,6 +79,16 @@ describe("attachDocument", () => {
     ).rejects.toThrow(/Forbidden/)
   })
 
+  it("clears externalUrl so a file replacing a link leaves a single-source row", async () => {
+    await attachDocument({ changeId: "cr-1", kind: "impact_scope", ...pdf })
+    expect(mockDb.attachment.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ storageKey: "drive-file-1", externalUrl: null }),
+        update: expect.objectContaining({ storageKey: "drive-file-1", externalUrl: null }),
+      })
+    )
+  })
+
   it("forbids uploading to a non-draft change", async () => {
     mockDb.changeRequest.findUnique.mockResolvedValueOnce({
       id: "cr-1", status: "pending", opcoId: "opco-1", requesterId: "user-1",
