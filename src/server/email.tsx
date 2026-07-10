@@ -1,6 +1,8 @@
 // src/server/email.ts
 import { Resend } from "resend"
 import nodemailer from "nodemailer"
+import { render } from "@react-email/render"
+import InvitationEmail from "@/emails/invitation"
 import type { Language } from "@/lib/i18n"
 
 const apiKey = process.env.RESEND_API_KEY
@@ -68,38 +70,20 @@ export async function sendUserInvitationEmail(opts: {
   locale?: Language
 }) {
   const fr = opts.locale === "fr"
-  const assignmentList = opts.assignments
-    .map((a) => `<li>${escapeHtml(a.role)} ${fr ? "dans" : "in"} ${escapeHtml(a.opcoSlug)}</li>`)
-    .join("")
-  const passwordCopy = opts.federated
-    ? (fr
-        ? "<p>Connectez-vous avec Google (« Se connecter avec Google ») en utilisant votre adresse @csquared.com. Aucun mot de passe n'est requis.</p>"
-        : "<p>Sign in with Google (\"Sign in with Google\") using your @csquared.com address. No password is required.</p>")
-    : opts.existingIdentity
-    ? (fr
-        ? "<p>Utilisez votre mot de passe Keycloak existant. Si vous ne le connaissez pas, demandez à un administrateur de le réinitialiser dans Keycloak.</p>"
-        : "<p>Use your existing Keycloak password. If you do not know it, ask an administrator to reset it in Keycloak.</p>")
-    : (fr
-        ? `<p>Votre mot de passe temporaire est : <strong>${escapeHtml(opts.tempPassword ?? "ChangeMe123!")}</strong></p><p>Il pourra vous être demandé de le changer à la première connexion.</p>`
-        : `<p>Your temporary password is: <strong>${escapeHtml(opts.tempPassword ?? "ChangeMe123!")}</strong></p><p>You may be asked to change it on first sign-in.</p>`)
-
-  await dispatchEmail(
-    opts.to,
-    fr ? "Vous êtes invité à CSquared CMS" : "You're invited to CSquared CMS",
-    fr
-      ? `<p>Bonjour ${escapeHtml(opts.name)},</p>
-<p>Vous avez été invité à CSquared CMS.</p>
-<p><a href="${BASE}/login">Se connecter à CSquared CMS</a></p>
-${passwordCopy}
-<p>Vos accès :</p>
-<ul>${assignmentList}</ul>`
-      : `<p>Hi ${escapeHtml(opts.name)},</p>
-<p>You have been invited to CSquared CMS.</p>
-<p><a href="${BASE}/login">Sign in to CSquared CMS</a></p>
-${passwordCopy}
-<p>Your access:</p>
-<ul>${assignmentList}</ul>`
+  const subject = fr ? "Vous êtes invité à CSquared CMS" : "You're invited to CSquared CMS"
+  const el = (
+    <InvitationEmail
+      name={opts.name}
+      tempPassword={opts.tempPassword}
+      existingIdentity={opts.existingIdentity}
+      federated={opts.federated}
+      assignments={opts.assignments}
+      lang={opts.locale ?? "en"}
+    />
   )
+  const html = await render(el)
+  const text = await render(el, { plainText: true })
+  await dispatchEmail(opts.to, subject, html, text)
 }
 
 export async function sendApprovalRequestEmail(opts: {
