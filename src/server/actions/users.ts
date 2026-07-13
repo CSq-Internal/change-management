@@ -341,3 +341,25 @@ export async function listOpCoApprovers(opcoSlug: string | null) {
   })
   return rows.map((r) => r.user)
 }
+
+// Users eligible to sit on a CAB: those holding the approver OR admin role — matching
+// what addCabMember accepts. Separate from listOpCoApprovers, which stays approver-only
+// for the delegations flow.
+export async function listCabEligible(opcoSlug: string | null) {
+  const session = await getAppSession()
+  if (opcoSlug === null) {
+    if (!isGroupAdmin(session.realmRoles)) {
+      throw new Error("Forbidden: only a group_admin can list group CAB candidates")
+    }
+  } else if (!canManageUsers(session.organizations, session.realmRoles, opcoSlug)) {
+    throw new Error(`Forbidden: cannot list CAB candidates in ${opcoSlug}`)
+  }
+
+  const db = getPrisma()
+  const rows = await db.userOpCoAssignment.findMany({
+    where: { role: { in: ["approver", "admin"] }, isActive: true, ...(opcoSlug ? { opco: { slug: opcoSlug } } : {}) },
+    select: { user: { select: { id: true, name: true, email: true } } },
+    distinct: ["userId"],
+  })
+  return rows.map((r) => r.user)
+}

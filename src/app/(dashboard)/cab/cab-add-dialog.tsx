@@ -6,34 +6,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import { addCabMember } from "@/server/actions/cab"
-import { listOpCoApprovers } from "@/server/actions/users"
+import { listCabEligible } from "@/server/actions/users"
 
-type Approver = { id: string; name: string | null; email: string }
+type Eligible = { id: string; name: string | null; email: string }
 
 interface CabAddDialogProps {
   language: Language
-  opcoSlug: string | null // null = group CAB
-  existingUserIds: string[]
+  opcos: { slug: string; name: string }[] | null // null = group CAB
+  existing: { userId: string; opcoSlug: string | null }[]
   onClose: () => void
   onAdded: () => void
 }
 
-export default function CabAddDialog({ language, opcoSlug, existingUserIds, onClose, onAdded }: CabAddDialogProps) {
+export default function CabAddDialog({ language, opcos, existing, onClose, onAdded }: CabAddDialogProps) {
   const { toast } = useToast()
-  const [approvers, setApprovers] = useState<Approver[]>([])
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(opcos && opcos.length ? opcos[0].slug : null)
+  const [eligible, setEligible] = useState<Eligible[]>([])
   const [pending, setPending] = useState(false)
 
   useEffect(() => {
-    listOpCoApprovers(opcoSlug).then(setApprovers).catch(() => setApprovers([]))
-  }, [opcoSlug])
+    listCabEligible(selectedSlug).then(setEligible).catch(() => setEligible([]))
+  }, [selectedSlug])
 
-  const existing = new Set(existingUserIds)
-  const addable = approvers.filter((a) => !existing.has(a.id))
+  const taken = new Set(existing.filter((e) => e.opcoSlug === selectedSlug).map((e) => e.userId))
+  const addable = eligible.filter((a) => !taken.has(a.id))
 
   const add = async (userId: string) => {
     setPending(true)
     try {
-      await addCabMember(userId, opcoSlug)
+      await addCabMember(userId, selectedSlug)
       toast({ title: t(language, "cabAdmin.added"), variant: "success" })
       onAdded()
     } catch (err) {
@@ -50,6 +51,19 @@ export default function CabAddDialog({ language, opcoSlug, existingUserIds, onCl
           <CardTitle className="text-base">{t(language, "cabAdmin.addTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {opcos && (
+            <select
+              aria-label={t(language, "cabAdmin.opcoLabel")}
+              className="w-full rounded border bg-background px-2 py-2 text-sm"
+              value={selectedSlug ?? ""}
+              onChange={(e) => setSelectedSlug(e.target.value)}
+              disabled={pending}
+            >
+              {opcos.map((o) => (
+                <option key={o.slug} value={o.slug}>{o.name}</option>
+              ))}
+            </select>
+          )}
           <div className="text-xs text-muted-foreground">{t(language, "cabAdmin.pick")}</div>
           <div className="space-y-1">
             {addable.map((a) => (
