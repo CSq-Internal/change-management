@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo, manageableOpCoSlugs } from "@/lib/permissions"
+import { isGroupAdmin } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
@@ -18,17 +18,16 @@ interface CabClientProps {
   perOpco: CabMember[]
   group: CabMember[]
   showGroup: boolean
+  manageableOpcos: { slug: string; name: string }[]
 }
 
-export default function CabClient({ perOpco, group, showGroup }: CabClientProps) {
+export default function CabClient({ perOpco, group, showGroup, manageableOpcos }: CabClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
   const router = useRouter()
   const { toast } = useToast()
 
-  const isAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
-  const scope = session ? manageableOpCoSlugs(session.user.organizations, session.user.realmRoles) : []
-  const perOpcoSlug = perOpco[0]?.opco?.slug ?? (scope === "all" ? undefined : scope[0])
+  const isGroupAdminUser = session ? isGroupAdmin(session.user.realmRoles) : false
 
   const [tab, setTab] = useState<"perOpco" | "group">("perOpco")
   const [addOpen, setAddOpen] = useState(false)
@@ -36,7 +35,8 @@ export default function CabClient({ perOpco, group, showGroup }: CabClientProps)
   const [pending, setPending] = useState(false)
 
   const activeMembers = tab === "group" ? group : perOpco
-  const addSlug = tab === "group" ? null : perOpcoSlug ?? null
+  // Group CAB add is group_admin-only server-side; per-OpCo add needs ≥1 manageable OpCo.
+  const addDisabled = tab === "group" ? !isGroupAdminUser : manageableOpcos.length === 0
 
   const refresh = () => router.refresh()
 
@@ -62,7 +62,7 @@ export default function CabClient({ perOpco, group, showGroup }: CabClientProps)
           <h1 className="text-2xl font-semibold">{t(language, "cabAdmin.title")}</h1>
           <p className="text-sm text-muted-foreground">{t(language, "cabAdmin.desc")}</p>
         </div>
-        <Button onClick={() => setAddOpen(true)} disabled={!isAdmin || (tab === "perOpco" && !addSlug)}>
+        <Button onClick={() => setAddOpen(true)} disabled={addDisabled}>
           {t(language, "cabAdmin.add")}
         </Button>
       </div>
@@ -83,8 +83,8 @@ export default function CabClient({ perOpco, group, showGroup }: CabClientProps)
       {addOpen && (
         <CabAddDialog
           language={language}
-          opcoSlug={addSlug}
-          existingUserIds={activeMembers.map((m) => m.userId)}
+          opcos={tab === "group" ? null : manageableOpcos}
+          existing={activeMembers.map((m) => ({ userId: m.userId, opcoSlug: m.opco?.slug ?? null }))}
           onClose={() => setAddOpen(false)}
           onAdded={() => { setAddOpen(false); refresh() }}
         />

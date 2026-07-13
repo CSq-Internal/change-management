@@ -54,7 +54,7 @@ const mockDb = {
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
-import { onboardUser, deactivateUser, reactivateUser, setUserAssignments, listOpCoApprovers } from '@/server/actions/users'
+import { onboardUser, deactivateUser, reactivateUser, setUserAssignments, listOpCoApprovers, listCabEligible } from '@/server/actions/users'
 import { getAppSession } from '@/lib/session'
 import { createOrFindKeycloakUser } from '@/server/keycloak'
 import { sendUserInvitationEmail } from '@/server/email'
@@ -356,6 +356,42 @@ describe("listOpCoApprovers", () => {
     await listOpCoApprovers(null)
     expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
       where: { role: "approver", isActive: true },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      distinct: ["userId"],
+    })
+  })
+})
+
+describe("listCabEligible", () => {
+  it("rejects a non-admin for a per-OpCo request", async () => {
+    await expect(listCabEligible("ghana")).rejects.toThrow(/Forbidden/)
+  })
+
+  it("rejects a non-group_admin for a group request", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await expect(listCabEligible(null)).rejects.toThrow(/Forbidden/)
+  })
+
+  it("lists approver AND admin users for an OpCo admin", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([
+      { user: { id: "u1", name: "Ada", email: "ada@csquared.com" } },
+    ])
+    const eligible = await listCabEligible("ghana")
+    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
+      where: { role: { in: ["approver", "admin"] }, isActive: true, opco: { slug: "ghana" } },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      distinct: ["userId"],
+    })
+    expect(eligible).toEqual([{ id: "u1", name: "Ada", email: "ada@csquared.com" }])
+  })
+
+  it("queries approver+admin across all OpCos for a group_admin group request", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([])
+    await listCabEligible(null)
+    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith({
+      where: { role: { in: ["approver", "admin"] }, isActive: true },
       select: { user: { select: { id: true, name: true, email: true } } },
       distinct: ["userId"],
     })
