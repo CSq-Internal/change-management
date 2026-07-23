@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { getChange } from "@/server/actions/changes"
 import { getPrisma } from "@/server/db"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, canAudit } from "@/lib/permissions"
-import { canUserApproveChange } from "@/server/approval-authority"
+import { canUserApproveChange, listEligibleApprovers } from "@/server/approval-authority"
 import ChangeDetailClient from "./change-detail-client"
 import type { SerializedChange, Caps } from "./change-detail-client"
 
@@ -86,6 +86,10 @@ export default async function ChangeDetailPage({
     ? await canUserApproveChange({
         userId: meUser.id, realmRoles: me.realmRoles,
         change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+        // Without changeId the named-approver branch never runs, so a nominated approver
+        // who is not on the routed CAB would land here from their notification and find
+        // no decision buttons.
+        changeId: change.id,
       })
     : false
   // Mirrors the implement-time SoD guard in updateChangeStatus: the *sole* approve-voter
@@ -102,12 +106,28 @@ export default async function ChangeDetailPage({
     soleApproverIsMe,
   }
 
-  const assigneeCandidates = Array.from(new Map(
-    (await db.userOpCoAssignment.findMany({
+  // The dialog draws from two pools. Implementers may be any active user in the OpCo —
+  // setChangeAssignees runs no eligibility check on them, and the requester is a common
+  // choice. Approvers use the narrower rule (group CAB only for Equiano infra) with the
+  // requester excluded, since submitApproval rejects self-approval.
+  const [implementerRows, approverRows] = await Promise.all([
+    db.userOpCoAssignment.findMany({
       where: { opco: { slug }, isActive: true },
       include: { user: { select: { id: true, name: true, email: true } } },
-    })).map((a) => [a.user.id, { id: a.user.id, label: a.user.name ?? a.user.email }])
+    }),
+    listEligibleApprovers(change.opcoId, change.infrastructureType, change.requesterId),
+  ])
+  const assigneeCandidates = Array.from(new Map(
+    implementerRows.map((a) => [a.user.id, { id: a.user.id, label: a.user.name ?? a.user.email }])
   ).values())
+  const approverCandidates = approverRows.map((u) => ({ id: u.id, label: u.name ?? u.email }))
 
-  return <ChangeDetailClient change={serialize(change)} caps={caps} assigneeCandidates={assigneeCandidates} />
+  return (
+    <ChangeDetailClient
+      change={serialize(change)}
+      caps={caps}
+      assigneeCandidates={assigneeCandidates}
+      approverCandidates={approverCandidates}
+    />
+  )
 }

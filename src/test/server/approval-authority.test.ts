@@ -6,10 +6,15 @@ const mockDb = {
   approverDelegation: { findMany: vi.fn() },
   changeAssignee: { findMany: vi.fn() },
   changeRequest: { findMany: vi.fn() },
+  userOpCoAssignment: { findMany: vi.fn() },
+  opCo: { findUnique: vi.fn() },
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { getRoutedApprovers, getNamedApprovers, canUserApproveChange, listApprovableChanges } from "@/server/approval-authority"
+import {
+  getRoutedApprovers, getNamedApprovers, canUserApproveChange, listApprovableChanges,
+  listEligibleApprovers, listEligibleApproversForScope, isEligibleApprover,
+} from "@/server/approval-authority"
 
 const equianoChange = { infrastructureType: "Equiano Optics", opcoId: "opco-1" }
 const wifiChange = { infrastructureType: "Wifi", opcoId: "opco-1" }
@@ -21,6 +26,8 @@ beforeEach(() => {
   mockDb.cABMembership.findMany.mockResolvedValue([])
   mockDb.approverDelegation.findMany.mockResolvedValue([])
   mockDb.changeAssignee.findMany.mockResolvedValue([])
+  mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
+  mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-1" })
 })
 
 describe("getRoutedApprovers", () => {
@@ -97,9 +104,27 @@ describe("canUserApproveChange", () => {
   it("is true for a group admin", async () => {
     expect(await canUserApproveChange({ userId: "x", realmRoles: ["group_admin"], change: wifiChange })).toBe(true)
   })
-  it("is true for a named approver-role assignee", async () => {
+  it("is true for a named approver-role assignee who is still eligible", async () => {
     mockDb.changeAssignee.findMany.mockResolvedValue([{ user: u("named1") }])
+    // Still holds the OpCo approver role, so the eligibility re-check passes.
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: u("named1") }])
     expect(await canUserApproveChange({ userId: "named1", realmRoles: [], change: wifiChange, changeId: "c1" })).toBe(true)
+  })
+  it("is false for a named assignee who has since lost eligibility", async () => {
+    // The nomination row survives, but they are no longer on the CAB and hold no
+    // approver/admin role — a nomination is not a standing grant.
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ user: u("named1") }])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
+    mockDb.cABMembership.findMany.mockResolvedValue([])
+    expect(await canUserApproveChange({ userId: "named1", realmRoles: [], change: wifiChange, changeId: "c1" })).toBe(false)
+  })
+  it("is false for an OpCo approver named on a change since moved to Equiano infra", async () => {
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ user: u("opcoAppr") }])
+    // Equiano is group-level: the OpCo role no longer confers authority, and the group
+    // CAB is empty. Without revalidation the stale nomination would still authorise them.
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: u("opcoAppr") }])
+    mockDb.cABMembership.findMany.mockResolvedValue([])
+    expect(await canUserApproveChange({ userId: "opcoAppr", realmRoles: [], change: equianoChange, changeId: "c1" })).toBe(false)
   })
   it("is false for an unrelated user", async () => {
     expect(await canUserApproveChange({ userId: "nope", realmRoles: [], change: wifiChange, changeId: "c1" })).toBe(false)
@@ -141,5 +166,131 @@ describe("listApprovableChanges", () => {
         }),
       })
     )
+  })
+})
+
+describe("listEligibleApprovers", () => {
+  it("non-Equiano infra: returns OpCo CAB members plus OpCo approver/admin role holders", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "cab1", name: "Cab One", email: "cab1@c.com", isActive: true } },
+    ])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
+      { user: { id: "appr1", name: "Appr One", email: "appr1@c.com", isActive: true } },
+      { user: { id: "adm1", name: "Adm One", email: "adm1@c.com", isActive: true } },
+    ])
+
+    const out = await listEligibleApprovers("opco-1", "Wifi")
+
+    expect(out.map((u) => u.id).sort()).toEqual(["adm1", "appr1", "cab1"])
+    expect(mockDb.cABMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ opcoId: "opco-1", isActive: true }) })
+    )
+    expect(mockDb.userOpCoAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          opcoId: "opco-1", isActive: true, role: { in: ["approver", "admin"] },
+        }),
+      })
+    )
+  })
+
+  it("Equiano infra: returns group CAB members ONLY and never queries OpCo role holders", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "samuel", name: "Samuel", email: "s@c.com", isActive: true } },
+    ])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
+      { user: { id: "appr1", name: "Appr One", email: "appr1@c.com", isActive: true } },
+    ])
+
+    const out = await listEligibleApprovers("opco-1", "Equiano Optics")
+
+    expect(out.map((u) => u.id)).toEqual(["samuel"])
+    expect(mockDb.cABMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ opcoId: null, isActive: true }) })
+    )
+    expect(mockDb.userOpCoAssignment.findMany).not.toHaveBeenCalled()
+  })
+
+  it("excludes inactive users", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "live", name: "Live", email: "live@c.com", isActive: true } },
+      { user: { id: "gone", name: "Gone", email: "gone@c.com", isActive: false } },
+    ])
+    const out = await listEligibleApprovers("opco-1", "Wifi")
+    expect(out.map((u) => u.id)).toEqual(["live"])
+  })
+
+  it("excludes excludeUserId (the requester)", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "me", name: "Me", email: "me@c.com", isActive: true } },
+      { user: { id: "other", name: "Other", email: "other@c.com", isActive: true } },
+    ])
+    const out = await listEligibleApprovers("opco-1", "Wifi", "me")
+    expect(out.map((u) => u.id)).toEqual(["other"])
+  })
+
+  it("dedupes a user who is both a CAB member and an OpCo approver", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "dual", name: "Dual", email: "dual@c.com", isActive: true } },
+    ])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
+      { user: { id: "dual", name: "Dual", email: "dual@c.com", isActive: true } },
+    ])
+    const out = await listEligibleApprovers("opco-1", "Wifi")
+    expect(out.map((u) => u.id)).toEqual(["dual"])
+  })
+
+  it("does NOT include delegates (they derive authority via getRoutedApprovers)", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "cab1", name: "Cab One", email: "cab1@c.com", isActive: true } },
+    ])
+    mockDb.approverDelegation.findMany.mockResolvedValue([
+      { toUser: { id: "delegate", name: "Del", email: "del@c.com" } },
+    ])
+    const out = await listEligibleApprovers("opco-1", "Wifi")
+    expect(out.map((u) => u.id)).toEqual(["cab1"])
+  })
+})
+
+describe("listEligibleApproversForScope", () => {
+  it("resolves the OpCo slug to an id and delegates to listEligibleApprovers", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-9" })
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "cab1", name: "Cab One", email: "cab1@c.com", isActive: true } },
+    ])
+    const out = await listEligibleApproversForScope("ghana", "Wifi")
+    expect(mockDb.opCo.findUnique).toHaveBeenCalledWith({ where: { slug: "ghana" }, select: { id: true } })
+    expect(mockDb.cABMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ opcoId: "opco-9" }) })
+    )
+    expect(out.map((u) => u.id)).toEqual(["cab1"])
+  })
+
+  it("returns an empty list for an unknown OpCo slug", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue(null)
+    const out = await listEligibleApproversForScope("nowhere", "Wifi")
+    expect(out).toEqual([])
+  })
+})
+
+describe("isEligibleApprover", () => {
+  it("agrees with listEligibleApprovers — true for a listed user", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([
+      { user: { id: "cab1", name: "Cab One", email: "cab1@c.com", isActive: true } },
+    ])
+    expect(await isEligibleApprover("cab1", "opco-1", "Wifi")).toBe(true)
+  })
+
+  it("false for a user absent from the eligible list", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([])
+    expect(await isEligibleApprover("rando", "opco-1", "Wifi")).toBe(false)
+  })
+
+  it("false for an OpCo approver on an Equiano change (group-only tightening)", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
+      { user: { id: "appr1", name: "Appr One", email: "appr1@c.com", isActive: true } },
+    ])
+    expect(await isEligibleApprover("appr1", "opco-1", "Equiano IP")).toBe(false)
   })
 })

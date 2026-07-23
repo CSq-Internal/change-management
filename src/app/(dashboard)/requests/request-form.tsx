@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
@@ -8,6 +8,8 @@ import { t } from "@/lib/i18n"
 import { OPCO_NAMES } from "@/lib/opco"
 import type { OpCoSlug } from "@/lib/opco"
 import { createChange, updateChange, submitChange } from "@/server/actions/changes"
+import { listEligibleApproversAction } from "@/server/actions/eligible-approvers"
+import { setChangeApprovers } from "@/server/actions/assignees"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,8 +19,6 @@ import DocumentSection from "@/components/document-section"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import type { AttachmentKind } from "@prisma/client"
-
-type Approver = { name: string | null; email: string }
 
 const infraTypes = [
   "Equiano Optics",
@@ -56,11 +56,11 @@ interface Props {
   initial?: Initial
   defaultEmail?: string
   attachments?: AttachmentSlot[]
-  groupCtos?: Approver[]
-  approversByOpco?: Record<string, Approver[]>
+  /** Approvers already named on the change (edit mode), so saving does not clear them. */
+  initialApproverIds?: string[]
 }
 
-export default function RequestForm({ opcoOptions, mode = "create", initial, defaultEmail, attachments = [], groupCtos = [], approversByOpco = {} }: Props) {
+export default function RequestForm({ opcoOptions, mode = "create", initial, defaultEmail, attachments = [], initialApproverIds = [] }: Props) {
   const { language } = useStore()
   const router = useRouter()
   const { toast } = useToast()
@@ -84,6 +84,16 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   const [implementationPlan, setImplementationPlan] = useState(initial?.implementationPlan ?? "")
   const [testingPlan, setTestingPlan] = useState(initial?.testingPlan ?? "")
   const [backoutPlan, setBackoutPlan] = useState(initial?.backoutPlan ?? "")
+  // Requester-nominated approvers, and the candidate list they are chosen from.
+  const [approverIds, setApproverIds] = useState<string[]>(initialApproverIds)
+  const [approversCleared, setApproversCleared] = useState(false)
+  const [approverReload, setApproverReload] = useState(0)
+  // Result of the last completed load, tagged with the scope it was for; `rows: null` = it failed.
+  // Load state is derived from this rather than stored, so the effect never setStates synchronously.
+  const [loadedApprovers, setLoadedApprovers] = useState<{
+    scope: string
+    rows: { id: string; name: string | null; email: string }[] | null
+  }>({ scope: "", rows: null })
   // Which action is in flight, so we can spinner the right button and disable both.
   const [savingAction, setSavingAction] = useState<"draft" | "submit" | null>(null)
   const isSaving = savingAction !== null
@@ -120,9 +130,44 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
     backout_plan: { value: backoutPlan, set: setBackoutPlan },
   }
 
-  // Live approver routing preview based on infra type + selected OpCo.
-  const groupCtoNames = groupCtos.map((c) => c.name ?? c.email)
-  const residentNames = (approversByOpco[opcoSlug] ?? []).map((a) => a.name ?? a.email)
+  // Candidates depend on OpCo + infra type, so they load client-side once both are known.
+  // The reload counter is part of the scope so Retry re-runs the query.
+  const approverScope = infrastructureType && opcoSlug
+    ? `${opcoSlug}|${infrastructureType}|${approverReload}`
+    : ""
+  const approverLoad: "idle" | "loading" | "error" | "ready" = !approverScope
+    ? "idle"
+    : loadedApprovers.scope !== approverScope
+      ? "loading"
+      : loadedApprovers.rows
+        ? "ready"
+        : "error"
+  const eligible = approverLoad === "ready" ? loadedApprovers.rows ?? [] : []
+
+  // Changing infra type re-queries and drops any selection that no longer applies.
+  useEffect(() => {
+    if (!approverScope) return
+    let cancelled = false
+    listEligibleApproversAction(opcoSlug, infrastructureType, persistedId ?? undefined)
+      .then((rows) => {
+        if (cancelled) return
+        setLoadedApprovers({ scope: approverScope, rows })
+        setApproverIds((prev) => {
+          const allowed = new Set(rows.map((r) => r.id))
+          const kept = prev.filter((id) => allowed.has(id))
+          setApproversCleared(kept.length < prev.length)
+          return kept
+        })
+      })
+      .catch(() => {
+        if (cancelled) return
+        setLoadedApprovers({ scope: approverScope, rows: null })
+        // A failed load says nothing about whether the selection is still valid, so the
+        // "cleared" notice from an earlier scope must not linger beside the error.
+        setApproversCleared(false)
+      })
+    return () => { cancelled = true }
+  }, [approverScope, opcoSlug, infrastructureType, persistedId])
 
   const isEmergency = riskLevel === "emergency"
 
@@ -150,6 +195,14 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
         })
         return
       }
+      if (approverIds.length === 0) {
+        toast({
+          title: t(language, "requests.toast.approverMissing"),
+          description: t(language, "requests.toast.approverMissingDesc"),
+          variant: "error",
+        })
+        return
+      }
     }
     setSavingAction(submit ? "submit" : "draft")
     const payload = {
@@ -172,8 +225,11 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
       let id = persistedId
       if (id) {
         await updateChange(id, payload)
+        // updateChange writes the payload straight to the row, so approvers go through
+        // setChangeApprovers — setChangeAssignees would drop the implementers.
+        await setChangeApprovers(id, approverIds)
       } else {
-        const created = await createChange(opcoSlug, payload)
+        const created = await createChange(opcoSlug, { ...payload, approverIds })
         id = created.id
         setPersistedId(id)
       }
@@ -310,25 +366,57 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
         {infrastructureType && (
           <Card className="border-emerald-300/70 bg-emerald-50/60 dark:border-emerald-800/50 dark:bg-emerald-950/40">
             <CardHeader>
-              <CardTitle className="text-base">{t(language, "requests.approverRouting")}</CardTitle>
-              <CardDescription>{t(language, "requests.approverRoutingHint")}</CardDescription>
+              <CardTitle className="text-base">
+                {t(language, "requests.selectApprovers")} <span className="text-rose-600">*</span>
+              </CardTitle>
+              <CardDescription>{t(language, "requests.selectApproversHint")}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              {isGroupLevelInfra(infrastructureType) ? (
-                <p>
-                  <span className="font-medium">{t(language, "requests.groupCto")}:</span>{" "}
-                  {groupCtoNames.length > 0 ? groupCtoNames.join(", ") : t(language, "requests.noApprover")}
+            <CardContent className="space-y-2 text-sm">
+              {/* Above the branches: a scope switch can empty the new list, and the notice
+                  must still be shown when it does. */}
+              {approversCleared && (
+                <p className="text-amber-700 dark:text-amber-400">
+                  {t(language, "requests.approversCleared")}
                 </p>
-              ) : (
+              )}
+
+              {approverLoad === "loading" && <p className="text-muted-foreground">…</p>}
+
+              {approverLoad === "error" && (
+                <div className="space-y-2">
+                  <p className="text-rose-600">{t(language, "requests.approversLoadFailed")}</p>
+                  <Button variant="outline" onClick={() => setApproverReload((n) => n + 1)}>
+                    {t(language, "requests.approversRetry")}
+                  </Button>
+                </div>
+              )}
+
+              {approverLoad === "ready" && eligible.length === 0 && (
+                <p className="text-rose-600">
+                  {isGroupLevelInfra(infrastructureType)
+                    ? t(language, "requests.approversNoneGroup")
+                    : t(language, "requests.approversNone")}
+                </p>
+              )}
+
+              {approverLoad === "ready" && eligible.length > 0 && (
                 <>
-                  <p>
-                    <span className="font-medium">{t(language, "requests.residentApprovers")}:</span>{" "}
-                    {residentNames.length > 0 ? residentNames.join(", ") : t(language, "requests.noApprover")}
-                  </p>
-                  <p className="text-muted-foreground">
-                    <span className="font-medium">{t(language, "requests.secondee")}:</span>{" "}
-                    {groupCtoNames.length > 0 ? groupCtoNames.join(", ") : "—"}
-                  </p>
+                  {eligible.map((a) => (
+                    <label key={a.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={a.email}
+                        checked={approverIds.includes(a.id)}
+                        onChange={(e) =>
+                          setApproverIds((prev) =>
+                            e.target.checked ? [...prev, a.id] : prev.filter((id) => id !== a.id)
+                          )
+                        }
+                      />
+                      <span>{a.name ?? a.email}</span>
+                      <span className="text-muted-foreground">{a.email}</span>
+                    </label>
+                  ))}
                 </>
               )}
             </CardContent>
@@ -469,9 +557,15 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
               {savingAction === "draft" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t(language, savingAction === "draft" ? "requests.savingDraft" : "requests.saveDraft")}
             </Button>
+            {/* Once an infra type is picked, submit needs a settled picker *and* a selection:
+                a failed or in-flight load can leave approverIds holding an abandoned scope.
+                Before that, stay enabled so an empty form still gets the "missing fields" toast. */}
             <Button
               onClick={() => void save({ submit: true })}
-              disabled={isSaving}
+              disabled={
+                isSaving ||
+                (approverScope !== "" && (approverLoad !== "ready" || approverIds.length === 0))
+              }
               className="w-full sm:w-auto"
             >
               {savingAction === "submit" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
