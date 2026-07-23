@@ -33,6 +33,7 @@ const mockDb = {
         { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
         { kind: 'backout_plan' }, { kind: 'solution_document' },
       ],
+      assignees: [{ userId: 'appr1', role: 'approver' }],
     }),
     update: vi.fn().mockResolvedValue({ id: 'cr-1', status: 'pending' }),
   },
@@ -87,6 +88,7 @@ beforeEach(() => {
   mockDb.approverAssignment.findMany.mockResolvedValue([])
   mockDb.changeAssignee.findMany.mockReset()
   mockDb.changeAssignee.findMany.mockResolvedValue([])
+  mockDb.changeRequest.update.mockClear()
   tx.changeRequest.create.mockClear()
   tx.changeAssignee.create.mockClear()
   tx.auditLog.create.mockClear()
@@ -390,6 +392,7 @@ describe('submitChange', () => {
         { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
         { kind: 'backout_plan' }, { kind: 'solution_document' },
       ],
+      assignees: [{ userId: 'appr1', role: 'approver' }],
     })
     // blackoutPeriod.findMany should NOT be called, but even if it were it returns empty by default
     const result = await submitChange('cr-1')
@@ -418,6 +421,7 @@ describe('submitChange', () => {
       plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
       isEmergency: false,
       attachments: [], // no documents — allowed for low risk
+      assignees: [{ userId: 'appr1', role: 'approver' }],
     })
     const result = await submitChange('cr-1')
     expect(result).toHaveProperty('status', 'pending')
@@ -543,5 +547,55 @@ describe('createChange — approverIds', () => {
     await createChange('ghana', { ...baseInput, approverIds: ['appr1'] })
     const created = tx.changeRequest.create.mock.calls[0][0] as { data: Record<string, unknown> }
     expect(created.data).not.toHaveProperty('approverIds')
+  })
+})
+
+describe('submitChange — mandatory approver', () => {
+  const SUBMITTABLE = {
+    id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+    opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+    riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+    infrastructureType: 'Backbone IP Network',
+    isEmergency: false,
+    plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+    attachments: [],
+  }
+
+  it('throws when the change has no named approver', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({ ...SUBMITTABLE, assignees: [] })
+    await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('succeeds when one approver is named', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...SUBMITTABLE,
+      assignees: [{ userId: 'appr1', role: 'approver' }],
+    })
+    await submitChange('cr-1')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'pending' } })
+    )
+  })
+
+  it('ignores implementer assignees when counting approvers', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...SUBMITTABLE,
+      assignees: [{ userId: 'impl1', role: 'implementer' }],
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
+  })
+
+  it('blocks an emergency change with no named approver (no exemption by design)', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...SUBMITTABLE, isEmergency: true, riskLevel: 'emergency', assignees: [],
+      // emergency risk requires the 5 documents (see documentsRequiredForRisk) — supply them
+      // so this test isolates the approver gate rather than tripping the document gate first.
+      attachments: [
+        { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
+        { kind: 'backout_plan' }, { kind: 'solution_document' },
+      ],
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
   })
 })

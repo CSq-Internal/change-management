@@ -170,7 +170,7 @@ export async function submitChange(id: string) {
   if (!user) throw new Error("User not found")
 
   const change = await db.changeRequest.findUnique({
-    where: { id }, include: { opco: true, attachments: true },
+    where: { id }, include: { opco: true, attachments: true, assignees: true },
   })
   if (!change) throw new Error("Change not found")
 
@@ -195,6 +195,14 @@ export async function submitChange(id: string) {
   const missingFields = requiredFields.filter(([, v]) => v === null || v === undefined || v === "").map(([k]) => k)
   if (missingFields.length > 0) {
     throw new Error(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
+  }
+
+  // At least one approver must be named before a change can enter the approval flow.
+  // Requester-named approvers are additive — the routed CAB keeps its authority — but
+  // the nomination itself is mandatory.
+  const namedApprovers = change.assignees.filter((a) => a.role === "approver")
+  if (namedApprovers.length === 0) {
+    throw new Error("Cannot submit: at least one approver must be named")
   }
 
   if (!change.isEmergency) {
