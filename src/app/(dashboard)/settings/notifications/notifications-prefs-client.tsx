@@ -1,11 +1,12 @@
 "use client"
 
+import * as React from "react"
 import { useState, useTransition } from "react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
-import { NOTIFY_EVENT_TYPES, type NotifyChannel } from "@/lib/notifications"
+import { NOTIFY_EVENT_GROUPS, DEFAULT_CHANNELS, type NotifyChannel } from "@/lib/notifications"
 import { setMyPreference, type PrefCell } from "@/server/actions/notification-prefs"
 
 const CHANNELS: NotifyChannel[] = ["email", "in_app"]
@@ -48,20 +49,29 @@ export default function NotificationsPrefsClient({ prefs }: { prefs: PrefCell[] 
               </tr>
             </thead>
             <tbody>
-              {NOTIFY_EVENT_TYPES.map((evt) => (
-                <tr key={evt} className="border-b border-border/40">
-                  <td className="px-4 py-2" data-label={t(language, "notifPrefs.event")}>{t(language, `notifEvent.${evt}`)}</td>
-                  {CHANNELS.map((ch) => (
-                    <td key={ch} className="px-4 py-2 text-center" data-label={t(language, ch === "email" ? "notifPrefs.email" : "notifPrefs.inApp")}>
-                      <input
-                        type="checkbox"
-                        checked={cells.get(`${evt}:${ch}`) ?? true}
-                        onChange={() => toggle(evt, ch)}
-                        aria-label={`${evt} ${ch}`}
-                      />
-                    </td>
+              {NOTIFY_EVENT_GROUPS.map((group) => (
+                <React.Fragment key={group.key}>
+                  <tr className="border-b border-border/70 bg-muted/40">
+                    <th colSpan={3} className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t(language, `notifGroup.${group.key}`)}
+                    </th>
+                  </tr>
+                  {group.types.map((evt) => (
+                    <tr key={evt} className="border-b border-border/40">
+                      <td className="px-4 py-2" data-label={t(language, "notifPrefs.event")}>{t(language, `notifEvent.${evt}`)}</td>
+                      {CHANNELS.map((ch) => (
+                        <td key={ch} className="px-4 py-2 text-center" data-label={t(language, ch === "email" ? "notifPrefs.email" : "notifPrefs.inApp")}>
+                          <input
+                            type="checkbox"
+                            checked={cells.get(`${evt}:${ch}`) ?? DEFAULT_CHANNELS[evt][ch]}
+                            onChange={() => toggle(evt, ch)}
+                            aria-label={`${evt} ${ch}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
