@@ -3,19 +3,53 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
-import { routedCabOpcoId } from "@/lib/approver-routing"
+import { isEligibleApprover } from "@/server/approval-authority"
 
 type AssigneeInput = { userId: string; role: "approver" | "implementer" }
 
-async function isEligibleApprover(
-  db: ReturnType<typeof getPrisma>, userId: string, opcoId: string, cabOpcoId: string | null
-): Promise<boolean> {
-  const opcoRole = await db.userOpCoAssignment.findFirst({
-    where: { userId, opcoId, isActive: true, role: { in: ["approver", "admin"] } },
+const NO_APPROVER_ERROR =
+  "Cannot save: a submitted change must have at least one named approver"
+
+/**
+ * Shared authz + change lookup for both setters. Only the requester or an admin may
+ * change who is assigned to a change.
+ */
+async function loadChangeForAssigneeWrite(changeId: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+  const me = await db.user.findUnique({
+    where: { keycloakId: session.keycloakId },
+    select: { id: true },
   })
-  if (opcoRole) return true
-  const cab = await db.cABMembership.findFirst({ where: { userId, opcoId: cabOpcoId, isActive: true } })
-  return !!cab
+  if (!me) throw new Error("User not found")
+
+  const change = await db.changeRequest.findUnique({
+    where: { id: changeId },
+    select: {
+      id: true, status: true, requesterId: true, opcoId: true,
+      infrastructureType: true, opco: { select: { slug: true } },
+    },
+  })
+  if (!change) throw new Error("Change not found")
+
+  const isAdmin =
+    isGroupAdmin(session.realmRoles) || hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
+  if (change.requesterId !== me.id && !isAdmin) {
+    throw new Error("Forbidden: only the requester or an admin can set assignees")
+  }
+  return { db, me, change }
+}
+
+async function assertApproversEligible(
+  approverIds: string[],
+  opcoId: string,
+  infrastructureType: string,
+) {
+  for (const userId of approverIds) {
+    if (!(await isEligibleApprover(userId, opcoId, infrastructureType))) {
+      throw new Error("Assignee is not an eligible approver for this change's scope")
+    }
+  }
 }
 
 export async function listChangeAssignees(changeId: string) {
@@ -27,26 +61,15 @@ export async function listChangeAssignees(changeId: string) {
 }
 
 export async function setChangeAssignees(changeId: string, assignees: AssigneeInput[]) {
-  const session = await getAppSession()
-  const db = getPrisma()
-  const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-  if (!me) throw new Error("User not found")
+  const { db, me, change } = await loadChangeForAssigneeWrite(changeId)
 
-  const change = await db.changeRequest.findUnique({
-    where: { id: changeId },
-    select: { id: true, requesterId: true, opcoId: true, infrastructureType: true, opco: { select: { slug: true } } },
-  })
-  if (!change) throw new Error("Change not found")
-
-  const isAdmin = isGroupAdmin(session.realmRoles) || hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
-  if (change.requesterId !== me.id && !isAdmin)
-    throw new Error("Forbidden: only the requester or an admin can set assignees")
-
-  const cabOpcoId = routedCabOpcoId(change.infrastructureType, change.opcoId)
-  for (const a of assignees.filter((x) => x.role === "approver")) {
-    if (!(await isEligibleApprover(db, a.userId, change.opcoId, cabOpcoId)))
-      throw new Error("Assignee is not an eligible approver for this change's scope")
+  const approverIds = assignees.filter((a) => a.role === "approver").map((a) => a.userId)
+  // A change past draft must never be left without an approver — otherwise a requester
+  // could submit with one and immediately strip it back out.
+  if (change.status !== "draft" && approverIds.length === 0) {
+    throw new Error(NO_APPROVER_ERROR)
   }
+  await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType)
 
   await db.$transaction(async (tx) => {
     await tx.changeAssignee.deleteMany({ where: { changeId } })
@@ -55,6 +78,33 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
     }
     await tx.auditLog.create({
       data: { changeId, actorId: me.id, action: "assignees_set", note: `Set ${assignees.length} assignee(s)` },
+    })
+  })
+}
+
+/**
+ * Replace only the approver rows. Used by the request form, which knows about approvers
+ * but not implementers — a full setChangeAssignees call from there would silently delete
+ * implementers named on the change-detail page.
+ */
+export async function setChangeApprovers(changeId: string, approverIds: string[]) {
+  const { db, me, change } = await loadChangeForAssigneeWrite(changeId)
+
+  if (change.status !== "draft" && approverIds.length === 0) {
+    throw new Error(NO_APPROVER_ERROR)
+  }
+  await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType)
+
+  await db.$transaction(async (tx) => {
+    await tx.changeAssignee.deleteMany({ where: { changeId, role: "approver" } })
+    for (const userId of approverIds) {
+      await tx.changeAssignee.create({ data: { changeId, userId, role: "approver" } })
+    }
+    await tx.auditLog.create({
+      data: {
+        changeId, actorId: me.id, action: "approvers_set",
+        note: `Named ${approverIds.length} approver(s)`,
+      },
     })
   })
 }
