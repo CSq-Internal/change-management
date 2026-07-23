@@ -13,6 +13,31 @@ overrides:
   #   postcss (via next) — GHSA-qx2v-qp2m-jg93 (XSS via unescaped </style>)
   '@hono/node-server': '>=1.19.13'
   postcss: '>=8.5.10'
+  # Patched transitive deps flagged HIGH by `pnpm audit`. All reach us only through
+  # tooling (eslint, testcontainers, react-email, @prisma/dev) or through glob patterns
+  # we author ourselves, so none is attacker-reachable at runtime — but the audit gate
+  # fails on high regardless, and the fixes are free.
+  #
+  # brace-expansion — GHSA-3jxr-9vmj-r5cp (DoS via exponential {} expansion). Three
+  # disjoint advisory ranges, so each major is pinned to its own patched release rather
+  # than given an open `>=`: an open range resolves straight to the newest major (5.0.6
+  # landed here first, itself still inside the 3.x-5.0.6 vulnerable window). v1 and v2
+  # have in-major fixes and stay put; v3 and v4 have none, so those consumers must jump
+  # to 5.0.7 — which is where the advisory points them anyway.
+  'brace-expansion@1': '1.1.16'
+  'brace-expansion@2': '2.1.2'
+  'brace-expansion@3': '5.0.7'
+  'brace-expansion@4': '5.0.7'
+  'brace-expansion@5': '>=5.0.7'
+  #   js-yaml (via eslint) — GHSA-52cp-r559-cp3m (quadratic CPU on merge-key chains).
+  #   Pinned, not `>=`: an open range resolves to v5 and drags eslint across a major.
+  'js-yaml@4': '4.3.0'
+  #   fast-uri (via ajv, in @prisma/dev + react-email) — GHSA-v2hh-gcrm-f6hx and
+  #   GHSA-4c8g-83qw-93j6 (host confusion). Pinned for the same reason (open resolves v4).
+  'fast-uri@3': '3.1.4'
+  #   sharp (via next, optional) — GHSA-f88m-g3jw-g9cj (inherited libvips CVEs).
+  #   next 16.2.11 still declares sharp ^0.34.5, which cannot reach the 0.35.0 fix.
+  sharp: '>=0.35.0'
 
 allowBuilds:
   '@prisma/engines': true
