@@ -32,6 +32,13 @@ export async function submitApproval(
   const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
   if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
 
+  // One vote per approver per change. Deliberately application-level rather than a DB
+  // unique constraint: an emergency can legitimately collect a normal approval, be
+  // expedited-implemented, then receive a retrospective approval from the same person.
+  if (!isRetrospective && change.approvals.some((a) => a.approverId === user.id)) {
+    throw new Error("You have already voted on this change")
+  }
+
   const allowed = await canUserApproveChange({
     userId: user.id,
     realmRoles: session.realmRoles,

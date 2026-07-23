@@ -170,3 +170,65 @@ describe('submitApproval — CAB authority + quorum', () => {
     )
   })
 })
+
+describe('submitApproval — duplicate vote guard', () => {
+  const PENDING = {
+    id: 'cr-1', status: 'pending', riskLevel: 'low', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
+  }
+
+  it('rejects a second vote from the same user on a pending change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+  })
+
+  it('allows a first vote when others have already voted', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'someone-else-entirely', decision: 'approve', isCab: true }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+
+  it('allows a retrospective vote from a user who already voted normally', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      status: 'implemented', isEmergency: true, expedited: true,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+})
+
+describe('submitApproval — named approvers count toward quorum', () => {
+  it('two distinct approvers satisfy quorum on a high-risk change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'pending', riskLevel: 'high', infrastructureType: 'Wifi',
+      opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
+      approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'approved' } })
+    )
+  })
+
+  it('a single approver does not satisfy quorum on a high-risk change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'pending', riskLevel: 'high', infrastructureType: 'Wifi',
+      opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
+      approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+})
