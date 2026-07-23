@@ -543,6 +543,15 @@ describe('createChange — approverIds', () => {
     })).rejects.toThrow(/not an eligible approver/i)
   })
 
+  // submitApproval rejects self-approval (SoD), so a requester who names only themselves
+  // would clear submitChange's mandatory-approver gate with nobody able to approve.
+  it('rejects the requester naming themselves as an approver', async () => {
+    await expect(createChange('ghana', { ...baseInput, approverIds: ['user-1'] }))
+      .rejects.toThrow(/yourself as an approver/i)
+    expect(tx.changeRequest.create).not.toHaveBeenCalled()
+    expect(mockDb.$transaction).not.toHaveBeenCalled()
+  })
+
   it('does not strip approverIds into the ChangeRequest row', async () => {
     await createChange('ghana', { ...baseInput, approverIds: ['appr1'] })
     const created = tx.changeRequest.create.mock.calls[0][0] as { data: Record<string, unknown> }

@@ -369,6 +369,14 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
               <CardDescription>{t(language, "requests.selectApproversHint")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
+              {/* Above the branches: a scope switch can empty the new list, and the notice
+                  must still be shown when it does. */}
+              {approversCleared && (
+                <p className="text-amber-700 dark:text-amber-400">
+                  {t(language, "requests.approversCleared")}
+                </p>
+              )}
+
               {approverLoad === "loading" && <p className="text-muted-foreground">…</p>}
 
               {approverLoad === "error" && (
@@ -390,11 +398,6 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
 
               {approverLoad === "ready" && eligible.length > 0 && (
                 <>
-                  {approversCleared && (
-                    <p className="text-amber-700 dark:text-amber-400">
-                      {t(language, "requests.approversCleared")}
-                    </p>
-                  )}
                   {eligible.map((a) => (
                     <label key={a.id} className="flex items-center gap-2">
                       <input
@@ -551,9 +554,15 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
               {savingAction === "draft" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t(language, savingAction === "draft" ? "requests.savingDraft" : "requests.saveDraft")}
             </Button>
+            {/* Once an infra type is picked, submit needs a settled picker *and* a selection:
+                a failed or in-flight load can leave approverIds holding an abandoned scope.
+                Before that, stay enabled so an empty form still gets the "missing fields" toast. */}
             <Button
               onClick={() => void save({ submit: true })}
-              disabled={isSaving || approverIds.length === 0}
+              disabled={
+                isSaving ||
+                (infrastructureType !== "" && (approverLoad !== "ready" || approverIds.length === 0))
+              }
               className="w-full sm:w-auto"
             >
               {savingAction === "submit" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -136,3 +136,27 @@ describe('setChangeApprovers', () => {
       .rejects.toThrow(/at least one named approver/i)
   })
 })
+
+describe('self-nomination guard', () => {
+  // submitApproval rejects self-approval (SoD), so a requester who names only themselves
+  // would clear the mandatory-approver gate with nobody able to approve.
+  it('setChangeApprovers rejects the requester as their own approver', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(true)
+    await expect(setChangeApprovers('c1', ['user-req']))
+      .rejects.toThrow(/yourself as an approver/i)
+    expect(tx.changeAssignee.create).not.toHaveBeenCalled()
+  })
+
+  it('setChangeAssignees rejects the requester in an approver-role assignee', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(true)
+    await expect(setChangeAssignees('c1', [{ userId: 'user-req', role: 'approver' }]))
+      .rejects.toThrow(/yourself as an approver/i)
+  })
+
+  it('still allows the requester to be named as an implementer', async () => {
+    await setChangeAssignees('c1', [{ userId: 'user-req', role: 'implementer' }])
+    expect(tx.changeAssignee.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: 'user-req', role: 'implementer' }) })
+    )
+  })
+})

@@ -115,6 +115,11 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
 
   // Validate before opening the transaction so a bad id leaves nothing behind.
   for (const userId of approverIds) {
+    // submitApproval rejects self-approval (SoD), so naming yourself would satisfy the
+    // mandatory-approver gate while leaving nobody able to actually approve.
+    if (userId === user.id) {
+      throw new Error("Cannot name yourself as an approver on your own change")
+    }
     if (!(await isEligibleApprover(userId, opco.id, data.infrastructureType))) {
       throw new Error("Assignee is not an eligible approver for this change's scope")
     }

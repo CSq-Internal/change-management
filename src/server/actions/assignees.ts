@@ -44,8 +44,14 @@ async function assertApproversEligible(
   approverIds: string[],
   opcoId: string,
   infrastructureType: string,
+  requesterId: string,
 ) {
   for (const userId of approverIds) {
+    // submitApproval rejects self-approval (SoD), so naming the requester would satisfy the
+    // mandatory-approver gate while leaving nobody able to actually approve.
+    if (userId === requesterId) {
+      throw new Error("Cannot name yourself as an approver on your own change")
+    }
     if (!(await isEligibleApprover(userId, opcoId, infrastructureType))) {
       throw new Error("Assignee is not an eligible approver for this change's scope")
     }
@@ -69,7 +75,7 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
   if (change.status !== "draft" && approverIds.length === 0) {
     throw new Error(NO_APPROVER_ERROR)
   }
-  await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType)
+  await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
 
   await db.$transaction(async (tx) => {
     await tx.changeAssignee.deleteMany({ where: { changeId } })
@@ -93,7 +99,7 @@ export async function setChangeApprovers(changeId: string, approverIds: string[]
   if (change.status !== "draft" && approverIds.length === 0) {
     throw new Error(NO_APPROVER_ERROR)
   }
-  await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType)
+  await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
 
   await db.$transaction(async (tx) => {
     await tx.changeAssignee.deleteMany({ where: { changeId, role: "approver" } })
