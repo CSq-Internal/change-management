@@ -106,7 +106,7 @@ export async function sendApprovalRequestEmail(opts: {
 }
 
 export async function sendStatusChangeEmail(opts: {
-  to: string; name: string; changeTitle: string; newStatus: string; locale?: Language
+  to: string; name: string; changeTitle: string; newStatus: string; changeId: string; locale?: Language
 }) {
   const fr = opts.locale === "fr"
   const statusFr: Record<string, string> = { approved: "approuvé", rejected: "rejeté" }
@@ -121,6 +121,7 @@ export async function sendStatusChangeEmail(opts: {
       changeTitle={opts.changeTitle}
       status={status}
       tone={tone}
+      changeId={opts.changeId}
       lang={opts.locale ?? "en"}
     />
   )
