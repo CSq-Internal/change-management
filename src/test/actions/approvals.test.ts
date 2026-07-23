@@ -44,7 +44,10 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/server/notify', () => ({
+  notifyEvent: vi.fn().mockResolvedValue(undefined),
+  notifyChange: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/server/approval-authority', () => ({
   canUserApproveChange: vi.fn().mockResolvedValue(true),

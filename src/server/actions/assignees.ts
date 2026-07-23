@@ -4,6 +4,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
 import { isEligibleApprover } from "@/server/approval-authority"
+import { notifyChange } from "@/server/notify"
 
 type AssigneeInput = { userId: string; role: "approver" | "implementer" }
 
@@ -78,6 +79,12 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
   }
   await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
 
+  // Both setters replace rows wholesale, so "who was added/removed" only exists as a diff
+  // against the previous set. Read it before the write.
+  const previous = await db.changeAssignee.findMany({
+    where: { changeId }, select: { userId: true, role: true },
+  })
+
   await db.$transaction(async (tx) => {
     await tx.changeAssignee.deleteMany({ where: { changeId } })
     for (const a of assignees) {
@@ -87,6 +94,14 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
       data: { changeId, actorId: me.id, action: "assignees_set", note: `Set ${assignees.length} assignee(s)` },
     })
   })
+
+  const before = new Map(previous.map((r) => [r.userId, r.role as string]))
+  const after = new Map(assignees.map((a) => [a.userId, a.role as string]))
+  const added = assignees.filter((a) => before.get(a.userId) !== a.role)
+    .map((a) => ({ userId: a.userId, role: a.role as string }))
+  const removed = previous.filter((r) => after.get(r.userId) !== r.role)
+    .map((r) => ({ userId: r.userId, role: r.role as string }))
+  await notifyAssigneeDiff(changeId, added, removed, me.id)
 }
 
 /**
@@ -102,6 +117,10 @@ export async function setChangeApprovers(changeId: string, approverIds: string[]
   }
   await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
 
+  const previous = await db.changeAssignee.findMany({
+    where: { changeId, role: "approver" }, select: { userId: true },
+  })
+
   await db.$transaction(async (tx) => {
     await tx.changeAssignee.deleteMany({ where: { changeId, role: "approver" } })
     for (const userId of approverIds) {
@@ -114,4 +133,47 @@ export async function setChangeApprovers(changeId: string, approverIds: string[]
       },
     })
   })
+
+  const before = new Set(previous.map((r) => r.userId))
+  const after = new Set(approverIds)
+  await notifyAssigneeDiff(
+    changeId,
+    approverIds.filter((id) => !before.has(id)).map((userId) => ({ userId, role: "approver" })),
+    [...before].filter((id) => !after.has(id)).map((userId) => ({ userId, role: "approver" })),
+    me.id,
+  )
+}
+
+/**
+ * assignee_added / assignee_removed target one specific person, so recipients are passed
+ * explicitly rather than resolved from a role group. Fires after the transaction commits.
+ */
+async function notifyAssigneeDiff(
+  changeId: string,
+  added: { userId: string; role: string }[],
+  removed: { userId: string; role: string }[],
+  actorId: string,
+) {
+  if (added.length === 0 && removed.length === 0) return
+  const db = getPrisma()
+  const ids = [...new Set([...added, ...removed].map((a) => a.userId))]
+  const users = await db.user.findMany({
+    where: { id: { in: ids }, isActive: true },
+    select: { id: true, name: true, email: true },
+  })
+  const byId = new Map(users.map((u) => [u.id, u]))
+
+  const send = async (entry: { userId: string; role: string }, type: "assignee_added" | "assignee_removed") => {
+    // No point telling people they assigned themselves.
+    if (entry.userId === actorId) return
+    const u = byId.get(entry.userId)
+    if (!u) return
+    await notifyChange(type, changeId, {
+      recipients: [{ userId: u.id, email: u.email, name: u.name }],
+      role: entry.role,
+    }).catch(() => {})
+  }
+
+  for (const a of added) await send(a, "assignee_added")
+  for (const r of removed) await send(r, "assignee_removed")
 }

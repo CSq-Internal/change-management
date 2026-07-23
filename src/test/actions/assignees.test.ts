@@ -19,13 +19,23 @@ const CHANGE = {
   opco: { slug: 'ghana' }, infrastructureType: 'Wifi',
 }
 const mockDb = {
-  user: { findUnique: vi.fn(async () => ({ id: 'user-req' })) },
+  user: {
+    findUnique: vi.fn(async () => ({ id: 'user-req' })),
+    // Resolves display names for the assignee-diff notifications.
+    findMany: vi.fn(async () => [] as { id: string; name: string | null; email: string }[]),
+  },
   changeRequest: { findUnique: vi.fn(async () => CHANGE) },
   userOpCoAssignment: { findFirst: vi.fn() },
+  // Read outside the transaction to diff the previous assignee set for notifications.
+  changeAssignee: { findMany: vi.fn(async () => [] as { userId: string; role: string }[]) },
   cABMembership: { findFirst: vi.fn() },
   $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
 }
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
+vi.mock('@/server/notify', () => ({
+  notifyEvent: vi.fn().mockResolvedValue(undefined),
+  notifyChange: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/server/approval-authority', () => ({
   isEligibleApprover: vi.fn(async () => false),
@@ -33,6 +43,7 @@ vi.mock('@/server/approval-authority', () => ({
 
 import { setChangeAssignees, setChangeApprovers } from '@/server/actions/assignees'
 import { isEligibleApprover } from '@/server/approval-authority'
+import { notifyChange } from '@/server/notify'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,6 +51,8 @@ beforeEach(() => {
   mockDb.changeRequest.findUnique.mockResolvedValue(CHANGE)
   mockDb.userOpCoAssignment.findFirst.mockResolvedValue(null)
   mockDb.cABMembership.findFirst.mockResolvedValue(null)
+  mockDb.changeAssignee.findMany.mockResolvedValue([])
+  mockDb.user.findMany.mockResolvedValue([])
   vi.mocked(isEligibleApprover).mockResolvedValue(false)
 })
 
@@ -158,5 +171,55 @@ describe('self-nomination guard', () => {
     expect(tx.changeAssignee.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: 'user-req', role: 'implementer' }) })
     )
+  })
+})
+
+describe('assignee diff notifications', () => {
+  it('notifies a newly named approver', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(true)
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
+    mockDb.user.findMany.mockResolvedValue([{ id: 'appr1', name: 'Ada', email: 'ada@c.com' }])
+    await setChangeApprovers('c1', ['appr1'])
+    expect(notifyChange).toHaveBeenCalledWith('assignee_added', 'c1', expect.objectContaining({
+      recipients: [{ userId: 'appr1', email: 'ada@c.com', name: 'Ada' }],
+      role: 'approver',
+    }))
+  })
+
+  it('notifies a removed approver', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(true)
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ userId: 'gone1', role: 'approver' }])
+    mockDb.user.findMany.mockResolvedValue([
+      { id: 'appr1', name: 'Ada', email: 'ada@c.com' },
+      { id: 'gone1', name: 'Kofi', email: 'kofi@c.com' },
+    ])
+    await setChangeApprovers('c1', ['appr1'])
+    expect(notifyChange).toHaveBeenCalledWith('assignee_removed', 'c1', expect.objectContaining({
+      recipients: [{ userId: 'gone1', email: 'kofi@c.com', name: 'Kofi' }],
+    }))
+  })
+
+  it('does not re-notify an approver who was already named', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(true)
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ userId: 'appr1', role: 'approver' }])
+    mockDb.user.findMany.mockResolvedValue([{ id: 'appr1', name: 'Ada', email: 'ada@c.com' }])
+    await setChangeApprovers('c1', ['appr1'])
+    expect(notifyChange).not.toHaveBeenCalled()
+  })
+
+  it('does not notify the actor about their own assignment', async () => {
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
+    mockDb.user.findMany.mockResolvedValue([{ id: 'user-req', name: 'Me', email: 'me@c.com' }])
+    await setChangeAssignees('c1', [{ userId: 'user-req', role: 'implementer' }])
+    expect(notifyChange).not.toHaveBeenCalled()
+  })
+
+  it('notifies an implementer named by someone else', async () => {
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
+    mockDb.user.findMany.mockResolvedValue([{ id: 'impl1', name: 'Eng', email: 'eng@c.com' }])
+    await setChangeAssignees('c1', [{ userId: 'impl1', role: 'implementer' }])
+    expect(notifyChange).toHaveBeenCalledWith('assignee_added', 'c1', expect.objectContaining({
+      role: 'implementer',
+    }))
   })
 })

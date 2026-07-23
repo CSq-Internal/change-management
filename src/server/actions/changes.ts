@@ -4,10 +4,11 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
-import { notifyEvent } from "@/server/notify"
+import { notifyEvent, notifyChange } from "@/server/notify"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { getRoutedApprovers, getNamedApprovers, canUserApproveChange, isEligibleApprover } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
+import type { NotifyEventType } from "@/lib/notifications"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 // Emergency changes implemented under expedited authority must obtain retrospective
@@ -262,6 +263,10 @@ export async function submitChange(id: string) {
     }).catch(() => {})
   }
 
+  // Receipt to the requester. Deliberately not actor-suppressed — the resolver treats
+  // change_submitted as a receipt precisely so the submitter hears it landed.
+  await notifyChange("change_submitted", id, { actorId: user.id }).catch(() => {})
+
   return updated
 }
 
@@ -287,6 +292,9 @@ export async function discardChange(id: string) {
   await db.auditLog.create({
     data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
   })
+
+  await notifyChange("change_cancelled", id, { actorId: user.id }).catch(() => {})
+
   return updated
 }
 
@@ -297,6 +305,13 @@ const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {
   implemented: ["verified"],
   verified: ["closed"],
   rejected: ["draft"],
+}
+
+/** Status transitions that are worth telling people about. Others are silent by design. */
+const LIFECYCLE_EVENT: Partial<Record<ChangeStatus, NotifyEventType>> = {
+  implemented: "change_implemented",
+  closed: "change_closed",
+  draft: "change_reopened",
 }
 
 export async function updateChangeStatus(changeId: string, toStatus: ChangeStatus, note?: string) {
@@ -375,6 +390,14 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   await db.auditLog.create({
     data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
   })
+
+  const lifecycleEvent = LIFECYCLE_EVENT[toStatus]
+  if (lifecycleEvent) {
+    await notifyChange(lifecycleEvent, changeId, {
+      actorId: user.id, actorName: user.name ?? user.email, note,
+    }).catch(() => {})
+  }
+
   return updated
 }
 
@@ -428,5 +451,12 @@ export async function rescheduleChange(id: string, newStartIso: string, newEndIs
       note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
     },
   })
+
+  await notifyChange("change_rescheduled", id, {
+    actorId: user.id,
+    windowFrom: oldWindow,
+    windowTo: `${newStart.toISOString()} – ${newEnd.toISOString()}`,
+  }).catch(() => {})
+
   return updated
 }
