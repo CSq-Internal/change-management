@@ -2,7 +2,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { NOTIFY_EVENT_TYPES, type NotifyEventType, type NotifyChannel } from "@/lib/notifications"
+import { NOTIFY_EVENT_TYPES, DEFAULT_CHANNELS, type NotifyEventType, type NotifyChannel } from "@/lib/notifications"
 
 const CHANNELS: NotifyChannel[] = ["email", "in_app"]
 
@@ -25,7 +25,12 @@ export async function getMyPreferences(): Promise<PrefCell[]> {
   for (const eventType of NOTIFY_EVENT_TYPES) {
     for (const channel of CHANNELS) {
       const key = `${eventType}:${channel}`
-      cells.push({ eventType, channel, enabled: stored.has(key) ? stored.get(key)! : true })
+      // Absent row means "never touched" — fall back to the per-event default, not a
+      // blanket true, or the settings page would advertise sends that never happen.
+      cells.push({
+        eventType, channel,
+        enabled: stored.has(key) ? stored.get(key)! : DEFAULT_CHANNELS[eventType][channel],
+      })
     }
   }
   return cells

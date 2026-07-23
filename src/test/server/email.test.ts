@@ -28,7 +28,7 @@ describe('email localization', () => {
 
   it('status change: localizes the status word in French', async () => {
     const { sendStatusChangeEmail } = await import('@/server/email')
-    await sendStatusChangeEmail({ to: 'a@x.com', name: 'Ada', changeTitle: 'Upgrade', newStatus: 'approved', locale: 'fr' })
+    await sendStatusChangeEmail({ to: 'a@x.com', name: 'Ada', changeTitle: 'Upgrade', newStatus: 'approved', changeId: 'cr-1', locale: 'fr' })
     expect(lastSubject()).toMatch(/approuvé/i)
   })
 

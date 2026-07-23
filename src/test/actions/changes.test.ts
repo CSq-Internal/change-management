@@ -52,7 +52,10 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/server/notify', () => ({
+  notifyEvent: vi.fn().mockResolvedValue(undefined),
+  notifyChange: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/server/approval-authority', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/server/approval-authority')>()
@@ -61,7 +64,7 @@ vi.mock('@/server/approval-authority', async (importOriginal) => {
 
 import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
-import { notifyEvent } from '@/server/notify'
+import { notifyEvent, notifyChange } from '@/server/notify'
 import { isEligibleApprover } from '@/server/approval-authority'
 
 const tx = {
@@ -76,6 +79,8 @@ const tx = {
 
 beforeEach(() => {
   vi.mocked(notifyEvent).mockClear()
+  vi.mocked(notifyChange).mockClear()
+  vi.mocked(notifyChange).mockResolvedValue(undefined)
   mockDb.user.findMany.mockReset()
   mockDb.user.findMany.mockResolvedValue([mockGroupCtoUser])
   mockDb.userOpCoAssignment.findMany.mockReset()
@@ -615,5 +620,39 @@ describe('submitChange — mandatory approver', () => {
     })
     mockDb.changeAssignee.findMany.mockResolvedValue([])
     await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
+  })
+})
+
+describe('lifecycle notifications', () => {
+  it('submitChange sends the requester a receipt', async () => {
+    await submitChange('cr-1')
+    expect(notifyChange).toHaveBeenCalledWith(
+      'change_submitted', 'cr-1', expect.objectContaining({ actorId: 'user-1' })
+    )
+  })
+
+  it('discardChange notifies change_cancelled', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1', opco: { slug: 'ghana' },
+    })
+    await discardChange('cr-1')
+    expect(notifyChange).toHaveBeenCalledWith(
+      'change_cancelled', 'cr-1', expect.objectContaining({ actorId: 'user-1' })
+    )
+  })
+
+  it('a throwing notifyChange does not fail the action', async () => {
+    // Self-contained: changeRequest.findUnique is not reset in beforeEach, so the
+    // preceding discardChange test's minimal draft would otherwise leak in here.
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+      riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network', isEmergency: false,
+      plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+      attachments: [],
+    })
+    vi.mocked(notifyChange).mockRejectedValue(new Error('boom'))
+    await expect(submitChange('cr-1')).resolves.toBeDefined()
   })
 })

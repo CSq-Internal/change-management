@@ -4,7 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { checkCabQuorum } from "@/lib/cab-quorum"
-import { notifyEvent } from "@/server/notify"
+import { notifyEvent, notifyChange } from "@/server/notify"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import { canUserApproveChange } from "@/server/approval-authority"
 
@@ -82,6 +82,11 @@ export async function submitApproval(
         note: comment,
       },
     })
+
+    await notifyChange(decision === "approve" ? "retro_approved" : "retro_rejected", changeId, {
+      actorId: user.id, actorName: user.name ?? user.email, note: comment,
+    }).catch(() => {})
+
     return approval
   }
 

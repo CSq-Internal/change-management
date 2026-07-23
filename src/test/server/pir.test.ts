@@ -19,6 +19,10 @@ const mockDb = {
   $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb)),
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
+vi.mock("@/server/notify", () => ({
+  notifyEvent: vi.fn().mockResolvedValue(undefined),
+  notifyChange: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { submitPostImplementationReview } from "@/server/actions/pir"
 

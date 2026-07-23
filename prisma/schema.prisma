@@ -461,3 +461,16 @@ model AccessRequest {
   @@index([opcoId, status])
   @@index([userId, status])
 }
+
+/// Send ledger. Written after every fan-out attempt; read by the reminder sweep so a
+/// recurring nudge fires at most once per interval. Intentionally relation-free — it is
+/// an append-only audit of what was sent, not a foreign-key-enforced join table.
+model NotificationDispatch {
+  id       String   @id @default(cuid())
+  userId   String
+  changeId String
+  type     String
+  sentAt   DateTime @default(now())
+
+  @@index([userId, changeId, type, sentAt])
+}

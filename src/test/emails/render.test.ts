@@ -12,7 +12,7 @@ import type { Language } from "@/lib/i18n"
 const cases = [
   ["invitation", (lang: Language) => React.createElement(InvitationEmail, { name: "A", tempPassword: "X", existingIdentity: false, assignments: [{ opcoSlug: "ghana", role: "requester" }], lang }), "/login"],
   ["approval", (lang: Language) => React.createElement(ApprovalRequestEmail, { approverName: "A", changeTitle: "T", requesterName: "R", riskLevel: "high", lang }), "/approvals"],
-  ["status", (lang: Language) => React.createElement(StatusChangeEmail, { name: "A", changeTitle: "T", status: "approved", tone: "approved", lang }), "/changes"],
+  ["status", (lang: Language) => React.createElement(StatusChangeEmail, { name: "A", changeTitle: "T", status: "approved", tone: "approved", changeId: "c1", lang }), "/changes/c1"],
   ["sla", (lang: Language) => React.createElement(SlaEscalationEmail, { changeTitle: "T", changeId: "c1", level: 2, riskLevel: "high", tier: "group", lang }), "/changes/c1"],
   ["access", (lang: Language) => React.createElement(AccessRequestEmail, { adminName: "A", requesterName: "R", opcoName: "Ghana", lang }), "/access-requests"],
   ["emergency", (lang: Language) => React.createElement(EmergencyAlertEmail, { changeTitle: "T", changeId: "c1", requesterName: "R", lang }), "/changes/c1"],
