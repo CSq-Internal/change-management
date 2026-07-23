@@ -125,9 +125,10 @@ interface Props {
   change: SerializedChange
   caps: Caps
   assigneeCandidates: { id: string; label: string }[]
+  approverCandidates: { id: string; label: string }[]
 }
 
-export default function ChangeDetailClient({ change, caps, assigneeCandidates }: Props) {
+export default function ChangeDetailClient({ change, caps, assigneeCandidates, approverCandidates }: Props) {
   const { language } = useStore()
   const { toast } = useToast()
   const router = useRouter()
@@ -476,6 +477,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates }:
           <AssigneesDialog
             changeId={change.id}
             candidates={assigneeCandidates}
+            approverCandidates={approverCandidates}
             current={change.assignees.map((a) => ({ userId: a.userId, role: a.role as "approver" | "implementer" }))}
             onClose={() => setAssigneesOpen(false)}
           />

@@ -35,6 +35,8 @@ const mockDb = {
   },
   auditLog: {
     create: vi.fn().mockResolvedValue({}),
+    // Latest `submitted` row — marks the start of the current submission cycle.
+    findFirst: vi.fn().mockResolvedValue(null),
   },
 }
 
@@ -54,6 +56,7 @@ import { canUserApproveChange } from '@/server/approval-authority'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockDb.auditLog.findFirst.mockResolvedValue(null)
 })
 
 // ── checkCabQuorum (pure function, no mocks needed) ──────────────────────────
@@ -204,6 +207,76 @@ describe('submitApproval — duplicate vote guard', () => {
     })
     await submitApproval('cr-1', 'approve', undefined, true)
     expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+})
+
+describe('submitApproval — submission-cycle scoping', () => {
+  const RESUBMITTED_AT = new Date('2026-07-20T10:00:00Z')
+  const BEFORE = new Date('2026-07-19T09:00:00Z')
+  const AFTER = new Date('2026-07-20T11:00:00Z')
+  const PENDING = {
+    id: 'cr-1', status: 'pending', riskLevel: 'low', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, title: 'x',
+  }
+
+  it('lets an approver who rejected a previous cycle vote again after a resubmission', async () => {
+    // reject → reopen → fix → resubmit: the old reject belongs to the previous cycle.
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'reject', isCab: true, decidedAt: BEFORE }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('still rejects a duplicate vote cast within the current cycle', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+  })
+
+  it('does not count a stale pre-rejection approve vote toward quorum', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING, riskLevel: 'high',
+      approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true, decidedAt: BEFORE }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    // The old vote was cast against a previous version of the plan — quorum is not met.
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('counts an approve vote cast in the current cycle toward quorum', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING, riskLevel: 'high',
+      approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true, decidedAt: AFTER }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('treats every approval as current when no submitted audit row exists (legacy data)', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue(null)
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: BEFORE }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
   })
 })
 

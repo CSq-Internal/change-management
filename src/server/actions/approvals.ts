@@ -32,10 +32,23 @@ export async function submitApproval(
   const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
   if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
 
-  // One vote per approver per change. Deliberately application-level rather than a DB
+  // Votes are scoped to the current submission cycle. A change can go
+  // rejected → draft → pending again, and approvals from before the last submission were
+  // cast against a previous version of the plan: they must neither block a fresh vote nor
+  // count toward quorum. Legacy changes with no `submitted` audit row keep every approval.
+  const lastSubmission = await db.auditLog.findFirst({
+    where: { changeId, action: "submitted" },
+    orderBy: { at: "desc" },
+    select: { at: true },
+  })
+  const cycleApprovals = lastSubmission
+    ? change.approvals.filter((a) => a.decidedAt >= lastSubmission.at)
+    : change.approvals
+
+  // One vote per approver per cycle. Deliberately application-level rather than a DB
   // unique constraint: an emergency can legitimately collect a normal approval, be
   // expedited-implemented, then receive a retrospective approval from the same person.
-  if (!isRetrospective && change.approvals.some((a) => a.approverId === user.id)) {
+  if (!isRetrospective && cycleApprovals.some((a) => a.approverId === user.id)) {
     throw new Error("You have already voted on this change")
   }
 
@@ -72,7 +85,7 @@ export async function submitApproval(
     return approval
   }
 
-  const allApprovals = [...change.approvals, { isCab: true, decision, approverId: user.id }]
+  const allApprovals = [...cycleApprovals, { isCab: true, decision, approverId: user.id }]
   const needsCab =
     !isGroupLevelInfra(change.infrastructureType) &&
     (change.riskLevel === "high" || change.riskLevel === "emergency")

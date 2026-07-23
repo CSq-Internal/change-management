@@ -87,7 +87,12 @@ beforeEach(() => {
   mockDb.approverAssignment.findMany.mockReset()
   mockDb.approverAssignment.findMany.mockResolvedValue([])
   mockDb.changeAssignee.findMany.mockReset()
-  mockDb.changeAssignee.findMany.mockResolvedValue([])
+  // submitChange's mandatory-approver gate reads through getNamedApprovers, which queries
+  // changeAssignee.findMany (role: "approver") — not the `assignees` relation on findUnique.
+  // Default to one eligible approver so happy-path submits pass; negative tests override.
+  mockDb.changeAssignee.findMany.mockResolvedValue([
+    { user: { id: 'appr1', name: 'Approver One', email: 'appr1@csquared.com', isActive: true } },
+  ])
   mockDb.changeRequest.update.mockClear()
   tx.changeRequest.create.mockClear()
   tx.changeAssignee.create.mockClear()
@@ -536,7 +541,7 @@ describe('createChange — approverIds', () => {
     expect(mockDb.$transaction).not.toHaveBeenCalled()
   })
 
-  it('throws when an OpCo approver is named on an Equiano change', async () => {
+  it('propagates an eligibility rejection from the shared rule', async () => {
     vi.mocked(isEligibleApprover).mockResolvedValue(false)
     await expect(createChange('ghana', {
       ...baseInput, infrastructureType: 'Equiano IP', approverIds: ['appr1'],
@@ -572,6 +577,7 @@ describe('submitChange — mandatory approver', () => {
 
   it('throws when the change has no named approver', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValue({ ...SUBMITTABLE, assignees: [] })
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
     await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
     expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
   })
@@ -592,6 +598,8 @@ describe('submitChange — mandatory approver', () => {
       ...SUBMITTABLE,
       assignees: [{ userId: 'impl1', role: 'implementer' }],
     })
+    // getNamedApprovers filters on role: "approver", so an implementer-only change yields none.
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
     await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
   })
 
@@ -605,6 +613,7 @@ describe('submitChange — mandatory approver', () => {
         { kind: 'backout_plan' }, { kind: 'solution_document' },
       ],
     })
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
     await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
   })
 })

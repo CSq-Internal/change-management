@@ -72,7 +72,13 @@ export async function canUserApproveChange(args: {
   if (approvers.some((u) => u.id === args.userId)) return true
   if (args.changeId) {
     const named = await getNamedApprovers(args.changeId)
-    if (named.some((u) => u.id === args.userId)) return true
+    // A nomination is not a standing grant. Re-check eligibility rather than trusting the
+    // stored row: the nominee may since have left the CAB or lost their approver role, or
+    // the change's infrastructure type may have moved to Equiano (group-level), which
+    // would otherwise leave an OpCo approver authoritative over group infrastructure.
+    if (named.some((u) => u.id === args.userId)) {
+      return isEligibleApprover(args.userId, args.change.opcoId, args.change.infrastructureType)
+    }
   }
   return false
 }

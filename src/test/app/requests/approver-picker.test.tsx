@@ -54,7 +54,7 @@ describe("request form approver picker", () => {
     renderForm()
     fireEvent.change(infraSelect(), { target: { value: "Wifi" } })
     await waitFor(() =>
-      expect(listEligibleApproversAction).toHaveBeenCalledWith("ghana", "Wifi")
+      expect(listEligibleApproversAction).toHaveBeenCalledWith("ghana", "Wifi", undefined)
     )
     await waitFor(() => expect(screen.getByText("ada@csquared.com")).toBeInTheDocument())
   })
@@ -73,7 +73,7 @@ describe("request form approver picker", () => {
     fireEvent.change(infra, { target: { value: "Equiano IP" } })
 
     await waitFor(() =>
-      expect(listEligibleApproversAction).toHaveBeenCalledWith("ghana", "Equiano IP")
+      expect(listEligibleApproversAction).toHaveBeenCalledWith("ghana", "Equiano IP", undefined)
     )
     await waitFor(() => expect(screen.getByText("cto@csquared.com")).toBeInTheDocument())
     expect(screen.queryByText("ada@csquared.com")).not.toBeInTheDocument()
@@ -200,7 +200,7 @@ describe("submit button gating", () => {
     fireEvent.change(infra, { target: { value: "Equiano IP" } })
 
     await waitFor(() =>
-      expect(listEligibleApproversAction).toHaveBeenCalledWith("ghana", "Equiano IP")
+      expect(listEligibleApproversAction).toHaveBeenCalledWith("ghana", "Equiano IP", undefined)
     )
     expect(submitButton()).toBeDisabled()
   })

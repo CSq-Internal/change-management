@@ -148,7 +148,7 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   useEffect(() => {
     if (!approverScope) return
     let cancelled = false
-    listEligibleApproversAction(opcoSlug, infrastructureType)
+    listEligibleApproversAction(opcoSlug, infrastructureType, persistedId ?? undefined)
       .then((rows) => {
         if (cancelled) return
         setLoadedApprovers({ scope: approverScope, rows })
@@ -162,9 +162,12 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
       .catch(() => {
         if (cancelled) return
         setLoadedApprovers({ scope: approverScope, rows: null })
+        // A failed load says nothing about whether the selection is still valid, so the
+        // "cleared" notice from an earlier scope must not linger beside the error.
+        setApproversCleared(false)
       })
     return () => { cancelled = true }
-  }, [approverScope, opcoSlug, infrastructureType])
+  }, [approverScope, opcoSlug, infrastructureType, persistedId])
 
   const isEmergency = riskLevel === "emergency"
 
@@ -561,7 +564,7 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
               onClick={() => void save({ submit: true })}
               disabled={
                 isSaving ||
-                (infrastructureType !== "" && (approverLoad !== "ready" || approverIds.length === 0))
+                (approverScope !== "" && (approverLoad !== "ready" || approverIds.length === 0))
               }
               className="w-full sm:w-auto"
             >

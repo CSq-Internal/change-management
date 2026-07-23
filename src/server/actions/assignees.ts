@@ -70,9 +70,10 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
   const { db, me, change } = await loadChangeForAssigneeWrite(changeId)
 
   const approverIds = assignees.filter((a) => a.role === "approver").map((a) => a.userId)
-  // A change past draft must never be left without an approver — otherwise a requester
-  // could submit with one and immediately strip it back out.
-  if (change.status !== "draft" && approverIds.length === 0) {
+  // A change awaiting approval must never be left without an approver — otherwise a
+  // requester could submit with one and immediately strip it back out. Scoped to pending:
+  // naming an implementer on an already-approved change is routine and must not be blocked.
+  if (change.status === "pending" && approverIds.length === 0) {
     throw new Error(NO_APPROVER_ERROR)
   }
   await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
@@ -96,7 +97,7 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
 export async function setChangeApprovers(changeId: string, approverIds: string[]) {
   const { db, me, change } = await loadChangeForAssigneeWrite(changeId)
 
-  if (change.status !== "draft" && approverIds.length === 0) {
+  if (change.status === "pending" && approverIds.length === 0) {
     throw new Error(NO_APPROVER_ERROR)
   }
   await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)

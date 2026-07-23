@@ -72,7 +72,7 @@ describe('setChangeAssignees — eligibility delegation', () => {
     expect(isEligibleApprover).toHaveBeenCalledWith('appr1', 'opco-1', 'Wifi')
   })
 
-  it('rejects an OpCo approver on an Equiano change (regression: routing leak)', async () => {
+  it('propagates an eligibility rejection from the shared rule', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValue({ ...CHANGE, infrastructureType: 'Equiano IP' })
     vi.mocked(isEligibleApprover).mockResolvedValue(false)
     await expect(setChangeAssignees('c1', [{ userId: 'appr1', role: 'approver' }]))

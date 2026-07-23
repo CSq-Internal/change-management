@@ -204,9 +204,15 @@ export async function submitChange(id: string) {
 
   // At least one approver must be named before a change can enter the approval flow.
   // Requester-named approvers are additive — the routed CAB keeps its authority — but
-  // the nomination itself is mandatory.
-  const namedApprovers = change.assignees.filter((a) => a.role === "approver")
-  if (namedApprovers.length === 0) {
+  // the nomination itself is mandatory. Count only nominees who can still act: a row for
+  // a deactivated or since-ineligible user would pass a bare count while leaving the
+  // change in pending with nobody able to approve it, which is what this gate prevents.
+  const namedApprovers = await getNamedApprovers(id)
+  let actionableApprovers = 0
+  for (const a of namedApprovers) {
+    if (await isEligibleApprover(a.id, change.opcoId, change.infrastructureType)) actionableApprovers++
+  }
+  if (actionableApprovers === 0) {
     throw new Error("Cannot submit: at least one approver must be named")
   }
 

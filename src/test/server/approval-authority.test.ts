@@ -104,9 +104,27 @@ describe("canUserApproveChange", () => {
   it("is true for a group admin", async () => {
     expect(await canUserApproveChange({ userId: "x", realmRoles: ["group_admin"], change: wifiChange })).toBe(true)
   })
-  it("is true for a named approver-role assignee", async () => {
+  it("is true for a named approver-role assignee who is still eligible", async () => {
     mockDb.changeAssignee.findMany.mockResolvedValue([{ user: u("named1") }])
+    // Still holds the OpCo approver role, so the eligibility re-check passes.
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: u("named1") }])
     expect(await canUserApproveChange({ userId: "named1", realmRoles: [], change: wifiChange, changeId: "c1" })).toBe(true)
+  })
+  it("is false for a named assignee who has since lost eligibility", async () => {
+    // The nomination row survives, but they are no longer on the CAB and hold no
+    // approver/admin role — a nomination is not a standing grant.
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ user: u("named1") }])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
+    mockDb.cABMembership.findMany.mockResolvedValue([])
+    expect(await canUserApproveChange({ userId: "named1", realmRoles: [], change: wifiChange, changeId: "c1" })).toBe(false)
+  })
+  it("is false for an OpCo approver named on a change since moved to Equiano infra", async () => {
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ user: u("opcoAppr") }])
+    // Equiano is group-level: the OpCo role no longer confers authority, and the group
+    // CAB is empty. Without revalidation the stale nomination would still authorise them.
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: u("opcoAppr") }])
+    mockDb.cABMembership.findMany.mockResolvedValue([])
+    expect(await canUserApproveChange({ userId: "opcoAppr", realmRoles: [], change: equianoChange, changeId: "c1" })).toBe(false)
   })
   it("is false for an unrelated user", async () => {
     expect(await canUserApproveChange({ userId: "nope", realmRoles: [], change: wifiChange, changeId: "c1" })).toBe(false)
