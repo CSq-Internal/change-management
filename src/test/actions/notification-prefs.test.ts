@@ -13,13 +13,15 @@ const mockDb = {
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 
 import { getMyPreferences, setMyPreference } from '@/server/actions/notification-prefs'
+import { NOTIFY_EVENT_TYPES } from '@/lib/notifications'
 
 beforeEach(() => { vi.clearAllMocks(); mockDb.user.findUnique.mockResolvedValue({ id: 'user-me' }) })
 
 describe('getMyPreferences', () => {
   it('returns the full matrix with defaults on and stored overrides applied', async () => {
     const prefs = await getMyPreferences()
-    expect(prefs).toHaveLength(10)
+    // Derived, not hardcoded — the matrix grows with the event catalogue.
+    expect(prefs).toHaveLength(NOTIFY_EVENT_TYPES.length * 2)
     const approvedEmail = prefs.find((p) => p.eventType === 'change_approved' && p.channel === 'email')
     expect(approvedEmail!.enabled).toBe(false)
     const approvedInApp = prefs.find((p) => p.eventType === 'change_approved' && p.channel === 'in_app')

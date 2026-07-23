@@ -32,6 +32,10 @@ function emailFor(type: NotifyEventType, r: NotifyRecipient, change: { id: strin
       return sendSlaEscalationEmail({ to: r.email, changeTitle: change.title, changeId: change.id, level: ctx.level ?? 1, riskLevel: ctx.riskLevel ?? "", locale })
     case "emergency_submitted":
       return sendEmergencyAlertEmail({ to: r.email, changeTitle: change.title, changeId: change.id, requesterName: ctx.requesterName ?? "", locale })
+    default:
+      // The expanded event types render through a generic template, wired up when
+      // notifyChange lands. Nothing dispatches them yet, so there is nothing to send.
+      return Promise.resolve()
   }
 }
 
