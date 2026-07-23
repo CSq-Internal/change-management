@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { getChange } from "@/server/actions/changes"
 import { getPrisma } from "@/server/db"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, canAudit } from "@/lib/permissions"
-import { canUserApproveChange } from "@/server/approval-authority"
+import { canUserApproveChange, listEligibleApprovers } from "@/server/approval-authority"
 import ChangeDetailClient from "./change-detail-client"
 import type { SerializedChange, Caps } from "./change-detail-client"
 
@@ -102,12 +102,13 @@ export default async function ChangeDetailPage({
     soleApproverIsMe,
   }
 
-  const assigneeCandidates = Array.from(new Map(
-    (await db.userOpCoAssignment.findMany({
-      where: { opco: { slug }, isActive: true },
-      include: { user: { select: { id: true, name: true, email: true } } },
-    })).map((a) => [a.user.id, { id: a.user.id, label: a.user.name ?? a.user.email }])
-  ).values())
+  // Approver-eligible users for this change's scope — group CAB only for Equiano infra.
+  // The requester is excluded: submitApproval rejects self-approval, so offering them
+  // would be a dead end. Uses the same rule setChangeAssignees enforces, so the picker
+  // can never offer someone the save will refuse.
+  const assigneeCandidates = (
+    await listEligibleApprovers(change.opcoId, change.infrastructureType, change.requesterId)
+  ).map((u) => ({ id: u.id, label: u.name ?? u.email }))
 
   return <ChangeDetailClient change={serialize(change)} caps={caps} assigneeCandidates={assigneeCandidates} />
 }
