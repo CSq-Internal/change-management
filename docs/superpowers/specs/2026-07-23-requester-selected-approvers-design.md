@@ -50,9 +50,10 @@ does exist offers the wrong people.
 - Eligibility gets **one implementation**, in `approval-authority.ts`, used by the picker,
   by `setChangeAssignees`, and by `createChange`. The picker can then never offer someone
   the server will reject.
-- The picker moves into the request form and is **optional**. Submission is not blocked
-  when no approver is named, because an OpCo with no configured eligible approver would
-  otherwise be unable to raise a request at all.
+- The picker moves into the request form and naming at least one approver is
+  **mandatory at submit**. Drafts may still be saved without approvers, so a requester can
+  fill the form in stages, but `submitChange` refuses a change with no named approver.
+  See *Risks* for the operational consequence.
 
 ## Eligibility rule
 
@@ -115,6 +116,31 @@ The picker re-queries whenever the **infrastructure type** field changes. Select
 Any already-selected approvers that are not in the new list are cleared, with a visible
 notice — silently dropping them would let a requester believe they had nominated someone.
 
+### Mandatory selection
+
+The invariant is *a change in `pending` or beyond has at least one named approver*. It is
+enforced at three points:
+
+1. **`submitChange`** — refuses when the change has no `ChangeAssignee` with
+   `role: "approver"`, alongside the existing required-field and required-document checks.
+   This is the authoritative gate; it holds regardless of which client submitted.
+2. **`setChangeAssignees`** — refuses to remove the last named approver when the change's
+   status is not `draft`. Without this, a requester could submit with an approver and then
+   strip it back out.
+3. **The request form** — marks Approvers required and disables Submit until one is
+   chosen. Client-side only; a convenience, not the guarantee.
+
+`createChange` deliberately does **not** require `approverIds`. Blocking draft creation
+would prevent a requester from saving partial work, and the draft state is not yet subject
+to approval.
+
+Because selection is now mandatory, the picker's empty state carries weight. When
+`listEligibleApproversForScope` returns nobody, the form shows an explicit blocking
+message naming the scope — *"No eligible approvers are configured for Ghana. Contact your
+OpCo administrator."*, or for Equiano infra *"No group CAB members are configured."* — so
+the requester is told what is wrong and who fixes it, rather than facing a Submit button
+that silently refuses.
+
 ### Duplicate-vote guard
 
 `ChangeAssignee` already has `@@unique([changeId, userId])`, so the same person cannot be
@@ -137,8 +163,33 @@ same change from the same user, **unless** this is the retrospective stage
   is written, so no orphaned draft.
 - An approver deactivated between picker load and submit → caught by the same validation;
   the error names the user so the requester can correct it.
-- The picker failing to load (network/DB) → renders empty with an inline error, and the
-  form still submits. Approver nomination is optional, so it must never block a request.
+- The picker failing to load (network/DB) → renders an inline error with a retry, and
+  Submit stays disabled. Since selection is mandatory, a failed load must not be
+  indistinguishable from "this scope genuinely has no approvers".
+- `submitChange` with no named approver → throws
+  `"Cannot submit: at least one approver must be named"`, matching the existing
+  `"Cannot submit: required field(s) missing: …"` phrasing so the form surfaces it the
+  same way.
+
+## Risks
+
+**Mandatory selection can block an urgent submission.** If an OpCo has no eligible
+approver configured — no `approver`/`admin` assignment and an empty OpCo CAB — nobody in
+that OpCo can submit a change at all, including an emergency during a live incident. The
+same applies to Equiano infra if the group CAB is empty.
+
+This is the accepted trade-off of the mandatory rule, and it is arguably correct: a change
+with no possible approver cannot progress anyway, so failing loudly at submit beats
+sitting in `pending` unnoticed. Two mitigations are in scope:
+
+- the blocking empty-state message above names the scope and the responsible admin, so the
+  fix is obvious rather than mysterious;
+- an OpCo with zero eligible approvers is a pre-existing configuration fault that this
+  change makes visible rather than creates.
+
+If the incident risk proves unacceptable in practice, the escape hatch is a one-line
+exemption in `submitChange` for `isEmergency` changes, which already route to a CAB
+automatically. It is deliberately **not** included now.
 
 ## Testing
 
@@ -151,12 +202,19 @@ same change from the same user, **unless** this is the retrospective stage
 
 `src/test/actions/changes.test.ts` (extend)
 - `createChange` with `approverIds` writes `ChangeAssignee` rows with `role: "approver"`
+- `createChange` **without** `approverIds` still succeeds — drafts are exempt
 - an ineligible id throws and writes no `ChangeRequest`
 - an OpCo approver id on an Equiano change throws
+- `submitChange` throws when the change has no named approver
+- `submitChange` succeeds with one named approver
+- an emergency change with no named approver is **also** blocked (documents the
+  deliberate absence of an emergency exemption — see *Risks*)
 
 `src/test/actions/assignees.test.ts` (extend)
 - the eligibility rule still holds after the refactor to the shared function
 - Equiano change rejects an OpCo approver (regression test for the leak in Problem #4)
+- removing the last named approver is rejected when status is `pending`
+- removing the last named approver is allowed when status is `draft`
 
 `src/test/actions/approvals.test.ts` (extend)
 - a second vote from the same user on a pending change is rejected
@@ -166,8 +224,14 @@ same change from the same user, **unless** this is the retrospective stage
 Request-form render test
 - changing infrastructure type to `Equiano IP` re-queries the picker
 - selected approvers not in the refreshed list are cleared and a notice is shown
+- Submit is disabled with no approver selected, enabled with one
+- an empty eligible list renders the scope-specific blocking message
+- a failed picker load renders an error with retry, and Submit stays disabled
 
 ## Scope
 
-~6 files, no migration. Excluded: any change to quorum size, delegation semantics, or the
-approval-matrix admin UI.
+~7 files, no migration. New user-visible strings (picker label, required-approver error,
+empty-state messages, picker-cleared notice) go through `src/lib/i18n.ts` in EN and FR
+like every other string in the app.
+
+Excluded: any change to quorum size, delegation semantics, or the approval-matrix admin UI.
