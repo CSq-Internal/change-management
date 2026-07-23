@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockDb = {
   notificationPreference: { findMany: vi.fn().mockResolvedValue([]) },
+  notificationDispatch: { create: vi.fn().mockResolvedValue({}) },
   notification: { create: vi.fn().mockResolvedValue({}) },
   chatWebhook: { findMany: vi.fn().mockResolvedValue([]) },
   user: { findMany: vi.fn().mockResolvedValue([]) },
