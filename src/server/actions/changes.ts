@@ -6,7 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { notifyEvent } from "@/server/notify"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
-import { getRoutedApprovers, getNamedApprovers, canUserApproveChange } from "@/server/approval-authority"
+import { getRoutedApprovers, getNamedApprovers, canUserApproveChange, isEligibleApprover } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
@@ -30,6 +30,8 @@ type CreateChangeInput = {
   plannedStart?: Date
   plannedEnd?: Date
   isEmergency?: boolean
+  /** Requester-nominated approvers. Additive — routed CAB approvers keep their authority. */
+  approverIds?: string[]
 }
 
 export async function getChange(id: string) {
@@ -109,12 +111,26 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   const slaDeadline = new Date()
   slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
 
-  const change = await db.changeRequest.create({
-    data: { ...data, opcoId: opco.id, requesterId: user.id, status: "draft", slaDeadline },
-  })
+  const { approverIds = [], ...changeData } = data
 
-  await db.auditLog.create({
-    data: { changeId: change.id, actorId: user.id, action: "created", toStatus: "draft" },
+  // Validate before opening the transaction so a bad id leaves nothing behind.
+  for (const userId of approverIds) {
+    if (!(await isEligibleApprover(userId, opco.id, data.infrastructureType))) {
+      throw new Error("Assignee is not an eligible approver for this change's scope")
+    }
+  }
+
+  const change = await db.$transaction(async (tx) => {
+    const created = await tx.changeRequest.create({
+      data: { ...changeData, opcoId: opco.id, requesterId: user.id, status: "draft", slaDeadline },
+    })
+    for (const userId of approverIds) {
+      await tx.changeAssignee.create({ data: { changeId: created.id, userId, role: "approver" } })
+    }
+    await tx.auditLog.create({
+      data: { changeId: created.id, actorId: user.id, action: "created", toStatus: "draft" },
+    })
+    return created
   })
 
   return change

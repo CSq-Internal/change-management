@@ -44,6 +44,7 @@ const mockDb = {
   approverDelegation: { findMany: vi.fn().mockResolvedValue([]) },
   approverAssignment: { findMany: vi.fn().mockResolvedValue([]) },
   changeAssignee: { findMany: vi.fn().mockResolvedValue([]) },
+  $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
 }
 
 vi.mock('@/server/db', () => ({
@@ -52,9 +53,25 @@ vi.mock('@/server/db', () => ({
 
 vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
 
+vi.mock('@/server/approval-authority', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/server/approval-authority')>()
+  return { ...actual, isEligibleApprover: vi.fn(async () => true) }
+})
+
 import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
 import { notifyEvent } from '@/server/notify'
+import { isEligibleApprover } from '@/server/approval-authority'
+
+const tx = {
+  changeRequest: {
+    create: vi.fn().mockImplementation(({ data }: { data: unknown }) =>
+      Promise.resolve({ id: 'cr-new', status: 'draft', ...(data as object) })
+    ),
+  },
+  changeAssignee: { create: vi.fn().mockResolvedValue({}) },
+  auditLog: { create: vi.fn().mockResolvedValue({}) },
+}
 
 beforeEach(() => {
   vi.mocked(notifyEvent).mockClear()
@@ -70,6 +87,11 @@ beforeEach(() => {
   mockDb.approverAssignment.findMany.mockResolvedValue([])
   mockDb.changeAssignee.findMany.mockReset()
   mockDb.changeAssignee.findMany.mockResolvedValue([])
+  tx.changeRequest.create.mockClear()
+  tx.changeAssignee.create.mockClear()
+  tx.auditLog.create.mockClear()
+  mockDb.$transaction.mockClear()
+  vi.mocked(isEligibleApprover).mockResolvedValue(true)
 })
 
 const ugandaSession = {
@@ -473,5 +495,53 @@ describe('discardChange', () => {
       id: 'cr-1', status: 'approved', opcoId: 'opco-1', requesterId: 'user-1', opco: { slug: 'ghana' },
     })
     await expect(discardChange('cr-1')).rejects.toThrow(/Only draft/)
+  })
+})
+
+describe('createChange — approverIds', () => {
+  const baseInput = {
+    title: 'Router update', description: 'BGP config',
+    category: 'config' as const, riskLevel: 'low' as const,
+    contactEmail: 'test@csquared.com', infrastructureType: 'Wifi',
+  }
+
+  it('writes an approver ChangeAssignee row per id', async () => {
+    await createChange('ghana', { ...baseInput, approverIds: ['appr1', 'appr2'] })
+    expect(tx.changeAssignee.create).toHaveBeenCalledTimes(2)
+    expect(tx.changeAssignee.create).toHaveBeenCalledWith({
+      data: { changeId: 'cr-new', userId: 'appr1', role: 'approver' },
+    })
+  })
+
+  it('validates each id against the shared eligibility rule', async () => {
+    await createChange('ghana', { ...baseInput, approverIds: ['appr1'] })
+    expect(isEligibleApprover).toHaveBeenCalledWith('appr1', 'opco-1', 'Wifi')
+  })
+
+  it('succeeds with no approverIds — drafts are exempt', async () => {
+    const out = await createChange('ghana', baseInput)
+    expect(out.id).toBe('cr-new')
+    expect(tx.changeAssignee.create).not.toHaveBeenCalled()
+  })
+
+  it('throws on an ineligible id and writes no ChangeRequest', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(false)
+    await expect(createChange('ghana', { ...baseInput, approverIds: ['rando'] }))
+      .rejects.toThrow(/not an eligible approver/i)
+    expect(tx.changeRequest.create).not.toHaveBeenCalled()
+    expect(mockDb.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('throws when an OpCo approver is named on an Equiano change', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(false)
+    await expect(createChange('ghana', {
+      ...baseInput, infrastructureType: 'Equiano IP', approverIds: ['appr1'],
+    })).rejects.toThrow(/not an eligible approver/i)
+  })
+
+  it('does not strip approverIds into the ChangeRequest row', async () => {
+    await createChange('ghana', { ...baseInput, approverIds: ['appr1'] })
+    const created = tx.changeRequest.create.mock.calls[0][0] as { data: Record<string, unknown> }
+    expect(created.data).not.toHaveProperty('approverIds')
   })
 })
