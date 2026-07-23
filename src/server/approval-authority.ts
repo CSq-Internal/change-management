@@ -1,6 +1,6 @@
 import { getPrisma } from "@/server/db"
 import { isGroupAdmin } from "@/lib/permissions"
-import { routedCabOpcoId } from "@/lib/approver-routing"
+import { routedCabOpcoId, isGroupLevelInfra } from "@/lib/approver-routing"
 
 type ChangeForAuth = { infrastructureType: string; opcoId: string }
 type ApproverUser = { id: string; name: string | null; email: string }
@@ -101,4 +101,70 @@ export async function listApprovableChanges(args: { userId: string; realmRoles: 
     }
   }
   return visible
+}
+
+/**
+ * Users a requester may name as an approver on a change in this scope.
+ *
+ * Equiano infra is group-level: the group CAB and nobody else. All other infra is
+ * per-OpCo: the OpCo CAB plus resident approver/admin role holders.
+ *
+ * Delegates are deliberately absent — a delegate's authority is time-boxed and already
+ * resolved by getRoutedApprovers at notification time. Naming one directly would create
+ * a second grant that outlives the delegation window.
+ */
+export async function listEligibleApprovers(
+  opcoId: string,
+  infrastructureType: string,
+  excludeUserId?: string,
+): Promise<ApproverUser[]> {
+  const db = getPrisma()
+  const groupLevel = isGroupLevelInfra(infrastructureType)
+
+  const cab = await db.cABMembership.findMany({
+    where: { opcoId: groupLevel ? null : opcoId, isActive: true },
+    include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
+  })
+  const candidates = cab.map((m) => m.user)
+
+  if (!groupLevel) {
+    const roleHolders = await db.userOpCoAssignment.findMany({
+      where: { opcoId, isActive: true, role: { in: ["approver", "admin"] } },
+      include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
+    })
+    candidates.push(...roleHolders.map((a) => a.user))
+  }
+
+  const seen = new Set<string>()
+  const out: ApproverUser[] = []
+  for (const u of candidates) {
+    if (!u.isActive) continue
+    if (u.id === excludeUserId) continue
+    if (seen.has(u.id)) continue
+    seen.add(u.id)
+    out.push({ id: u.id, name: u.name, email: u.email })
+  }
+  return out
+}
+
+/** Slug-keyed variant, for callers that have an OpCo slug rather than an id (the request form). */
+export async function listEligibleApproversForScope(
+  opcoSlug: string,
+  infrastructureType: string,
+  excludeUserId?: string,
+): Promise<ApproverUser[]> {
+  const db = getPrisma()
+  const opco = await db.opCo.findUnique({ where: { slug: opcoSlug }, select: { id: true } })
+  if (!opco) return []
+  return listEligibleApprovers(opco.id, infrastructureType, excludeUserId)
+}
+
+/** Membership test against the same list, so the check can never diverge from the picker. */
+export async function isEligibleApprover(
+  userId: string,
+  opcoId: string,
+  infrastructureType: string,
+): Promise<boolean> {
+  const eligible = await listEligibleApprovers(opcoId, infrastructureType)
+  return eligible.some((u) => u.id === userId)
 }
