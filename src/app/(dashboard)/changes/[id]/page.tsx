@@ -4,6 +4,7 @@ import { getChange } from "@/server/actions/changes"
 import { getPrisma } from "@/server/db"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, canAudit } from "@/lib/permissions"
 import { canUserApproveChange, listEligibleApprovers } from "@/server/approval-authority"
+import { hasVotedSince } from "@/lib/approval-cycle"
 import ChangeDetailClient from "./change-detail-client"
 import type { SerializedChange, Caps } from "./change-detail-client"
 
@@ -96,6 +97,21 @@ export default async function ChangeDetailPage({
   // cannot also implement. Surfaced so the client can warn before calling the server.
   const approveVoters = [...new Set(change.approvals.filter((a) => a.decision === "approve").map((a) => a.approverId))]
   const soleApproverIsMe = !!meUser && approveVoters.length === 1 && approveVoters[0] === meUser.id
+  // Mirrors the stage scoping in submitApproval (@/lib/approval-cycle) so the page never
+  // offers a decision the server would refuse. auditTrail is ordered `at: asc`, so the
+  // last `submitted` entry opens the current cycle; an expedited change awaiting its
+  // retrospective is instead scoped from implementedAt.
+  const awaitingRetroDecision =
+    change.status === "implemented" && change.expedited && !change.retroApprovedAt
+  const lastSubmittedAt =
+    change.auditTrail.filter((e) => e.action === "submitted").map((e) => e.at).pop() ?? null
+  const hasVotedThisStage =
+    !!meUser &&
+    hasVotedSince(
+      change.approvals,
+      awaitingRetroDecision ? change.implementedAt : lastSubmittedAt,
+      meUser.id
+    )
   const caps: Caps = {
     isRequester: change.requester.keycloakId === me.keycloakId,
     canApprove: canApproveThis,
@@ -104,6 +120,7 @@ export default async function ChangeDetailPage({
     canExportEvidence: isGroupLevel(me.realmRoles) || canAudit(me.organizations, me.realmRoles, slug),
     canManageAssignees: (change.requester.keycloakId === me.keycloakId) || isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
     soleApproverIsMe,
+    hasVotedThisStage,
   }
 
   // The dialog draws from two pools. Implementers may be any active user in the OpCo —
