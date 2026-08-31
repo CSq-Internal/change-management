@@ -18,7 +18,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@googleapis/drive": "^20.2.0",
+    "@googleapis/drive": "^21.0.0",
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",
     "@prisma/adapter-pg": "^7.8.0",
