@@ -26,7 +26,7 @@
     "@radix-ui/react-separator": "^1.1.11",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
-    "@react-pdf/renderer": "^4.5.1",
+    "@react-pdf/renderer": "^4.9.0",
     "class-variance-authority": "^0.7.1",
     "dayjs": "^1.11.21",
     "google-auth-library": "^10.9.0",
