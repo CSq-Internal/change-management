@@ -7,6 +7,7 @@ import { checkCabQuorum } from "@/lib/cab-quorum"
 import { notifyEvent, notifyChange } from "@/server/notify"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
 import { canUserApproveChange } from "@/server/approval-authority"
+import { votesSince, hasVotedSince } from "@/lib/approval-cycle"
 
 export async function submitApproval(
   changeId: string,
@@ -32,23 +33,25 @@ export async function submitApproval(
   const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
   if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
 
-  // Votes are scoped to the current submission cycle. A change can go
-  // rejected → draft → pending again, and approvals from before the last submission were
-  // cast against a previous version of the plan: they must neither block a fresh vote nor
-  // count toward quorum. Legacy changes with no `submitted` audit row keep every approval.
+  // Votes are scoped to the stage they were cast in — see @/lib/approval-cycle. A change
+  // can go rejected → draft → pending again, and approvals from before the last
+  // submission were cast against a previous version of the plan: they must neither block
+  // a fresh vote nor count toward quorum.
   const lastSubmission = await db.auditLog.findFirst({
     where: { changeId, action: "submitted" },
     orderBy: { at: "desc" },
     select: { at: true },
   })
-  const cycleApprovals = lastSubmission
-    ? change.approvals.filter((a) => a.decidedAt >= lastSubmission.at)
-    : change.approvals
+  const cycleApprovals = votesSince(change.approvals, lastSubmission?.at ?? null)
 
-  // One vote per approver per cycle. Deliberately application-level rather than a DB
+  // One vote per approver per stage. Deliberately application-level rather than a DB
   // unique constraint: an emergency can legitimately collect a normal approval, be
   // expedited-implemented, then receive a retrospective approval from the same person.
-  if (!isRetrospective && cycleApprovals.some((a) => a.approverId === user.id)) {
+  // The retrospective stage opens at `implementedAt`, so that later vote is admitted
+  // while a *second* retrospective vote from the same person is not — without this the
+  // retrospective path had no cap at all and each repeat rewrote `retroApprovedAt`.
+  const stageStart = isRetrospective ? change.implementedAt : (lastSubmission?.at ?? null)
+  if (hasVotedSince(change.approvals, stageStart, user.id)) {
     throw new Error("You have already voted on this change")
   }
 

@@ -77,6 +77,8 @@ export type Caps = {
   canExportEvidence: boolean
   canManageAssignees: boolean
   soleApproverIsMe: boolean
+  /** Already voted in the current decision stage — the server would refuse a second. */
+  hasVotedThisStage: boolean
 }
 
 // Friendly labels for the five required documents (matches the request form).
@@ -146,8 +148,10 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     edit: change.status === "draft" && (caps.isRequester || caps.isAdmin),
     // pending → normal approval; an expedited emergency awaiting its retrospective
     // approval (implemented, not yet retro-approved) reuses the same approve/reject path.
-    approve: canDecide && caps.canApprove && !caps.isRequester,
-    reject: canDecide && caps.canApprove && !caps.isRequester,
+    // hasVotedThisStage: one vote per approver per stage. Without this the buttons stayed
+    // live after voting and every click wrote another Approval row.
+    approve: canDecide && caps.canApprove && !caps.isRequester && !caps.hasVotedThisStage,
+    reject: canDecide && caps.canApprove && !caps.isRequester && !caps.hasVotedThisStage,
     // approved → normal implement; an emergency may be implemented straight from
     // pending (expedited), obtaining its approval retrospectively. Hidden from the
     // sole approver — implementer SoD forbids them implementing (server enforces it

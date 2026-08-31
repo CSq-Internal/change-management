@@ -206,7 +206,67 @@ describe('submitApproval — duplicate vote guard', () => {
     mockDb.changeRequest.findUnique.mockResolvedValue({
       ...PENDING,
       status: 'implemented', isEmergency: true, expedited: true,
-      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true }],
+      implementedAt: new Date('2026-07-21T10:00:00Z'),
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true,
+        decidedAt: new Date('2026-07-20T09:00:00Z'),
+      }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+})
+
+describe('submitApproval — retrospective stage scoping', () => {
+  const IMPLEMENTED_AT = new Date('2026-07-21T10:00:00Z')
+  const BEFORE_IMPL = new Date('2026-07-20T09:00:00Z')
+  const AFTER_IMPL = new Date('2026-07-21T11:00:00Z')
+  const EXPEDITED = {
+    id: 'cr-1', status: 'implemented', riskLevel: 'emergency', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, title: 'x',
+    isEmergency: true, expedited: true, implementedAt: IMPLEMENTED_AT,
+  }
+
+  it('rejects a second retrospective vote from the same approver', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
+      }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+  })
+
+  it('does not let a repeated retrospective vote overwrite retroApprovedAt', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
+      }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true)).rejects.toThrow()
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('allows a retrospective vote when the approver only voted before implementation', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: BEFORE_IMPL,
+      }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+
+  it('allows a retrospective vote from an approver who has not voted in this stage', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'someone-else-entirely', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
+      }],
     })
     await submitApproval('cr-1', 'approve', undefined, true)
     expect(mockDb.approval.create).toHaveBeenCalled()
