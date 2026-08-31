@@ -1,10 +1,17 @@
 # Dependabot configuration.
 # The "npm" ecosystem covers pnpm — Dependabot reads pnpm-lock.yaml (there is no
 # package-lock.json in this repo; it was removed during the pnpm migration).
+#
+# target-branch is `dev`, NOT the repo default (`prod`). Without it Dependabot branches
+# off prod, and updating one means merging prod into the dependabot branch and then into
+# dev — which inverts the integration direction and, on 2026-08-31, made git take the same
+# lockfile block from both merge sides. The result was a pnpm-lock.yaml with duplicated
+# mapping keys that no job could install. dev is where integration happens; branch there.
 version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -12,8 +19,28 @@ updates:
       # Batch low-risk dev/tooling bumps into a single PR to reduce noise.
       dev-dependencies:
         dependency-type: "development"
+      # react and react-dom are exact-pinned and React refuses to run on a mismatched
+      # pair, so they must move together or not at all. Same for next and the eslint
+      # config that configures it.
+      react:
+        patterns: ["react", "react-dom"]
+      next:
+        patterns: ["next", "eslint-config-next"]
+    ignore:
+      # ESLint 10 removed context.getFilename(); eslint-plugin-react (via
+      # eslint-config-next) still calls it and crashes on load. Rejected once already,
+      # then re-proposed and merged on 2026-08-31, which broke lint again. Stay on 9
+      # until eslint-config-next ships ESLint 10-ready plugins.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 removed ts.ModuleKind.Cjs, which
+      # @typescript-eslint/typescript-estree reads at load time — lint crashes. Revisit
+      # when @typescript-eslint ships TS 7 support.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
