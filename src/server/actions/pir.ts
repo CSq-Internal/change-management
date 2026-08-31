@@ -3,6 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
+import { notifyChange } from "@/server/notify"
 import { isGroupAdmin, hasRoleInOpCo, canApprove } from "@/lib/permissions"
 import type { PirOutcome } from "@prisma/client"
 
@@ -41,7 +42,7 @@ export async function submitPostImplementationReview(
     throw new Error("This emergency change needs a retrospective approval before it can be verified")
   }
 
-  return db.$transaction(async (tx) => {
+  const pir = await db.$transaction(async (tx) => {
     const pir = await tx.postImplementationReview.create({
       data: {
         changeId,
@@ -61,4 +62,13 @@ export async function submitPostImplementationReview(
     })
     return pir
   })
+
+  // After the transaction commits — a notification must never hold a DB transaction open
+  // nor roll one back.
+  await notifyChange("change_verified", changeId, {
+    actorId: user.id, actorName: user.name ?? user.email,
+    outcome: input.outcome, note: input.summary.trim(),
+  }).catch(() => {})
+
+  return pir
 }

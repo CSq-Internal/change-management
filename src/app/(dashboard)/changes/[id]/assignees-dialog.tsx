@@ -12,10 +12,13 @@ import { setChangeAssignees } from "@/server/actions/assignees"
 type Entry = { userId: string; role: "approver" | "implementer" }
 
 export default function AssigneesDialog({
-  changeId, candidates, current, onClose,
+  changeId, candidates, approverCandidates, current, onClose,
 }: {
   changeId: string
+  /** Implementer candidates: every active user in the change's OpCo. */
   candidates: { id: string; label: string }[]
+  /** Approver candidates: the narrower eligibility rule setChangeAssignees enforces. */
+  approverCandidates: { id: string; label: string }[]
   current: Entry[]
   onClose: () => void
 }) {
@@ -27,12 +30,21 @@ export default function AssigneesDialog({
   const [pickUser, setPickUser] = useState(candidates[0]?.id ?? "")
   const [pickRole, setPickRole] = useState<"approver" | "implementer">("implementer")
 
+  // The two roles draw from different pools, so the user list follows the chosen role.
+  const roleCandidates = pickRole === "approver" ? approverCandidates : candidates
+  const changeRole = (role: Entry["role"]) => {
+    setPickRole(role)
+    const next = role === "approver" ? approverCandidates : candidates
+    if (!next.some((c) => c.id === pickUser)) setPickUser(next[0]?.id ?? "")
+  }
+
   const add = () => {
     if (!pickUser || entries.some((e) => e.userId === pickUser)) return
     setEntries((e) => [...e, { userId: pickUser, role: pickRole }])
   }
   const remove = (userId: string) => setEntries((e) => e.filter((x) => x.userId !== userId))
-  const labelOf = (id: string) => candidates.find((c) => c.id === id)?.label ?? id
+  const labelOf = (id: string) =>
+    [...candidates, ...approverCandidates].find((c) => c.id === id)?.label ?? id
 
   const save = () => startTransition(async () => {
     try {
@@ -51,9 +63,9 @@ export default function AssigneesDialog({
         <CardContent className="space-y-3">
           <div className="flex items-end gap-2">
             <select className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={pickUser} onChange={(e) => setPickUser(e.target.value)}>
-              {candidates.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+              {roleCandidates.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
             </select>
-            <select className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={pickRole} onChange={(e) => setPickRole(e.target.value as Entry["role"])}>
+            <select className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={pickRole} onChange={(e) => changeRole(e.target.value as Entry["role"])}>
               <option value="implementer">{t(language, "assignees.role.implementer")}</option>
               <option value="approver">{t(language, "assignees.role.approver")}</option>
             </select>

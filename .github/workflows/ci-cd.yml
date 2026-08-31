@@ -139,8 +139,10 @@ jobs:
       # Fails on high-severity advisories by design (security signal). This job is
       # NOT a required status check (branch protection gates on quality + test only),
       # so a red audit surfaces vulnerabilities without blocking merges.
-      # Highs are currently clear: vite pinned >=8.0.16 (devDep) and hono >=4.12.25
-      # (pnpm-workspace overrides). Remaining advisories are moderate/low only.
+      # Highs are currently clear. Direct pins carrying fixes: next 16.2.11 (four
+      # advisories incl. Turbopack middleware bypass and Server Action DoS) and vite
+      # >=8.0.16. Everything else is forced via pnpm-workspace overrides — see the
+      # comments there, which name the advisory each override answers.
       - run: pnpm audit --audit-level=high
 
   image:

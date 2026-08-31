@@ -35,6 +35,8 @@ const mockDb = {
   },
   auditLog: {
     create: vi.fn().mockResolvedValue({}),
+    // Latest `submitted` row — marks the start of the current submission cycle.
+    findFirst: vi.fn().mockResolvedValue(null),
   },
 }
 
@@ -42,7 +44,10 @@ vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/server/notify', () => ({
+  notifyEvent: vi.fn().mockResolvedValue(undefined),
+  notifyChange: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/server/approval-authority', () => ({
   canUserApproveChange: vi.fn().mockResolvedValue(true),
@@ -54,6 +59,7 @@ import { canUserApproveChange } from '@/server/approval-authority'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockDb.auditLog.findFirst.mockResolvedValue(null)
 })
 
 // ── checkCabQuorum (pure function, no mocks needed) ──────────────────────────
@@ -165,6 +171,198 @@ describe('submitApproval — CAB authority + quorum', () => {
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ retroApprovedAt: expect.any(Date) }) })
     )
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+})
+
+describe('submitApproval — duplicate vote guard', () => {
+  const PENDING = {
+    id: 'cr-1', status: 'pending', riskLevel: 'low', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
+  }
+
+  it('rejects a second vote from the same user on a pending change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+  })
+
+  it('allows a first vote when others have already voted', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'someone-else-entirely', decision: 'approve', isCab: true }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+
+  it('allows a retrospective vote from a user who already voted normally', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      status: 'implemented', isEmergency: true, expedited: true,
+      implementedAt: new Date('2026-07-21T10:00:00Z'),
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true,
+        decidedAt: new Date('2026-07-20T09:00:00Z'),
+      }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+})
+
+describe('submitApproval — retrospective stage scoping', () => {
+  const IMPLEMENTED_AT = new Date('2026-07-21T10:00:00Z')
+  const BEFORE_IMPL = new Date('2026-07-20T09:00:00Z')
+  const AFTER_IMPL = new Date('2026-07-21T11:00:00Z')
+  const EXPEDITED = {
+    id: 'cr-1', status: 'implemented', riskLevel: 'emergency', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, title: 'x',
+    isEmergency: true, expedited: true, implementedAt: IMPLEMENTED_AT,
+  }
+
+  it('rejects a second retrospective vote from the same approver', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
+      }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+  })
+
+  it('does not let a repeated retrospective vote overwrite retroApprovedAt', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
+      }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true)).rejects.toThrow()
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('allows a retrospective vote when the approver only voted before implementation', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: BEFORE_IMPL,
+      }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+
+  it('allows a retrospective vote from an approver who has not voted in this stage', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED,
+      approvals: [{
+        approverId: 'someone-else-entirely', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
+      }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+})
+
+describe('submitApproval — submission-cycle scoping', () => {
+  const RESUBMITTED_AT = new Date('2026-07-20T10:00:00Z')
+  const BEFORE = new Date('2026-07-19T09:00:00Z')
+  const AFTER = new Date('2026-07-20T11:00:00Z')
+  const PENDING = {
+    id: 'cr-1', status: 'pending', riskLevel: 'low', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, title: 'x',
+  }
+
+  it('lets an approver who rejected a previous cycle vote again after a resubmission', async () => {
+    // reject → reopen → fix → resubmit: the old reject belongs to the previous cycle.
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'reject', isCab: true, decidedAt: BEFORE }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalled()
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('still rejects a duplicate vote cast within the current cycle', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+  })
+
+  it('does not count a stale pre-rejection approve vote toward quorum', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING, riskLevel: 'high',
+      approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true, decidedAt: BEFORE }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    // The old vote was cast against a previous version of the plan — quorum is not met.
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('counts an approve vote cast in the current cycle toward quorum', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue({ at: RESUBMITTED_AT })
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING, riskLevel: 'high',
+      approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true, decidedAt: AFTER }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('treats every approval as current when no submitted audit row exists (legacy data)', async () => {
+    mockDb.auditLog.findFirst.mockResolvedValue(null)
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...PENDING,
+      approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: BEFORE }],
+    })
+    await expect(submitApproval('cr-1', 'approve', undefined, true))
+      .rejects.toThrow(/already voted/i)
+  })
+})
+
+describe('submitApproval — named approvers count toward quorum', () => {
+  it('two distinct approvers satisfy quorum on a high-risk change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'pending', riskLevel: 'high', infrastructureType: 'Wifi',
+      opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
+      approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true }],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'approved' } })
+    )
+  })
+
+  it('a single approver does not satisfy quorum on a high-risk change', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'pending', riskLevel: 'high', infrastructureType: 'Wifi',
+      opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
+      approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )

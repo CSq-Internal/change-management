@@ -4,10 +4,11 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
-import { notifyEvent } from "@/server/notify"
+import { notifyEvent, notifyChange } from "@/server/notify"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
-import { getRoutedApprovers, getNamedApprovers, canUserApproveChange } from "@/server/approval-authority"
+import { getRoutedApprovers, getNamedApprovers, canUserApproveChange, isEligibleApprover } from "@/server/approval-authority"
 import { SLA_HOURS } from "@/lib/sla"
+import type { NotifyEventType } from "@/lib/notifications"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
 
 // Emergency changes implemented under expedited authority must obtain retrospective
@@ -30,6 +31,8 @@ type CreateChangeInput = {
   plannedStart?: Date
   plannedEnd?: Date
   isEmergency?: boolean
+  /** Requester-nominated approvers. Additive — routed CAB approvers keep their authority. */
+  approverIds?: string[]
 }
 
 export async function getChange(id: string) {
@@ -109,12 +112,31 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   const slaDeadline = new Date()
   slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
 
-  const change = await db.changeRequest.create({
-    data: { ...data, opcoId: opco.id, requesterId: user.id, status: "draft", slaDeadline },
-  })
+  const { approverIds = [], ...changeData } = data
 
-  await db.auditLog.create({
-    data: { changeId: change.id, actorId: user.id, action: "created", toStatus: "draft" },
+  // Validate before opening the transaction so a bad id leaves nothing behind.
+  for (const userId of approverIds) {
+    // submitApproval rejects self-approval (SoD), so naming yourself would satisfy the
+    // mandatory-approver gate while leaving nobody able to actually approve.
+    if (userId === user.id) {
+      throw new Error("Cannot name yourself as an approver on your own change")
+    }
+    if (!(await isEligibleApprover(userId, opco.id, data.infrastructureType))) {
+      throw new Error("Assignee is not an eligible approver for this change's scope")
+    }
+  }
+
+  const change = await db.$transaction(async (tx) => {
+    const created = await tx.changeRequest.create({
+      data: { ...changeData, opcoId: opco.id, requesterId: user.id, status: "draft", slaDeadline },
+    })
+    for (const userId of approverIds) {
+      await tx.changeAssignee.create({ data: { changeId: created.id, userId, role: "approver" } })
+    }
+    await tx.auditLog.create({
+      data: { changeId: created.id, actorId: user.id, action: "created", toStatus: "draft" },
+    })
+    return created
   })
 
   return change
@@ -154,7 +176,7 @@ export async function submitChange(id: string) {
   if (!user) throw new Error("User not found")
 
   const change = await db.changeRequest.findUnique({
-    where: { id }, include: { opco: true, attachments: true },
+    where: { id }, include: { opco: true, attachments: true, assignees: true },
   })
   if (!change) throw new Error("Change not found")
 
@@ -179,6 +201,20 @@ export async function submitChange(id: string) {
   const missingFields = requiredFields.filter(([, v]) => v === null || v === undefined || v === "").map(([k]) => k)
   if (missingFields.length > 0) {
     throw new Error(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
+  }
+
+  // At least one approver must be named before a change can enter the approval flow.
+  // Requester-named approvers are additive — the routed CAB keeps its authority — but
+  // the nomination itself is mandatory. Count only nominees who can still act: a row for
+  // a deactivated or since-ineligible user would pass a bare count while leaving the
+  // change in pending with nobody able to approve it, which is what this gate prevents.
+  const namedApprovers = await getNamedApprovers(id)
+  let actionableApprovers = 0
+  for (const a of namedApprovers) {
+    if (await isEligibleApprover(a.id, change.opcoId, change.infrastructureType)) actionableApprovers++
+  }
+  if (actionableApprovers === 0) {
+    throw new Error("Cannot submit: at least one approver must be named")
   }
 
   if (!change.isEmergency) {
@@ -227,6 +263,10 @@ export async function submitChange(id: string) {
     }).catch(() => {})
   }
 
+  // Receipt to the requester. Deliberately not actor-suppressed — the resolver treats
+  // change_submitted as a receipt precisely so the submitter hears it landed.
+  await notifyChange("change_submitted", id, { actorId: user.id }).catch(() => {})
+
   return updated
 }
 
@@ -252,6 +292,9 @@ export async function discardChange(id: string) {
   await db.auditLog.create({
     data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
   })
+
+  await notifyChange("change_cancelled", id, { actorId: user.id }).catch(() => {})
+
   return updated
 }
 
@@ -262,6 +305,13 @@ const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {
   implemented: ["verified"],
   verified: ["closed"],
   rejected: ["draft"],
+}
+
+/** Status transitions that are worth telling people about. Others are silent by design. */
+const LIFECYCLE_EVENT: Partial<Record<ChangeStatus, NotifyEventType>> = {
+  implemented: "change_implemented",
+  closed: "change_closed",
+  draft: "change_reopened",
 }
 
 export async function updateChangeStatus(changeId: string, toStatus: ChangeStatus, note?: string) {
@@ -340,6 +390,14 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   await db.auditLog.create({
     data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
   })
+
+  const lifecycleEvent = LIFECYCLE_EVENT[toStatus]
+  if (lifecycleEvent) {
+    await notifyChange(lifecycleEvent, changeId, {
+      actorId: user.id, actorName: user.name ?? user.email, note,
+    }).catch(() => {})
+  }
+
   return updated
 }
 
@@ -393,5 +451,12 @@ export async function rescheduleChange(id: string, newStartIso: string, newEndIs
       note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
     },
   })
+
+  await notifyChange("change_rescheduled", id, {
+    actorId: user.id,
+    windowFrom: oldWindow,
+    windowTo: `${newStart.toISOString()} – ${newEnd.toISOString()}`,
+  }).catch(() => {})
+
   return updated
 }

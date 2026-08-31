@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { runDueEscalations } from "@/server/sla"
+import { runDueReminders } from "@/server/reminders"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -21,8 +22,11 @@ async function handle(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const result = await runDueEscalations({})
-  return NextResponse.json(result)
+  const escalations = await runDueEscalations({})
+  // Reminders ride the same daily sweep — no second endpoint, secret, vercel.json entry,
+  // or Cloud Scheduler job to keep in step.
+  const reminders = await runDueReminders()
+  return NextResponse.json({ escalations, reminders })
 }
 
 export const GET = handle

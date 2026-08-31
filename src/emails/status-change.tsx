@@ -9,11 +9,12 @@ export interface StatusChangeEmailProps {
   changeTitle: string
   status: string // already localized display value
   tone: string   // "approved" | "rejected" | "info"
+  changeId: string
   lang: Language
 }
 
 export default function StatusChangeEmail({
-  name, changeTitle, status, tone, lang,
+  name, changeTitle, status, tone, changeId, lang,
 }: StatusChangeEmailProps) {
   const fr = lang === "fr"
   return (
@@ -27,8 +28,8 @@ export default function StatusChangeEmail({
         {fr ? "est maintenant : " : "is now: "}
         <Pill tone={tone}>{status}</Pill>
       </Text>
-      <CtaButton href={`${EMAIL_BASE_URL}/changes`}>
-        {fr ? "Voir les changements" : "View Changes"}
+      <CtaButton href={`${EMAIL_BASE_URL}/changes/${changeId}`}>
+        {fr ? "Voir la demande" : "View request"}
       </CtaButton>
     </EmailLayout>
   )

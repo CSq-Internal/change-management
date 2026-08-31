@@ -8,6 +8,8 @@ import StatusChangeEmail from "@/emails/status-change"
 import SlaEscalationEmail from "@/emails/sla-escalation"
 import AccessRequestEmail from "@/emails/access-request"
 import EmergencyAlertEmail from "@/emails/emergency-alert"
+import ChangeEventEmail from "@/emails/change-event"
+import { EMAIL_BASE_URL } from "@/emails/config"
 import type { Language } from "@/lib/i18n"
 
 const apiKey = process.env.RESEND_API_KEY
@@ -104,7 +106,7 @@ export async function sendApprovalRequestEmail(opts: {
 }
 
 export async function sendStatusChangeEmail(opts: {
-  to: string; name: string; changeTitle: string; newStatus: string; locale?: Language
+  to: string; name: string; changeTitle: string; newStatus: string; changeId: string; locale?: Language
 }) {
   const fr = opts.locale === "fr"
   const statusFr: Record<string, string> = { approved: "approuvé", rejected: "rejeté" }
@@ -119,6 +121,7 @@ export async function sendStatusChangeEmail(opts: {
       changeTitle={opts.changeTitle}
       status={status}
       tone={tone}
+      changeId={opts.changeId}
       lang={opts.locale ?? "en"}
     />
   )
@@ -188,4 +191,37 @@ export async function sendEmergencyAlertEmail(opts: {
   const html = await render(el)
   const text = await render(el, { plainText: true })
   await dispatchEmail(opts.to, subject, html, text)
+}
+
+/**
+ * Generic sender behind every notification type added by the expansion. Content comes
+ * from notificationContent (one copy source, EN + FR), so this only shapes the layout.
+ */
+export async function sendChangeEventEmail(opts: {
+  to: string
+  subject: string
+  headline: string
+  intro: string
+  pill?: { tone: string; label: string }
+  rows: [string, string][]
+  note?: string
+  changeId: string
+  locale?: Language
+}) {
+  const fr = opts.locale === "fr"
+  const el = (
+    <ChangeEventEmail
+      headline={opts.headline}
+      intro={opts.intro}
+      pill={opts.pill}
+      rows={opts.rows}
+      note={opts.note}
+      ctaHref={`${EMAIL_BASE_URL}/changes/${opts.changeId}`}
+      ctaLabel={fr ? "Voir la demande" : "View request"}
+      lang={opts.locale ?? "en"}
+    />
+  )
+  const html = await render(el)
+  const text = await render(el, { plainText: true })
+  await dispatchEmail(opts.to, opts.subject, html, text)
 }

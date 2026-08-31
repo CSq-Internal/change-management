@@ -33,6 +33,7 @@ const mockDb = {
         { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
         { kind: 'backout_plan' }, { kind: 'solution_document' },
       ],
+      assignees: [{ userId: 'appr1', role: 'approver' }],
     }),
     update: vi.fn().mockResolvedValue({ id: 'cr-1', status: 'pending' }),
   },
@@ -44,20 +45,42 @@ const mockDb = {
   approverDelegation: { findMany: vi.fn().mockResolvedValue([]) },
   approverAssignment: { findMany: vi.fn().mockResolvedValue([]) },
   changeAssignee: { findMany: vi.fn().mockResolvedValue([]) },
+  $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
 }
 
 vi.mock('@/server/db', () => ({
   getPrisma: () => mockDb,
 }))
 
-vi.mock('@/server/notify', () => ({ notifyEvent: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/server/notify', () => ({
+  notifyEvent: vi.fn().mockResolvedValue(undefined),
+  notifyChange: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/server/approval-authority', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/server/approval-authority')>()
+  return { ...actual, isEligibleApprover: vi.fn(async () => true) }
+})
 
 import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
-import { notifyEvent } from '@/server/notify'
+import { notifyEvent, notifyChange } from '@/server/notify'
+import { isEligibleApprover } from '@/server/approval-authority'
+
+const tx = {
+  changeRequest: {
+    create: vi.fn().mockImplementation(({ data }: { data: unknown }) =>
+      Promise.resolve({ id: 'cr-new', status: 'draft', ...(data as object) })
+    ),
+  },
+  changeAssignee: { create: vi.fn().mockResolvedValue({}) },
+  auditLog: { create: vi.fn().mockResolvedValue({}) },
+}
 
 beforeEach(() => {
   vi.mocked(notifyEvent).mockClear()
+  vi.mocked(notifyChange).mockClear()
+  vi.mocked(notifyChange).mockResolvedValue(undefined)
   mockDb.user.findMany.mockReset()
   mockDb.user.findMany.mockResolvedValue([mockGroupCtoUser])
   mockDb.userOpCoAssignment.findMany.mockReset()
@@ -69,7 +92,18 @@ beforeEach(() => {
   mockDb.approverAssignment.findMany.mockReset()
   mockDb.approverAssignment.findMany.mockResolvedValue([])
   mockDb.changeAssignee.findMany.mockReset()
-  mockDb.changeAssignee.findMany.mockResolvedValue([])
+  // submitChange's mandatory-approver gate reads through getNamedApprovers, which queries
+  // changeAssignee.findMany (role: "approver") — not the `assignees` relation on findUnique.
+  // Default to one eligible approver so happy-path submits pass; negative tests override.
+  mockDb.changeAssignee.findMany.mockResolvedValue([
+    { user: { id: 'appr1', name: 'Approver One', email: 'appr1@csquared.com', isActive: true } },
+  ])
+  mockDb.changeRequest.update.mockClear()
+  tx.changeRequest.create.mockClear()
+  tx.changeAssignee.create.mockClear()
+  tx.auditLog.create.mockClear()
+  mockDb.$transaction.mockClear()
+  vi.mocked(isEligibleApprover).mockResolvedValue(true)
 })
 
 const ugandaSession = {
@@ -368,6 +402,7 @@ describe('submitChange', () => {
         { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
         { kind: 'backout_plan' }, { kind: 'solution_document' },
       ],
+      assignees: [{ userId: 'appr1', role: 'approver' }],
     })
     // blackoutPeriod.findMany should NOT be called, but even if it were it returns empty by default
     const result = await submitChange('cr-1')
@@ -396,6 +431,7 @@ describe('submitChange', () => {
       plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
       isEmergency: false,
       attachments: [], // no documents — allowed for low risk
+      assignees: [{ userId: 'appr1', role: 'approver' }],
     })
     const result = await submitChange('cr-1')
     expect(result).toHaveProperty('status', 'pending')
@@ -473,5 +509,150 @@ describe('discardChange', () => {
       id: 'cr-1', status: 'approved', opcoId: 'opco-1', requesterId: 'user-1', opco: { slug: 'ghana' },
     })
     await expect(discardChange('cr-1')).rejects.toThrow(/Only draft/)
+  })
+})
+
+describe('createChange — approverIds', () => {
+  const baseInput = {
+    title: 'Router update', description: 'BGP config',
+    category: 'config' as const, riskLevel: 'low' as const,
+    contactEmail: 'test@csquared.com', infrastructureType: 'Wifi',
+  }
+
+  it('writes an approver ChangeAssignee row per id', async () => {
+    await createChange('ghana', { ...baseInput, approverIds: ['appr1', 'appr2'] })
+    expect(tx.changeAssignee.create).toHaveBeenCalledTimes(2)
+    expect(tx.changeAssignee.create).toHaveBeenCalledWith({
+      data: { changeId: 'cr-new', userId: 'appr1', role: 'approver' },
+    })
+  })
+
+  it('validates each id against the shared eligibility rule', async () => {
+    await createChange('ghana', { ...baseInput, approverIds: ['appr1'] })
+    expect(isEligibleApprover).toHaveBeenCalledWith('appr1', 'opco-1', 'Wifi')
+  })
+
+  it('succeeds with no approverIds — drafts are exempt', async () => {
+    const out = await createChange('ghana', baseInput)
+    expect(out.id).toBe('cr-new')
+    expect(tx.changeAssignee.create).not.toHaveBeenCalled()
+  })
+
+  it('throws on an ineligible id and writes no ChangeRequest', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(false)
+    await expect(createChange('ghana', { ...baseInput, approverIds: ['rando'] }))
+      .rejects.toThrow(/not an eligible approver/i)
+    expect(tx.changeRequest.create).not.toHaveBeenCalled()
+    expect(mockDb.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('propagates an eligibility rejection from the shared rule', async () => {
+    vi.mocked(isEligibleApprover).mockResolvedValue(false)
+    await expect(createChange('ghana', {
+      ...baseInput, infrastructureType: 'Equiano IP', approverIds: ['appr1'],
+    })).rejects.toThrow(/not an eligible approver/i)
+  })
+
+  // submitApproval rejects self-approval (SoD), so a requester who names only themselves
+  // would clear submitChange's mandatory-approver gate with nobody able to approve.
+  it('rejects the requester naming themselves as an approver', async () => {
+    await expect(createChange('ghana', { ...baseInput, approverIds: ['user-1'] }))
+      .rejects.toThrow(/yourself as an approver/i)
+    expect(tx.changeRequest.create).not.toHaveBeenCalled()
+    expect(mockDb.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('does not strip approverIds into the ChangeRequest row', async () => {
+    await createChange('ghana', { ...baseInput, approverIds: ['appr1'] })
+    const created = tx.changeRequest.create.mock.calls[0][0] as { data: Record<string, unknown> }
+    expect(created.data).not.toHaveProperty('approverIds')
+  })
+})
+
+describe('submitChange — mandatory approver', () => {
+  const SUBMITTABLE = {
+    id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+    opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+    riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+    infrastructureType: 'Backbone IP Network',
+    isEmergency: false,
+    plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+    attachments: [],
+  }
+
+  it('throws when the change has no named approver', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({ ...SUBMITTABLE, assignees: [] })
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
+    await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('succeeds when one approver is named', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...SUBMITTABLE,
+      assignees: [{ userId: 'appr1', role: 'approver' }],
+    })
+    await submitChange('cr-1')
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'pending' } })
+    )
+  })
+
+  it('ignores implementer assignees when counting approvers', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...SUBMITTABLE,
+      assignees: [{ userId: 'impl1', role: 'implementer' }],
+    })
+    // getNamedApprovers filters on role: "approver", so an implementer-only change yields none.
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
+    await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
+  })
+
+  it('blocks an emergency change with no named approver (no exemption by design)', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...SUBMITTABLE, isEmergency: true, riskLevel: 'emergency', assignees: [],
+      // emergency risk requires the 5 documents (see documentsRequiredForRisk) — supply them
+      // so this test isolates the approver gate rather than tripping the document gate first.
+      attachments: [
+        { kind: 'impact_scope' }, { kind: 'implementation_plan' }, { kind: 'testing_plan' },
+        { kind: 'backout_plan' }, { kind: 'solution_document' },
+      ],
+    })
+    mockDb.changeAssignee.findMany.mockResolvedValue([])
+    await expect(submitChange('cr-1')).rejects.toThrow(/at least one approver must be named/i)
+  })
+})
+
+describe('lifecycle notifications', () => {
+  it('submitChange sends the requester a receipt', async () => {
+    await submitChange('cr-1')
+    expect(notifyChange).toHaveBeenCalledWith(
+      'change_submitted', 'cr-1', expect.objectContaining({ actorId: 'user-1' })
+    )
+  })
+
+  it('discardChange notifies change_cancelled', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1', opco: { slug: 'ghana' },
+    })
+    await discardChange('cr-1')
+    expect(notifyChange).toHaveBeenCalledWith(
+      'change_cancelled', 'cr-1', expect.objectContaining({ actorId: 'user-1' })
+    )
+  })
+
+  it('a throwing notifyChange does not fail the action', async () => {
+    // Self-contained: changeRequest.findUnique is not reset in beforeEach, so the
+    // preceding discardChange test's minimal draft would otherwise leak in here.
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      id: 'cr-1', status: 'draft', opcoId: 'opco-1', requesterId: 'user-1',
+      opco: { slug: 'ghana' }, title: 'Router update', description: 'BGP config',
+      riskLevel: 'low', category: 'config', contactEmail: 'test@csquared.com',
+      infrastructureType: 'Backbone IP Network', isEmergency: false,
+      plannedStart: new Date('2026-07-01'), plannedEnd: new Date('2026-07-02'),
+      attachments: [],
+    })
+    vi.mocked(notifyChange).mockRejectedValue(new Error('boom'))
+    await expect(submitChange('cr-1')).resolves.toBeDefined()
   })
 })

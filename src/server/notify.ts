@@ -6,7 +6,9 @@ import {
 } from "@/lib/notifications"
 import {
   sendApprovalRequestEmail, sendStatusChangeEmail, sendSlaEscalationEmail, sendEmergencyAlertEmail,
+  sendChangeEventEmail,
 } from "@/server/email"
+import { resolveAudience } from "@/server/audience"
 import { coerceLocale, type Language } from "@/lib/i18n"
 
 type Db = ReturnType<typeof getPrisma>
@@ -20,18 +22,44 @@ async function loadPrefs(db: Db, userIds: string[], type: NotifyEventType): Prom
   return m
 }
 
-function emailFor(type: NotifyEventType, r: NotifyRecipient, change: { id: string; title: string }, ctx: NotifyContext, locale: Language): Promise<unknown> {
+/** Extra content the generic template needs; supplied by notifyChange, absent otherwise. */
+type EmailDetail = {
+  subject: string
+  headline: string
+  intro: string
+  rows: [string, string][]
+  note?: string
+}
+
+function emailFor(
+  type: NotifyEventType, r: NotifyRecipient, change: { id: string; title: string },
+  ctx: NotifyContext, locale: Language, detail?: EmailDetail,
+): Promise<unknown> {
   switch (type) {
     case "approval_requested":
       return sendApprovalRequestEmail({ to: r.email, approverName: r.name ?? r.email, changeTitle: change.title, requesterName: ctx.requesterName ?? "", riskLevel: ctx.riskLevel ?? "", changeId: change.id, locale })
     case "change_approved":
-      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "approved", locale })
+      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "approved", changeId: change.id, locale })
     case "change_rejected":
-      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "rejected", locale })
+      return sendStatusChangeEmail({ to: r.email, name: r.name ?? r.email, changeTitle: change.title, newStatus: "rejected", changeId: change.id, locale })
     case "sla_escalated":
       return sendSlaEscalationEmail({ to: r.email, changeTitle: change.title, changeId: change.id, level: ctx.level ?? 1, riskLevel: ctx.riskLevel ?? "", locale })
     case "emergency_submitted":
       return sendEmergencyAlertEmail({ to: r.email, changeTitle: change.title, changeId: change.id, requesterName: ctx.requesterName ?? "", locale })
+    default: {
+      // Every event added by the expansion renders through the one generic template.
+      const { title, body } = notificationContent(type, change.title, ctx, locale)
+      return sendChangeEventEmail({
+        to: r.email,
+        subject: detail?.subject ?? `${title}: ${change.title}`,
+        headline: detail?.headline ?? title,
+        intro: detail?.intro ?? body,
+        rows: detail?.rows ?? [],
+        note: detail?.note ?? ctx.note,
+        changeId: change.id,
+        locale,
+      })
+    }
   }
 }
 
@@ -44,6 +72,7 @@ export async function notifyEvent(input: {
   recipients: NotifyRecipient[]
   change: { id: string; title: string; opcoId: string }
   context?: NotifyContext
+  emailDetail?: EmailDetail
 }): Promise<void> {
   const { type, recipients, change } = input
   const ctx = input.context ?? {}
@@ -68,8 +97,11 @@ export async function notifyEvent(input: {
       tasks.push(db.notification.create({ data: { userId: r.userId, type, title, body, changeId: change.id } }))
     }
     if (isChannelEnabled(prefs, r.userId, type, "email")) {
-      tasks.push(emailFor(type, r, change, ctx, locale))
+      tasks.push(emailFor(type, r, change, ctx, locale, input.emailDetail))
     }
+    // Ledger row per recipient regardless of channel — it records that this person was
+    // notified about this event, which is what the reminder sweep needs to know.
+    tasks.push(db.notificationDispatch.create({ data: { userId: r.userId, changeId: change.id, type } }))
   }
 
   if (CHAT_BROADCAST_TYPES.includes(type)) {
@@ -99,4 +131,83 @@ export async function notifyUsers(
       })
     )
   )
+}
+
+/** Detail rows shown in the generic email. Kept here so copy and data stay together. */
+function detailRows(
+  change: {
+    title: string; riskLevel: string
+    plannedStart: Date | null; plannedEnd: Date | null
+    opco: { name: string }
+  },
+  locale: Language,
+): [string, string][] {
+  const fr = locale === "fr"
+  const stamp = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ")
+  const rows: [string, string][] = [
+    [fr ? "Changement" : "Change", change.title],
+    ["OpCo", change.opco.name],
+    [fr ? "Risque" : "Risk", change.riskLevel],
+  ]
+  if (change.plannedStart && change.plannedEnd) {
+    rows.push([fr ? "Fenêtre" : "Window", `${stamp(change.plannedStart)} – ${stamp(change.plannedEnd)}`])
+  }
+  return rows
+}
+
+/**
+ * Event-driven notification facade. Loads the change once, resolves the audience (or uses
+ * explicit recipients for the per-person assignment events), and fans out through
+ * notifyEvent.
+ *
+ * Best-effort by contract: it never rejects, so a mail or webhook fault cannot fail the
+ * domain operation that triggered it. Call sites still add `.catch(() => {})` — the guard
+ * documents the intent locally. Keep this catch block empty; a swallowed bug is the price
+ * of that guarantee and should not be compounded by logic hiding in here.
+ */
+export async function notifyChange(
+  type: NotifyEventType,
+  changeId: string,
+  ctx: NotifyContext & { actorId?: string; recipients?: NotifyRecipient[] } = {},
+): Promise<void> {
+  try {
+    const db = getPrisma()
+    const change = await db.changeRequest.findUnique({
+      where: { id: changeId },
+      select: {
+        id: true, title: true, opcoId: true, requesterId: true,
+        infrastructureType: true, riskLevel: true, plannedStart: true, plannedEnd: true,
+        opco: { select: { name: true, locale: true } },
+      },
+    })
+    if (!change) return
+
+    const { actorId, recipients: explicit, ...rest } = ctx
+    const recipients = explicit ?? await resolveAudience(type, {
+      id: change.id, opcoId: change.opcoId,
+      infrastructureType: change.infrastructureType, requesterId: change.requesterId,
+    }, actorId)
+    if (recipients.length === 0) return
+
+    // Subject and headline use the OpCo locale; per-recipient locale still applies to the
+    // body inside notifyEvent, which re-derives copy for each user.
+    const locale = coerceLocale(change.opco.locale)
+    const { title, body } = notificationContent(type, change.title, rest, locale)
+
+    await notifyEvent({
+      type,
+      recipients,
+      change: { id: change.id, title: change.title, opcoId: change.opcoId },
+      context: rest,
+      emailDetail: {
+        subject: `${title}: ${change.title}`,
+        headline: title,
+        intro: body,
+        rows: detailRows(change, locale),
+        note: rest.note,
+      },
+    })
+  } catch {
+    // Best-effort by contract — see the doc comment above.
+  }
 }

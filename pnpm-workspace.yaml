@@ -10,9 +10,57 @@ overrides:
   google-auth-library: '10.7.0'
   # Patched transitive deps flagged moderate by `pnpm audit`:
   #   @hono/node-server (via @prisma/dev) — GHSA-92pp-h63x-v22m (middleware bypass)
-  #   postcss (via next) — GHSA-qx2v-qp2m-jg93 (XSS via unescaped </style>)
+  #   postcss (via next, tailwind, vite) — GHSA-qx2v-qp2m-jg93 (XSS via unescaped
+  #   </style>) and the later path-traversal advisory in the source-map auto-loader,
+  #   which moved the floor to 8.5.18.
   '@hono/node-server': '>=1.19.13'
-  postcss: '>=8.5.10'
+  postcss: '>=8.5.18'
+  # Patched transitive deps flagged HIGH by `pnpm audit`. All reach us only through
+  # tooling (eslint, testcontainers, react-email, @prisma/dev) or through glob patterns
+  # we author ourselves, so none is attacker-reachable at runtime — but the audit gate
+  # fails on high regardless, and the fixes are free.
+  #
+  # brace-expansion — GHSA-3jxr-9vmj-r5cp (DoS via exponential {} expansion). Three
+  # disjoint advisory ranges, so each major is pinned to its own patched release rather
+  # than given an open `>=`: an open range resolves straight to the newest major (5.0.6
+  # landed here first, itself still inside the 3.x-5.0.6 vulnerable window). v1 and v2
+  # have in-major fixes and stay put; v3 and v4 have none, so those consumers must jump
+  # to 5.0.9 — which is where the advisory points them anyway.
+  #
+  # Floors move. Each of these pins has been raised once already as follow-up advisories
+  # landed against the version that was patched at the time; re-read the advisory range
+  # before assuming a pin here is still sufficient.
+  'brace-expansion@1': '1.1.18'
+  'brace-expansion@2': '2.1.4'
+  'brace-expansion@3': '5.0.9'
+  'brace-expansion@4': '5.0.9'
+  'brace-expansion@5': '>=5.0.9'
+  #   js-yaml (via eslint) — GHSA-52cp-r559-cp3m (quadratic CPU on merge-key chains).
+  #   Pinned, not `>=`: an open range resolves to v5 and drags eslint across a major.
+  'js-yaml@4': '4.3.1'
+  #   fast-uri (via ajv, in @prisma/dev + react-email) — GHSA-v2hh-gcrm-f6hx and
+  #   GHSA-4c8g-83qw-93j6 (host confusion). Pinned for the same reason (open resolves v4).
+  'fast-uri@3': '3.1.5'
+  #   sharp (via next, optional) — GHSA-f88m-g3jw-g9cj (inherited libvips CVEs).
+  #   next 16.2.11 still declares sharp ^0.34.5, which cannot reach the 0.35.0 fix.
+  sharp: '>=0.35.0'
+  #   nanoid (via postcss, in tailwind + vite) — GHSA-mwcw-c2x4-8c55 and the later
+  #   custom-generator variant; both fixed inside v3, so scope the override to @3 rather
+  #   than letting it resolve to v5.
+  'nanoid@3': '>=3.3.18'
+  #   deepmerge-ts (via prisma > @prisma/config) — GHSA-ggr8-5vv4-36mx (stack exhaustion
+  #   on recursive graphs). The only fix is v8, so this one does cross a major; prisma
+  #   calls it for config merging only and the API it uses is unchanged.
+  'deepmerge-ts': '>=8.0.0'
+  #   ip-address (via shadcn > socks / MCP SDK) — GHSA-2jjv-fjv5-q4vh (leading-zero
+  #   octets decoded as decimal, so an allowlist check can be bypassed). Dev tooling only.
+  'ip-address@10': '>=10.3.1'
+  #   undici (via shadcn) — GHSA-9rx9-jgrq-cw5g (cross-user information disclosure).
+  #   Scoped to @7: v8 is already present elsewhere and is outside the advisory range.
+  'undici@7': '>=7.29.0'
+  #   socket.io-parser (via react-email's preview server) — GHSA-6mjf-3j95-2hh8
+  #   (zero-attachment memory exhaustion). Dev preview only, never shipped.
+  'socket.io-parser@4': '>=4.2.7'
 
 allowBuilds:
   '@prisma/engines': true
