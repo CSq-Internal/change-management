@@ -1,3 +1,5 @@
+export const QUORUM_SIZE = 2
+
 export type QuorumApproval = { isCab: boolean; decision: string; approverId: string }
 
 /** Distinct approvers so far, and whether any approval came from the routed CAB. */
@@ -15,5 +17,5 @@ export function quorumProgress(approvals: QuorumApproval[]): { approvers: number
  */
 export function checkCabQuorum(approvals: QuorumApproval[]): boolean {
   const { approvers, hasCabVote } = quorumProgress(approvals)
-  return approvers >= 2 && hasCabVote
+  return approvers >= QUORUM_SIZE && hasCabVote
 }

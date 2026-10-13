@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { quorumProgress } from "@/lib/cab-quorum"
 import { submitChange, updateChangeStatus, discardChange } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { StatusPill, RiskPill } from "@/components/change-badges"
+import { QuorumProgress } from "@/components/quorum-progress"
 import PirForm from "./pir-form"
 import AssigneesDialog from "./assignees-dialog"
 import ConfirmDialog from "../../users/confirm-dialog"
@@ -280,7 +280,6 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
 
   // ── CAB quorum ───────────────────────────────────────────────────────────
   const needsCab = change.riskLevel === "high" || change.riskLevel === "emergency"
-  const quorum = quorumProgress(change.approvals)
 
   const requesterLabel = change.requester.name ?? change.requester.email
 
@@ -445,9 +444,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
             )}
             {needsCab && (
               <div className="mt-3 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{t(language, "detail.cabQuorum")}: </span>
-                {quorum.approvers}/2
-                {quorum.approvers >= 2 && !quorum.hasCabVote && `, ${t(language, "detail.awaitingCabVote")}`}
+                <QuorumProgress approvals={change.approvals} language={language} labelClassName="font-medium text-foreground" />
               </div>
             )}
           </CardContent>

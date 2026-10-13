@@ -10,7 +10,7 @@ import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { formatDateTime } from "@/lib/dates"
 import { submitApproval } from "@/server/actions/approvals"
-import { quorumProgress } from "@/lib/cab-quorum"
+import { QuorumProgress } from "@/components/quorum-progress"
 
 type Requester = { name: string | null; email: string }
 type OpCo = { name: string; slug: string }
@@ -93,7 +93,6 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
       {visible.map((c) => {
         const requesterLabel = c.requester.name ?? c.requester.email
         const isHigh = needsCabQuorum(c.riskLevel)
-        const quorum = quorumProgress(c.approvals)
         const isBusy = busyId === c.id || isPending
 
         return (
@@ -113,8 +112,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
               </div>
               {isHigh && (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  {t(language, "detail.cabQuorum")}: {quorum.approvers}/2
-                  {quorum.approvers >= 2 && !quorum.hasCabVote && `, ${t(language, "detail.awaitingCabVote")}`}
+                  <QuorumProgress approvals={c.approvals} language={language} />
                 </div>
               )}
               <div className="mt-3">
