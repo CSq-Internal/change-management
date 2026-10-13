@@ -219,13 +219,11 @@ gcloud run services update "$SERVICE" --region "$REGION" \
 ## 8. SLA cron (Cloud Scheduler → Cloud Run)
 
 ```bash
-export CRON_SECRET_VAL="$(gcloud secrets versions access latest --secret=CRON_SECRET)"
-gcloud scheduler jobs create http sla-escalation \
-  --location "$REGION" --schedule "0 * * * *" \
-  --uri "$RUN_URL/api/cron/sla" --http-method POST \
-  --headers "x-cron-secret=$CRON_SECRET_VAL" \
-  --oidc-service-account-email "$RUN_SA"   # drop if the service is public + header-only
+PROJECT_ID=access-africa-01 REGION=europe-west1 ./scripts/provision-gcp-scheduler.sh prod
 ```
+
+Creates (or updates) job `cms-prod-sla`, every 15 minutes, POSTing to the live service URL
+with the `x-cron-secret` header read from `cms-prod-cron-secret`.
 
 ---
 
@@ -235,7 +233,7 @@ gcloud scheduler jobs create http sla-escalation \
 - Create a change, upload all 5 documents to Drive, submit (gating enforced).
 - Approve via the CAB route; SoD blocks requester=approver; audit entries are immutable.
 - Tenant isolation: OpCo A user cannot read OpCo B's change.
-- Notifications fire (in-app + email); trigger the cron once (`gcloud scheduler jobs run sla-escalation --location $REGION`) and confirm escalation.
+- Notifications fire (in-app + email); trigger the cron once (`gcloud scheduler jobs run cms-prod-sla --location $REGION`) and confirm escalation.
 - Auditor CSV / PDF evidence export works.
 - Business UAT sign-off across requester / approver / auditor / admin.
 
