@@ -279,9 +279,9 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
 
   // ── CAB quorum ───────────────────────────────────────────────────────────
   const needsCab = change.riskLevel === "high" || change.riskLevel === "emergency"
-  const cabCount = new Set(
+  const quorumCount = new Set(
     change.approvals
-      .filter((a) => a.isCab && a.decision === "approve")
+      .filter((a) => a.decision === "approve")
       .map((a) => a.approverId)
   ).size
 
@@ -449,7 +449,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
             {needsCab && (
               <div className="mt-3 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{t(language, "detail.cabQuorum")}: </span>
-                {cabCount}/2
+                {quorumCount}/2
               </div>
             )}
           </CardContent>

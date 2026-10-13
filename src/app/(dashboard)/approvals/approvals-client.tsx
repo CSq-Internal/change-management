@@ -79,10 +79,10 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
   const needsCabQuorum = (riskLevel: string) =>
     riskLevel === "high" || riskLevel === "emergency"
 
-  const cabApprovedCount = (approvals: Approval[]) =>
+  const quorumCount = (approvals: Approval[]) =>
     new Set(
       approvals
-        .filter((a) => a.isCab && a.decision === "approve")
+        .filter((a) => a.decision === "approve")
         .map((a) => a.approverId)
     ).size
 
@@ -99,7 +99,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
       {visible.map((c) => {
         const requesterLabel = c.requester.name ?? c.requester.email
         const isHigh = needsCabQuorum(c.riskLevel)
-        const cabCount = cabApprovedCount(c.approvals)
+        const approvedCount = quorumCount(c.approvals)
         const isBusy = busyId === c.id || isPending
 
         return (
@@ -119,7 +119,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
               </div>
               {isHigh && (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  CAB quorum: {cabCount}/2 approvals
+                  CAB quorum: {approvedCount}/2 approvals
                 </div>
               )}
               <div className="mt-3">

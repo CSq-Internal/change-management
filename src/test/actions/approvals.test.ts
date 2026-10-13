@@ -51,11 +51,15 @@ vi.mock('@/server/notify', () => ({
 
 vi.mock('@/server/approval-authority', () => ({
   canUserApproveChange: vi.fn().mockResolvedValue(true),
+  // The routed CAB (members, infra overrides, active delegates). Empty by default, so a
+  // voter is a nominated, non-CAB approver unless a test says otherwise.
+  getRoutedApprovers: vi.fn().mockResolvedValue([]),
 }))
 
 import { checkCabQuorum } from '@/lib/cab-quorum'
 import { submitApproval } from '@/server/actions/approvals'
-import { canUserApproveChange } from '@/server/approval-authority'
+import { canUserApproveChange, getRoutedApprovers } from '@/server/approval-authority'
+import { getAppSession } from '@/lib/session'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -87,6 +91,15 @@ describe('checkCabQuorum', () => {
         { isCab: true, decision: 'approve', approverId: 'a1' },
       ])
     ).toBe(false)
+  })
+
+  it('returns true for 2 distinct approvals when at least one is from the CAB', () => {
+    expect(
+      checkCabQuorum([
+        { isCab: false, decision: 'approve', approverId: 'nominee' },
+        { isCab: true, decision: 'approve', approverId: 'cab-member' },
+      ])
+    ).toBe(true)
   })
 
   it('returns false for 2 non-CAB approvals', () => {
@@ -365,6 +378,67 @@ describe('submitApproval — named approvers count toward quorum', () => {
     await submitApproval('cr-1', 'approve', undefined, true)
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+})
+
+describe('submitApproval — high-risk quorum needs a routed CAB vote', () => {
+  const highRisk = (approvals: unknown[]) => ({
+    id: 'cr-1', status: 'pending', riskLevel: 'high', infrastructureType: 'Wifi',
+    opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, title: 'x', approvals,
+  })
+
+  it('records a nominated approver outside the routed CAB as a non-CAB vote', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue(highRisk([]))
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isCab: false }) })
+    )
+  })
+
+  it('records a routed CAB member as a CAB vote', async () => {
+    vi.mocked(getRoutedApprovers).mockResolvedValueOnce([
+      { id: 'user-requester', name: 'Requester', email: 'requester@csquared.com' },
+    ])
+    mockDb.changeRequest.findUnique.mockResolvedValue(highRisk([]))
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isCab: true }) })
+    )
+  })
+
+  it('records a group admin as a CAB vote', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce({
+      keycloakId: 'kc-requester', email: 'requester@csquared.com', name: 'Requester',
+      organizations: [], realmRoles: ['group_admin'],
+    } as never)
+    mockDb.changeRequest.findUnique.mockResolvedValue(highRisk([]))
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.approval.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isCab: true }) })
+    )
+  })
+
+  it('two nominated approvers outside the CAB cannot approve a high-risk change alone', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue(
+      highRisk([{ approverId: 'first-nominee', decision: 'approve', isCab: false }])
+    )
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } })
+    )
+  })
+
+  it('a routed CAB vote completes quorum alongside a nominated approver', async () => {
+    vi.mocked(getRoutedApprovers).mockResolvedValueOnce([
+      { id: 'user-requester', name: 'Requester', email: 'requester@csquared.com' },
+    ])
+    mockDb.changeRequest.findUnique.mockResolvedValue(
+      highRisk([{ approverId: 'first-nominee', decision: 'approve', isCab: false }])
+    )
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'approved' } })
     )
   })
 })

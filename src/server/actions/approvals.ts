@@ -6,7 +6,8 @@ import { getAppSession } from "@/lib/session"
 import { checkCabQuorum } from "@/lib/cab-quorum"
 import { notifyEvent, notifyChange } from "@/server/notify"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
-import { canUserApproveChange } from "@/server/approval-authority"
+import { canUserApproveChange, getRoutedApprovers } from "@/server/approval-authority"
+import { isGroupAdmin } from "@/lib/permissions"
 import { votesSince, hasVotedSince } from "@/lib/approval-cycle"
 
 export async function submitApproval(
@@ -70,8 +71,13 @@ export async function submitApproval(
     throw new Error("Approvers cannot approve their own requests (SoD violation — ISO 27001 A.5.3)")
   }
 
+  // A CAB vote comes from the routed CAB (members, infra overrides, active delegates) or a
+  // group admin. Nominated approvers outside it still vote, but cannot form quorum alone.
+  const routed = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
+  const isCabVote = isGroupAdmin(session.realmRoles) || routed.some((u) => u.id === user.id)
+
   const approval = await db.approval.create({
-    data: { changeId, approverId: user.id, decision, comment, isCab: true },
+    data: { changeId, approverId: user.id, decision, comment, isCab: isCabVote },
   })
 
   if (isRetrospective) {
@@ -93,7 +99,7 @@ export async function submitApproval(
     return approval
   }
 
-  const allApprovals = [...cycleApprovals, { isCab: true, decision, approverId: user.id }]
+  const allApprovals = [...cycleApprovals, { isCab: isCabVote, decision, approverId: user.id }]
   const needsCab =
     !isGroupLevelInfra(change.infrastructureType) &&
     (change.riskLevel === "high" || change.riskLevel === "emergency")
