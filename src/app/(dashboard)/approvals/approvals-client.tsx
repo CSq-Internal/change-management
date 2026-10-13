@@ -10,6 +10,7 @@ import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { formatDateTime } from "@/lib/dates"
 import { submitApproval } from "@/server/actions/approvals"
+import { quorumProgress } from "@/lib/cab-quorum"
 
 type Requester = { name: string | null; email: string }
 type OpCo = { name: string; slug: string }
@@ -79,13 +80,6 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
   const needsCabQuorum = (riskLevel: string) =>
     riskLevel === "high" || riskLevel === "emergency"
 
-  const quorumCount = (approvals: Approval[]) =>
-    new Set(
-      approvals
-        .filter((a) => a.decision === "approve")
-        .map((a) => a.approverId)
-    ).size
-
   const visible = changes.filter((c) => !removed.has(c.id))
 
   return (
@@ -99,7 +93,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
       {visible.map((c) => {
         const requesterLabel = c.requester.name ?? c.requester.email
         const isHigh = needsCabQuorum(c.riskLevel)
-        const approvedCount = quorumCount(c.approvals)
+        const quorum = quorumProgress(c.approvals)
         const isBusy = busyId === c.id || isPending
 
         return (
@@ -119,7 +113,8 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
               </div>
               {isHigh && (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  CAB quorum: {approvedCount}/2 approvals
+                  {t(language, "detail.cabQuorum")}: {quorum.approvers}/2
+                  {quorum.approvers >= 2 && !quorum.hasCabVote && `, ${t(language, "detail.awaitingCabVote")}`}
                 </div>
               )}
               <div className="mt-3">

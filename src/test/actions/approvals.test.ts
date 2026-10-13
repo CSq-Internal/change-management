@@ -56,7 +56,7 @@ vi.mock('@/server/approval-authority', () => ({
   getRoutedApprovers: vi.fn().mockResolvedValue([]),
 }))
 
-import { checkCabQuorum } from '@/lib/cab-quorum'
+import { checkCabQuorum, quorumProgress } from '@/lib/cab-quorum'
 import { submitApproval } from '@/server/actions/approvals'
 import { canUserApproveChange, getRoutedApprovers } from '@/server/approval-authority'
 import { getAppSession } from '@/lib/session'
@@ -109,6 +109,25 @@ describe('checkCabQuorum', () => {
         { isCab: false, decision: 'approve', approverId: 'a2' },
       ])
     ).toBe(false)
+  })
+})
+
+describe('quorumProgress', () => {
+  it('counts distinct approvers and whether any of them is from the CAB', () => {
+    expect(
+      quorumProgress([
+        { isCab: false, decision: 'approve', approverId: 'n1' },
+        { isCab: false, decision: 'approve', approverId: 'n1' },
+        { isCab: false, decision: 'approve', approverId: 'n2' },
+        { isCab: true, decision: 'reject', approverId: 'c1' },
+      ])
+    ).toEqual({ approvers: 2, hasCabVote: false })
+  })
+
+  it('reports a CAB vote among the approvals', () => {
+    expect(
+      quorumProgress([{ isCab: true, decision: 'approve', approverId: 'c1' }])
+    ).toEqual({ approvers: 1, hasCabVote: true })
   })
 })
 
