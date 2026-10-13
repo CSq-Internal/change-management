@@ -225,3 +225,25 @@ export async function sendChangeEventEmail(opts: {
   const text = await render(el, { plainText: true })
   await dispatchEmail(opts.to, opts.subject, html, text)
 }
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+
+/**
+ * New in-app feedback → the single FEEDBACK_INBOX address. Plain markup rather than a branded
+ * template: it goes to the triage team, not end users. Every user-controlled value is escaped.
+ */
+export async function sendFeedbackEmail(opts: {
+  to: string; category: string; route: string; authorName: string; roles: string; opcoSlugs: string; body: string
+}) {
+  const subject = `[CMS feedback] ${opts.category} — ${opts.route}`
+  const html =
+    `<p><strong>${escapeHtml(opts.authorName)}</strong></p>` +
+    `<p>Roles: ${escapeHtml(opts.roles || "—")}<br/>OpCos: ${escapeHtml(opts.opcoSlugs || "—")}<br/>` +
+    `Screen: ${escapeHtml(opts.route)}</p>` +
+    `<p style="white-space:pre-wrap">${escapeHtml(opts.body)}</p>`
+  const text =
+    `${opts.authorName}\nRoles: ${opts.roles || "—"}\nOpCos: ${opts.opcoSlugs || "—"}\n` +
+    `Screen: ${opts.route}\n\n${opts.body}`
+  await dispatchEmail(opts.to, subject, html, text)
+}
