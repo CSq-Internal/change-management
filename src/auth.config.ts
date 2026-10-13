@@ -16,7 +16,23 @@ const authConfig: NextAuthConfig = {
   ],
   // Failed callbacks (e.g. a PKCE mismatch from a stale or duplicated login tab)
   // land back on the login page with ?error=<code> instead of Auth.js's 500 page.
-  pages: { error: "/login" },
+  // Sign-in errors (provider-side OAuth errors, CSRF) redirect to pages.signIn instead.
+  pages: { error: "/login", signIn: "/login" },
+  logger: {
+    // One JSON line at ERROR severity: Cloud Run only maps plain stderr text to DEFAULT,
+    // so without this a failed sign-in never reaches the prod error alert.
+    error(error) {
+      const { err, ...details } = (error.cause ?? {}) as { err?: unknown } & Record<string, unknown>
+      const type = (error as { type?: string }).type ?? error.name
+      console.error(JSON.stringify({
+        severity: "ERROR",
+        message: `[auth][error] ${type}: ${error.message}`,
+        cause: err instanceof Error ? err.message : undefined,
+        details: Object.keys(details).length > 0 ? details : undefined,
+        stack: err instanceof Error ? err.stack : error.stack,
+      }))
+    },
+  },
   callbacks: {
     jwt({ token, account, profile }) {
       if (account) token.accessToken = account.access_token
