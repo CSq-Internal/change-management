@@ -225,6 +225,12 @@ PROJECT_ID=access-africa-01 REGION=europe-west1 ./scripts/provision-gcp-schedule
 Creates (or updates) job `cms-prod-sla`, every 15 minutes, POSTing to the live service URL
 with the `x-cron-secret` header read from `cms-prod-cron-secret`.
 
+Error alerting (email on any `cms-prod` ERROR log, at most one per 30 minutes):
+
+```bash
+PROJECT_ID=access-africa-01 ALERT_EMAIL=you@csquared.com ./scripts/provision-gcp-alerting.sh prod
+```
+
 ---
 
 ## 9. Smoke + UAT (gating)
