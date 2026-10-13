@@ -53,6 +53,19 @@ enum AttachmentKind {
   solution_document
 }
 
+enum FeedbackCategory {
+  bug
+  confusing
+  missing
+  praise
+}
+
+enum FeedbackSeverity {
+  blocker
+  major
+  minor
+}
+
 model User {
   id           String   @id @default(cuid())
   keycloakId   String   @unique
@@ -83,6 +96,7 @@ model User {
   changeAssignments    ChangeAssignee[]           @relation("ChangeAssignments")
   accessRequests        AccessRequest[]            @relation("AccessRequestRequester")
   accessRequestsDecided AccessRequest[]            @relation("AccessRequestDecider")
+  feedback              Feedback[]                 @relation("FeedbackAuthor")
 }
 
 model OpCo {
@@ -473,4 +487,36 @@ model NotificationDispatch {
   sentAt   DateTime @default(now())
 
   @@index([userId, changeId, type, sentAt])
+}
+
+/// In-app feedback ledger. The context columns (route … userAgent) are a SNAPSHOT copied at
+/// submit time — what the writer could see then — and are never joined back to live data;
+/// changeId is deliberately not an FK. A triage must record an outcome: enforced by the
+/// hand-added CHECK constraint `feedback_triage_needs_outcome` in the migration. outcome is a
+/// VARCHAR, not an enum, so the vocabulary (src/lib/feedback-outcome.ts) can grow without an
+/// ALTER TYPE.
+model Feedback {
+  id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation("FeedbackAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  category    FeedbackCategory
+  severity    FeedbackSeverity?
+  body        String
+  route       String            @db.VarChar(200)
+  roles       String            @db.VarChar(300)
+  opcoSlugs   String            @db.VarChar(200)
+  locale      String            @db.VarChar(5)
+  changeId    String?
+  appVersion  String            @db.VarChar(40)
+  viewport    String            @db.VarChar(20)
+  userAgent   String            @db.VarChar(300)
+  triagedAt   DateTime?
+  outcome     String?           @db.VarChar(20)
+  triageNote  String?
+  triagedById String?
+  createdAt   DateTime          @default(now())
+
+  @@index([category, createdAt])
+  @@index([triagedAt, createdAt])
+  @@map("feedback")
 }
