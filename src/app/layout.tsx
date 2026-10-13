@@ -34,12 +34,6 @@ export default function RootLayout({
             __html: `(function(){try{var m=localStorage.getItem('csq-theme')||'system';var d=m==='dark'||(m==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();`,
           }}
         />
-        {/* Feedbucket — in-app feedback widget for internal colleagues */}
-        {/* <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(k){let s=document.createElement('script');s.defer=true;s.src="https://cdn.feedbucket.app/assets/feedbucket.js";s.dataset.feedbucket=k;document.head.appendChild(s);})('a81mhdiblDzizKH1geLp')`,
-          }}
-        /> */}
       </head>
       <body
         className={cn(
