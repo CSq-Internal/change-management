@@ -14,6 +14,9 @@ const authConfig: NextAuthConfig = {
       issuer: process.env.KEYCLOAK_ISSUER!,
     }),
   ],
+  // Failed callbacks (e.g. a PKCE mismatch from a stale or duplicated login tab)
+  // land back on the login page with ?error=<code> instead of Auth.js's 500 page.
+  pages: { error: "/login" },
   callbacks: {
     jwt({ token, account, profile }) {
       if (account) token.accessToken = account.access_token
