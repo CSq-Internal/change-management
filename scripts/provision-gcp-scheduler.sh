@@ -5,7 +5,9 @@
 #
 # Runs AFTER the pipeline has created the service: the job targets the service's
 # live URL. The cron secret is read from Secret Manager straight into the job's
-# header and never printed. Idempotent: creates the job, or updates it in place.
+# header and never printed (it is briefly visible in this machine's process list as a
+# gcloud argument — gcloud has no file input for headers). Idempotent: creates the
+# job, or updates it in place.
 #
 # The endpoint is safe to call often — escalations only advance a level when one
 # is due, and reminders are de-duplicated by the NotificationDispatch ledger — so
@@ -36,6 +38,8 @@ if [[ -z "$PROJECT_ID" ]]; then
   exit 1
 fi
 command -v gcloud >/dev/null || { echo "ERROR: gcloud CLI not found on PATH." >&2; exit 1; }
+gcloud auth list --filter=status:ACTIVE --format='value(account)' | grep -q . \
+  || { echo "ERROR: no active gcloud login. Run 'gcloud auth login'." >&2; exit 1; }
 
 SERVICE_NAME="${SERVICE_NAME:-cms-${ENV_NAME}}"
 JOB_NAME="cms-${ENV_NAME}-sla"
@@ -47,8 +51,10 @@ echo "==> Service:   $SERVICE_NAME"
 echo "==> Job:       $JOB_NAME ($SCHEDULE UTC)"
 echo
 
+# ---- 1. API ----
 gcloud services enable cloudscheduler.googleapis.com --project="$PROJECT_ID"
 
+# ---- 2. target URL + cron secret ----
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" --project="$PROJECT_ID" \
   --region="$REGION" --format='value(status.url)')"
 if [[ -z "$SERVICE_URL" ]]; then
@@ -62,6 +68,7 @@ if [[ -z "$CRON_SECRET" ]]; then
   exit 1
 fi
 
+# ---- 3. scheduler job ----
 if gcloud scheduler jobs describe "$JOB_NAME" --project="$PROJECT_ID" --location="$REGION" >/dev/null 2>&1; then
   echo "==> Updating existing job '$JOB_NAME'..."
   gcloud scheduler jobs update http "$JOB_NAME" --project="$PROJECT_ID" --location="$REGION" \
