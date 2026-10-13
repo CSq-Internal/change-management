@@ -30,17 +30,17 @@ overrides:
   # Floors move. Each of these pins has been raised once already as follow-up advisories
   # landed against the version that was patched at the time; re-read the advisory range
   # before assuming a pin here is still sufficient.
-  'brace-expansion@1': '1.1.18'
-  'brace-expansion@2': '2.1.4'
-  'brace-expansion@3': '5.0.9'
-  'brace-expansion@4': '5.0.9'
-  'brace-expansion@5': '>=5.0.9'
+  'brace-expansion@1': '1.1.20'
+  'brace-expansion@2': '2.1.6'
+  'brace-expansion@3': '5.0.11'
+  'brace-expansion@4': '5.0.11'
+  'brace-expansion@5': '>=5.0.11'
   #   js-yaml (via eslint) — GHSA-52cp-r559-cp3m (quadratic CPU on merge-key chains).
   #   Pinned, not `>=`: an open range resolves to v5 and drags eslint across a major.
-  'js-yaml@4': '4.3.1'
+  'js-yaml@4': '4.3.2'
   #   fast-uri (via ajv, in @prisma/dev + react-email) — GHSA-v2hh-gcrm-f6hx and
   #   GHSA-4c8g-83qw-93j6 (host confusion). Pinned for the same reason (open resolves v4).
-  'fast-uri@3': '3.1.5'
+  'fast-uri@3': '3.1.7'
   #   sharp (via next, optional) — GHSA-f88m-g3jw-g9cj (inherited libvips CVEs).
   #   next 16.2.11 still declares sharp ^0.34.5, which cannot reach the 0.35.0 fix.
   sharp: '>=0.35.0'
@@ -61,6 +61,17 @@ overrides:
   #   socket.io-parser (via react-email's preview server) — GHSA-6mjf-3j95-2hh8
   #   (zero-attachment memory exhaustion). Dev preview only, never shipped.
   'socket.io-parser@4': '>=4.2.7'
+  #   mysql2 (via prisma, CLI only) - GHSA-3f6p-5ww8-9rcr and GHSA-rgwj-5xj2-c3m3 (auth
+  #   plugin downgrade leaks the password). The app talks to Postgres; never loaded at runtime.
+  'mysql2@3': '>=3.22.0'
+
+# braces (via fast-glob/micromatch in eslint-config-next and shadcn) - GHSA-vfj7-8cjw-p6xm
+# (stack exhaustion). The advisory names 3.0.4 as the fix but no 3.0.4 is published, so
+# there is nothing to pin to. Dev tooling only, fed glob patterns we write. Drop this
+# ignore once a patched braces ships.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
 
 allowBuilds:
   '@prisma/engines': true
