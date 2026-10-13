@@ -38,6 +38,13 @@ updates:
       # when @typescript-eslint ships TS 7 support.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # Vitest 5 drops the jest-dom matcher types our setup relies on (toBeInTheDocument
+      # and friends stop type-checking; PR #62, 2026-10-13). Move both packages together
+      # once @testing-library/jest-dom supports it.
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
