@@ -290,6 +290,25 @@ describe('updateChangeStatus — OpCo authorization', () => {
       expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
     })
 
+    it('is refused when the named user is an auditor', async () => {
+      vi.mocked(getAppSession).mockResolvedValueOnce({
+        ...fieldEngineer, organizations: [{ id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['auditor'] }],
+      })
+      mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-eng', keycloakId: 'kc-eng' })
+      mockDb.changeAssignee.findFirst.mockResolvedValue({ id: 'as-1' })
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+      await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
+      expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+    })
+
+    it('is refused for a group auditor who is named', async () => {
+      vi.mocked(getAppSession).mockResolvedValueOnce({ ...fieldEngineer, realmRoles: ['group_auditor'] })
+      mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-eng', keycloakId: 'kc-eng' })
+      mockDb.changeAssignee.findFirst.mockResolvedValue({ id: 'as-1' })
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+      await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
+    })
+
     it('cannot close a verified change', async () => {
       asNamedImplementer()
       mockDb.changeRequest.findUnique.mockResolvedValueOnce({ ...approvedChange, status: 'verified' })
