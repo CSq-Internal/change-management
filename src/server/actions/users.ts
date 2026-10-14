@@ -33,7 +33,9 @@ export async function onboardUser(input: {
   const session = await getAppSession()
 
   if (input.assignments.length === 0) throw new Error("At least one assignment is required")
-  if (!isAllowedSignInEmail(input.email)) throw new Error("Only @csquared.com addresses can be onboarded.")
+  // Stored exactly as the Google profile will send it, so the row matches at sign-in.
+  const email = input.email.trim().toLowerCase()
+  if (!isAllowedSignInEmail(email)) throw new Error("Only @csquared.com addresses can be onboarded.")
   for (const a of input.assignments) {
     if (!canAssignRole(session.organizations, session.realmRoles, a.opcoSlug, a.role)) {
       throw new Error(`Forbidden: cannot assign ${a.role} in ${a.opcoSlug}`)
@@ -41,7 +43,7 @@ export async function onboardUser(input: {
   }
 
   const db = getPrisma()
-  const existing = await db.user.findFirst({ where: { email: input.email } })
+  const existing = await db.user.findFirst({ where: { email } })
 
   // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
   let keycloakId: string
@@ -50,7 +52,7 @@ export async function onboardUser(input: {
   if (existing) {
     keycloakId = existing.keycloakId
   } else {
-    const identity = await createOrFindKeycloakUser(input.email, input.name)
+    const identity = await createOrFindKeycloakUser(email, input.name)
     keycloakId = identity.id
     createdKeycloakIdentity = identity.created
   }
@@ -62,7 +64,7 @@ export async function onboardUser(input: {
     try {
       await ensureKeycloakUserEnabledVerified(keycloakId)
     } catch (err) {
-      console.warn(`[onboardUser] Keycloak reconcile skipped for ${input.email}:`, err)
+      console.warn(`[onboardUser] Keycloak reconcile skipped for ${email}:`, err)
     }
   }
 
@@ -77,7 +79,7 @@ export async function onboardUser(input: {
   const user = await db.$transaction(async (tx) => {
     const user = existing
       ? existing
-      : await tx.user.create({ data: { keycloakId, email: input.email, name: input.name } })
+      : await tx.user.create({ data: { keycloakId, email, name: input.name } })
 
     for (const { opcoSlug, role } of input.assignments) {
       const opco = await tx.opCo.findUnique({ where: { slug: opcoSlug } })
@@ -98,7 +100,7 @@ export async function onboardUser(input: {
       actorName: session.name,
       action: existing ? "user.link" : "user.onboard",
       targetUserId: user.id,
-      summary: `${existing ? "Linked" : "Onboarded"} ${input.email} (${input.assignments.map((a) => `${a.role}@${a.opcoSlug}`).join(", ")})`,
+      summary: `${existing ? "Linked" : "Onboarded"} ${email} (${input.assignments.map((a) => `${a.role}@${a.opcoSlug}`).join(", ")})`,
       metadata: { assignments: input.assignments },
     })
 
@@ -114,13 +116,13 @@ export async function onboardUser(input: {
 
   try {
     await sendUserInvitationEmail({
-      to: input.email,
+      to: email,
       name: input.name,
       assignments: input.assignments,
       locale: inviteLocale,
     })
   } catch (err) {
-    console.warn(`[onboardUser] invitation email failed for ${input.email}:`, err)
+    console.warn(`[onboardUser] invitation email failed for ${email}:`, err)
   }
 
   return user

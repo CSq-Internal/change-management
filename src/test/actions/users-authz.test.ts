@@ -159,13 +159,18 @@ describe("onboardUser — authorization & ceiling", () => {
     expect(mockDb.user.create).not.toHaveBeenCalled()
   })
 
-  it("onboards a CSquared address typed with capitals or spaces", async () => {
+  it("onboards a CSquared address typed with capitals or spaces, stored as Google will send it", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     await onboardUser({
       name: "New", email: "New@CSquared.com ",
       assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })
-    expect(createOrFindKeycloakUser).toHaveBeenCalledTimes(1)
+    expect(mockDb.user.findFirst).toHaveBeenCalledWith({ where: { email: "new@csquared.com" } })
+    expect(createOrFindKeycloakUser).toHaveBeenCalledWith("new@csquared.com", "New")
+    expect(mockDb.user.create).toHaveBeenCalledWith({
+      data: { keycloakId: "kc-new", email: "new@csquared.com", name: "New" },
+    })
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "new@csquared.com" }))
   })
 })
 
