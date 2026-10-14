@@ -97,7 +97,6 @@ const navGroups = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -108,7 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const currentUser = session?.user ?? null
   // A locally-uploaded blob wins; otherwise the inherited profile image (Google
   // `picture`, once Keycloak maps it); otherwise initials from name/email.
-  const displayAvatar = avatarUrl ?? currentUser?.image ?? null
+  const displayAvatar = currentUser?.image ?? null
   const initials = (() => {
     const src = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || ""
     const parts = src.split(/[\s._-]+/).filter(Boolean)
@@ -376,7 +375,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Home className="h-4 w-4" />
                 </Link>
                 <OpCoSwitcher />
-                <label className="flex cursor-pointer items-center gap-2 rounded-full bg-card px-2 py-1">
+                <div className="flex items-center gap-2 rounded-full bg-card px-2 py-1">
                   <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                     {displayAvatar ? (
                       <Image src={displayAvatar} alt="Profile" fill unoptimized className="object-cover" />
@@ -387,18 +386,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                   </span>
                   <span className="text-sm">{currentUser?.name ?? "Guest"}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      if (!file) return
-                      const url = URL.createObjectURL(file)
-                      setAvatarUrl(url)
-                    }}
-                  />
-                </label>
+                </div>
                 <button
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
                   onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
