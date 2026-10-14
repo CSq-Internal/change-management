@@ -110,6 +110,10 @@ In your org's prod realm (note its name; the app derives the realm from
   assign **`manage-users`** (and nothing else — least privilege).
 - Copy the client secret → `KEYCLOAK_ADMIN_CLIENT_SECRET`.
 
+**3c. Google-only sign-in** (after the app is live)
+- Follow `docs/keycloak-cms-google-only-flow.md`: a `cms-google-only` browser-flow
+  override on `csquared-cms`, so the CMS never shows a password form.
+
 > **About `manage-organizations` (verified on Keycloak 26.6):** don't bother — the
 > `realm-management` `manage-organizations` role is **not seeded** when you enable
 > Organizations (confirmed: neither realm import nor native realm creation adds it),
