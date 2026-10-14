@@ -5,10 +5,11 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
-import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser, getFederatedIdentities, resetKeycloakPassword, ensureKeycloakUserEnabledVerified } from "@/server/keycloak"
+import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser, ensureKeycloakUserEnabledVerified } from "@/server/keycloak"
 import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
 import { sendUserInvitationEmail } from "@/server/email"
 import { coerceLocale } from "@/lib/i18n"
+import { isAllowedSignInEmail } from "@/lib/sign-in-domain"
 import type { Role, Prisma } from "@prisma/client"
 import type { SessionOrganization } from "@/types/next-auth"
 
@@ -27,12 +28,12 @@ function assertCanManageUser(
 export async function onboardUser(input: {
   name: string
   email: string
-  tempPassword: string
   assignments: Array<{ opcoSlug: string; role: Role }>
 }) {
   const session = await getAppSession()
 
   if (input.assignments.length === 0) throw new Error("At least one assignment is required")
+  if (!isAllowedSignInEmail(input.email)) throw new Error("Only @csquared.com addresses can be onboarded.")
   for (const a of input.assignments) {
     if (!canAssignRole(session.organizations, session.realmRoles, a.opcoSlug, a.role)) {
       throw new Error(`Forbidden: cannot assign ${a.role} in ${a.opcoSlug}`)
@@ -45,27 +46,21 @@ export async function onboardUser(input: {
   // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
   let keycloakId: string
   let createdKeycloakIdentity = false
-  let isFederated = false
 
   if (existing) {
     keycloakId = existing.keycloakId
   } else {
-    const identity = await createOrFindKeycloakUser(input.email, input.name, input.tempPassword)
+    const identity = await createOrFindKeycloakUser(input.email, input.name)
     keycloakId = identity.id
     createdKeycloakIdentity = identity.created
   }
 
-  // Reconcile an ADOPTED Keycloak account (not freshly created) so a re-invite after a
-  // DB wipe yields a working login: ensure it's enabled + verified, then either keep
-  // the federated (Google) login or reset the password for password users.
+  // An ADOPTED Keycloak account (a re-invite after a DB wipe, or someone already on the
+  // shared realm) must be able to sign in: enable + verify it. Its password is never
+  // touched, so a CMS invite cannot lock anyone out of another app on the realm.
   if (!createdKeycloakIdentity) {
     try {
-      const links = await getFederatedIdentities(keycloakId)
-      isFederated = links.length > 0
       await ensureKeycloakUserEnabledVerified(keycloakId)
-      if (!isFederated) {
-        await resetKeycloakPassword(keycloakId, input.tempPassword || "ChangeMe123!")
-      }
     } catch (err) {
       console.warn(`[onboardUser] Keycloak reconcile skipped for ${input.email}:`, err)
     }
@@ -121,9 +116,6 @@ export async function onboardUser(input: {
     await sendUserInvitationEmail({
       to: input.email,
       name: input.name,
-      tempPassword: input.tempPassword || "ChangeMe123!",
-      existingIdentity: !!existing || !createdKeycloakIdentity,
-      federated: isFederated,
       assignments: input.assignments,
       locale: inviteLocale,
     })

@@ -60,24 +60,12 @@ async function dispatchEmail(to: string, subject: string, html: string, text?: s
 export async function sendUserInvitationEmail(opts: {
   to: string
   name: string
-  tempPassword?: string
-  existingIdentity: boolean
-  federated?: boolean
   assignments: Array<{ opcoSlug: string; role: string }>
   locale?: Language
 }) {
   const fr = opts.locale === "fr"
   const subject = fr ? "Vous êtes invité à CSquared CMS" : "You're invited to CSquared CMS"
-  const el = (
-    <InvitationEmail
-      name={opts.name}
-      tempPassword={opts.tempPassword}
-      existingIdentity={opts.existingIdentity}
-      federated={opts.federated}
-      assignments={opts.assignments}
-      lang={opts.locale ?? "en"}
-    />
-  )
+  const el = <InvitationEmail name={opts.name} assignments={opts.assignments} lang={opts.locale ?? "en"} />
   const html = await render(el)
   const text = await render(el, { plainText: true })
   await dispatchEmail(opts.to, subject, html, text)

@@ -13,8 +13,6 @@ vi.mock('@/server/keycloak', () => ({
   assignToOrganization: vi.fn().mockResolvedValue(undefined),
   deactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
   reactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
-  getFederatedIdentities: vi.fn().mockResolvedValue([]),
-  resetKeycloakPassword: vi.fn().mockResolvedValue(undefined),
   ensureKeycloakUserEnabledVerified: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -57,8 +55,6 @@ vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 import { onboardUser } from '@/server/actions/users'
 import {
   createOrFindKeycloakUser,
-  getFederatedIdentities,
-  resetKeycloakPassword,
   ensureKeycloakUserEnabledVerified,
 } from '@/server/keycloak'
 import { sendUserInvitationEmail } from '@/server/email'
@@ -72,52 +68,27 @@ describe('onboardUser — adopt-path reconcile (Task B3)', () => {
     mockDb.opCo.findUnique.mockResolvedValue({ id: 'opco-gh', slug: 'ghana', locale: 'en' })
   })
 
-  it('adopt + federated: skips password reset, enables+verifies, sends federated invite', async () => {
-    // KC user already exists (created: false) with a Google federated identity
+  it('adopted Keycloak account: enabled + verified, no password touched', async () => {
     vi.mocked(createOrFindKeycloakUser).mockResolvedValueOnce({ id: 'kc-1', created: false })
-    vi.mocked(getFederatedIdentities).mockResolvedValueOnce([{ identityProvider: 'google-csquared' }])
 
     await onboardUser({
-      name: 'Federated User', email: 'fed@csquared.com', tempPassword: 'TempPass1!',
+      name: 'Adopted User', email: 'adopted@csquared.com',
       assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
     })
 
-    expect(resetKeycloakPassword).not.toHaveBeenCalled()
     expect(ensureKeycloakUserEnabledVerified).toHaveBeenCalledWith('kc-1')
-    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ federated: true })
-    )
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'adopted@csquared.com' }))
   })
 
-  it('adopt + password user: resets password, sends non-federated invite', async () => {
-    // KC user already exists (created: false) with no federated identity (password user)
-    vi.mocked(createOrFindKeycloakUser).mockResolvedValueOnce({ id: 'kc-1', created: false })
-    vi.mocked(getFederatedIdentities).mockResolvedValueOnce([])
-
-    await onboardUser({
-      name: 'Password User', email: 'pw@csquared.com', tempPassword: 'TempPass1!',
-      assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
-    })
-
-    expect(resetKeycloakPassword).toHaveBeenCalledWith('kc-1', 'TempPass1!')
-    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ federated: false })
-    )
-  })
-
-  it('brand-new user: skips federated check and password reset, sends temp-password invite', async () => {
-    // Brand-new KC user (created: true) — no reconcile needed
+  it('brand-new user: no reconcile, Google invite', async () => {
     vi.mocked(createOrFindKeycloakUser).mockResolvedValueOnce({ id: 'kc-new', created: true })
 
     await onboardUser({
-      name: 'New User', email: 'new@csquared.com', tempPassword: 'TempPass1!',
+      name: 'New User', email: 'new@csquared.com',
       assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
     })
 
-    expect(getFederatedIdentities).not.toHaveBeenCalled()
-    expect(resetKeycloakPassword).not.toHaveBeenCalled()
-    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ federated: false })
-    )
+    expect(ensureKeycloakUserEnabledVerified).not.toHaveBeenCalled()
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'new@csquared.com' }))
   })
 })
