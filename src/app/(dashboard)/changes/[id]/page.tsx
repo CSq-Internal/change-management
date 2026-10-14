@@ -115,6 +115,7 @@ export default async function ChangeDetailPage({
   const caps: Caps = {
     isRequester: change.requester.keycloakId === me.keycloakId,
     isImplementer: !!meUser && change.implementedById === meUser.id,
+    isNamedImplementer: !!meUser && change.assignees.some((a) => a.role === "implementer" && a.userId === meUser.id),
     canApprove: canApproveThis,
     isAdmin: isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
     isCabMember: isGroupAdmin(me.realmRoles),

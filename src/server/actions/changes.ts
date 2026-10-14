@@ -355,11 +355,16 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
     if (change.requesterId !== user.id && !isAdmin) {
       throw new Error("Forbidden: only the requester or an admin can reopen this change")
     }
-  } else {
-    // implemented / closed: requires approver or admin rights
-    if (!canApprove(session.organizations, change.opco.slug) && !isAdmin) {
-      throw new Error("Forbidden: not authorized to advance this change")
-    }
+  } else if (!canApprove(session.organizations, change.opco.slug) && !isAdmin) {
+    // implemented / closed normally need approver or admin rights. The exception is a named
+    // implementer recording the work they did on an approved change, so "implemented by"
+    // names who did it rather than whoever had the button. An expedited emergency
+    // (pending → implemented) still needs an approver: implementing it stands in for the
+    // approval, which a named implementer cannot give.
+    const namedImplementer =
+      toStatus === "implemented" && change.status === "approved" &&
+      !!(await db.changeAssignee.findFirst({ where: { changeId, userId: user.id, role: "implementer" } }))
+    if (!namedImplementer) throw new Error("Forbidden: not authorized to advance this change")
   }
 
   const data: {
