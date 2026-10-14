@@ -31,7 +31,7 @@
     "dayjs": "^1.11.21",
     "google-auth-library": "^10.9.0",
     "framer-motion": "^12.42.2",
-    "driver.js": "^1.6.0",
+    "driver.js": "^1.9.0",
     "lucide-react": "^1.24.0",
     "next": "16.3.8",
     "next-auth": "5.0.0-beta.32",
