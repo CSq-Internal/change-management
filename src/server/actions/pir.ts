@@ -5,6 +5,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { notifyChange } from "@/server/notify"
 import { isGroupAdmin, hasRoleInOpCo, canApprove } from "@/lib/permissions"
+import { needsIndependentPir } from "@/lib/pir-policy"
 import type { PirOutcome } from "@prisma/client"
 
 export async function submitPostImplementationReview(
@@ -36,6 +37,11 @@ export async function submitPostImplementationReview(
     canApprove(session.organizations, change.opco.slug) ||
     change.implementedById === user.id
   if (!authorized) throw new Error("Forbidden: not authorized to record a PIR for this change")
+
+  const selfReview = user.id === change.requesterId || user.id === change.implementedById
+  if (selfReview && needsIndependentPir(change, input)) {
+    throw new Error("Forbidden: this PIR must be recorded by someone who neither requested nor implemented the change")
+  }
 
   // Expedited emergencies must be sanctioned (retrospective approval) before verification.
   if (change.expedited && !change.retroApprovedAt) {
