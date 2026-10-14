@@ -9,6 +9,7 @@ import { useStore } from "@/lib/store"
 import { getNavCounts, setMyLocale } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
+import { FeedbackWidget } from "@/components/feedback-widget"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import { resolveTheme, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme"
@@ -44,6 +45,7 @@ import {
   Building2,
   ScrollText,
   UserPlus,
+  Flag,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import ProductTour from "@/components/tour/product-tour"
@@ -68,6 +70,7 @@ const navGroups = [
       { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight, gate: "admin" },
       { href: "/opcos", labelKey: "nav.opcos", icon: Building2, gate: "groupAdmin", tour: "nav-opcos" },
       { href: "/admin-audit", labelKey: "nav.audit", icon: ScrollText, gate: "adminOrAudit" },
+      { href: "/feedback", labelKey: "nav.feedback", icon: Flag, gate: "groupAdmin" },
     ],
   },
   {
@@ -411,6 +414,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <HelpCircle className="h-4 w-4" />
                 </button>
+                {currentUser && <FeedbackWidget route={pathname} />}
                 <div className="relative">
                   <button
                     className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"
