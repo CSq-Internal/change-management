@@ -12,6 +12,7 @@ import { submitChange, updateChangeStatus, discardChange } from "@/server/action
 import { submitApproval } from "@/server/actions/approvals"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { StatusPill, RiskPill } from "@/components/change-badges"
+import { QuorumProgress } from "@/components/quorum-progress"
 import PirForm from "./pir-form"
 import AssigneesDialog from "./assignees-dialog"
 import ConfirmDialog from "../../users/confirm-dialog"
@@ -279,11 +280,6 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
 
   // ── CAB quorum ───────────────────────────────────────────────────────────
   const needsCab = change.riskLevel === "high" || change.riskLevel === "emergency"
-  const cabCount = new Set(
-    change.approvals
-      .filter((a) => a.isCab && a.decision === "approve")
-      .map((a) => a.approverId)
-  ).size
 
   const requesterLabel = change.requester.name ?? change.requester.email
 
@@ -448,8 +444,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
             )}
             {needsCab && (
               <div className="mt-3 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{t(language, "detail.cabQuorum")}: </span>
-                {cabCount}/2
+                <QuorumProgress approvals={change.approvals} language={language} labelClassName="font-medium text-foreground" />
               </div>
             )}
           </CardContent>
