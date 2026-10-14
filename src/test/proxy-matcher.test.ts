@@ -3,6 +3,7 @@ import { config } from "@/proxy"
 
 // Next.js treats each matcher entry as a path regex; anything it matches goes through
 // the sign-in redirect.
+// eslint-disable-next-line security/detect-non-literal-regexp -- the pattern is our own matcher config
 const gated = (path: string) => config.matcher.some((m) => new RegExp(`^${m}$`).test(path))
 
 describe("proxy matcher", () => {
