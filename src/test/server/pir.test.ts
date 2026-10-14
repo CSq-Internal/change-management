@@ -28,6 +28,7 @@ import { submitPostImplementationReview } from "@/server/actions/pir"
 
 const implemented = {
   id: "cr-1", status: "implemented", opco: { slug: "ghana" },
+  riskLevel: "low", isEmergency: false, requesterId: "user-req",
   implementedById: "user-impl", expedited: false, retroApprovedAt: null, pir: null, approvals: [],
 }
 
@@ -72,4 +73,34 @@ it("blocks an expedited emergency PIR until retrospectively approved", async () 
   await expect(
     submitPostImplementationReview("cr-1", { outcome: "success", summary: "x", backoutUsed: false })
   ).rejects.toThrow(/retrospective approval/i)
+})
+
+describe("independent PIR (ISO 27001 A.5.3)", () => {
+  const ok = { outcome: "success" as const, summary: "Done", backoutUsed: false }
+
+  it("refuses the implementer reviewing their own high-risk change", async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({ ...implemented, riskLevel: "high" })
+    await expect(submitPostImplementationReview("cr-1", ok)).rejects.toThrow(/neither requested nor implemented/i)
+    expect(mockDb.postImplementationReview.create).not.toHaveBeenCalled()
+  })
+
+  it("refuses the requester reviewing their own emergency change", async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      ...implemented, isEmergency: true, requesterId: "user-impl", implementedById: "user-other",
+    })
+    await expect(submitPostImplementationReview("cr-1", ok)).rejects.toThrow(/neither requested nor implemented/i)
+  })
+
+  it("refuses a self-recorded failure or backout on a low-risk change", async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(implemented)
+    await expect(submitPostImplementationReview("cr-1", { ...ok, outcome: "failed" })).rejects.toThrow(/neither requested/i)
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(implemented)
+    await expect(submitPostImplementationReview("cr-1", { ...ok, backoutUsed: true })).rejects.toThrow(/neither requested/i)
+  })
+
+  it("lets an uninvolved approver review a high-risk change", async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({ ...implemented, riskLevel: "high", implementedById: "user-other" })
+    await submitPostImplementationReview("cr-1", ok)
+    expect(mockDb.postImplementationReview.create).toHaveBeenCalledTimes(1)
+  })
 })
