@@ -1,5 +1,5 @@
 // src/test/actions/changes.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/lib/session', () => ({
   getAppSession: vi.fn().mockResolvedValue({
@@ -44,7 +44,7 @@ const mockDb = {
   cABMembership: { findMany: vi.fn().mockResolvedValue([]) },
   approverDelegation: { findMany: vi.fn().mockResolvedValue([]) },
   approverAssignment: { findMany: vi.fn().mockResolvedValue([]) },
-  changeAssignee: { findMany: vi.fn().mockResolvedValue([]) },
+  changeAssignee: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
   $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
 }
 
@@ -251,6 +251,69 @@ describe('updateChangeStatus — OpCo authorization', () => {
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'implemented', expedited: true, retroApprovalDueAt: expect.any(Date) }) })
     )
+  })
+
+  describe('named implementer (requester role only)', () => {
+    const fieldEngineer = {
+      keycloakId: 'kc-eng', email: 'eng@csquared.com', name: 'Engineer',
+      organizations: [{ id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['requester'] }],
+      realmRoles: [] as string[],
+    }
+    const asNamedImplementer = () => {
+      vi.mocked(getAppSession).mockResolvedValueOnce(fieldEngineer)
+      mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-eng', keycloakId: 'kc-eng' })
+      mockDb.changeAssignee.findFirst.mockResolvedValue({ id: 'as-1' })
+    }
+    // Not a Once: the emergency and close paths never reach the lookup, so a queued value
+    // would leak into later tests.
+    afterEach(() => { mockDb.changeAssignee.findFirst.mockResolvedValue(null) })
+
+    it('can mark an approved change implemented, recorded as the implementer', async () => {
+      asNamedImplementer()
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+      await updateChangeStatus('cr-1', 'implemented')
+      expect(mockDb.changeAssignee.findFirst).toHaveBeenCalledWith({
+        where: { changeId: 'cr-1', userId: 'user-eng', role: 'implementer' },
+      })
+      expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'implemented', implementedById: 'user-eng' }) })
+      )
+    })
+
+    it('cannot expedite an emergency straight from pending', async () => {
+      asNamedImplementer()
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+        id: 'cr-1', status: 'pending', isEmergency: true, opco: { slug: 'ghana' },
+        requesterId: 'user-1', approvals: [],
+      })
+      await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
+      expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+    })
+
+    it('is refused when the named user is an auditor', async () => {
+      vi.mocked(getAppSession).mockResolvedValueOnce({
+        ...fieldEngineer, organizations: [{ id: 'org-1', name: 'Ghana', alias: 'ghana', roles: ['auditor'] }],
+      })
+      mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-eng', keycloakId: 'kc-eng' })
+      mockDb.changeAssignee.findFirst.mockResolvedValue({ id: 'as-1' })
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+      await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
+      expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+    })
+
+    it('is refused for a group auditor who is named', async () => {
+      vi.mocked(getAppSession).mockResolvedValueOnce({ ...fieldEngineer, realmRoles: ['group_auditor'] })
+      mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-eng', keycloakId: 'kc-eng' })
+      mockDb.changeAssignee.findFirst.mockResolvedValue({ id: 'as-1' })
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+      await expect(updateChangeStatus('cr-1', 'implemented')).rejects.toThrow(/Forbidden/)
+    })
+
+    it('cannot close a verified change', async () => {
+      asNamedImplementer()
+      mockDb.changeRequest.findUnique.mockResolvedValueOnce({ ...approvedChange, status: 'verified' })
+      await expect(updateChangeStatus('cr-1', 'closed')).rejects.toThrow(/Forbidden/)
+    })
   })
 
   it('forbids implementing a non-emergency change straight from pending', async () => {
