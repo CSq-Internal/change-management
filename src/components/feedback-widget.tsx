@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { createPortal } from "react-dom"
 import { Flag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -71,7 +72,9 @@ export function FeedbackWidget({ route }: { route: string }) {
         <Flag className="h-4 w-4" />
         <span className="hidden sm:inline">{translate("feedback.trigger")}</span>
       </button>
-      {open && (
+      {/* Portal to <body>: the header's backdrop-blur makes it the containing block for
+          fixed descendants, which would clip the overlay to the header strip. */}
+      {open && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div
             role="dialog"
@@ -141,7 +144,8 @@ export function FeedbackWidget({ route }: { route: string }) {
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

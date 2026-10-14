@@ -30,6 +30,12 @@ describe("FeedbackWidget", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 
+  it("renders the dialog outside its parent, so the blurred header cannot clip it", () => {
+    const { container } = render(<FeedbackWidget route="/cab" />)
+    fireEvent.click(screen.getByRole("button", { name: /feedback/i }))
+    expect(container.contains(screen.getByRole("dialog"))).toBe(false)
+  })
+
   it("will not submit without a category", () => {
     open()
     fireEvent.change(bodyBox(), { target: { value: "I could not find where to do this" } })
