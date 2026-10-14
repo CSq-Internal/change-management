@@ -74,6 +74,8 @@ export type SerializedChange = {
 export type Caps = {
   isRequester: boolean
   isImplementer: boolean
+  /** Named as an implementer on this change, which lets them mark it implemented once approved. */
+  isNamedImplementer: boolean
   canApprove: boolean
   isAdmin: boolean
   isCabMember: boolean
@@ -159,9 +161,11 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     // pending (expedited), obtaining its approval retrospectively. Hidden from the
     // sole approver — implementer SoD forbids them implementing (server enforces it
     // too, changes.ts); the handleStatusChange guard + toast remain as backstop.
+    // A named implementer may also implement an approved change, but not expedite an
+    // emergency from pending (changes.ts).
     implement:
-      (change.status === "approved" || (change.status === "pending" && change.isEmergency)) &&
-      (caps.canApprove || caps.isAdmin) &&
+      ((change.status === "approved" && (caps.canApprove || caps.isAdmin || caps.isNamedImplementer)) ||
+        (change.status === "pending" && change.isEmergency && (caps.canApprove || caps.isAdmin))) &&
       !caps.soleApproverIsMe,
     close: change.status === "verified" && (caps.canApprove || caps.isAdmin),
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
@@ -620,7 +624,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
               </Button>
             )}
 
-            {change.status === "implemented" && (caps.canApprove || caps.isAdmin) && !change.hasPir && (
+            {change.status === "implemented" && (caps.canApprove || caps.isAdmin || caps.isImplementer) && !change.hasPir && (
               (caps.isRequester || caps.isImplementer) && needsIndependentPir(change) ? (
                 <p className="text-sm text-muted-foreground">{t(language, "pir.needsIndependent")}</p>
               ) : (
