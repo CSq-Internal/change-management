@@ -55,3 +55,24 @@ describe("ApprovalsClient optimistic removal", () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 })
+
+describe("ApprovalsClient quorum progress", () => {
+  const highRisk = (approvals: ApprovalChange["approvals"]): ApprovalChange => ({
+    ...change, riskLevel: "high", approvals,
+  })
+
+  it("flags a high-risk change whose two approvals include no CAB vote", () => {
+    render(<ApprovalsClient isCabMember changes={[highRisk([
+      { isCab: false, decision: "approve", approverId: "n1" },
+      { isCab: false, decision: "approve", approverId: "n2" },
+    ])]} />)
+    expect(screen.getByText(/2\/2/).textContent).toContain("waiting for a CAB vote")
+  })
+
+  it("shows plain progress once a CAB member has approved", () => {
+    render(<ApprovalsClient isCabMember changes={[highRisk([
+      { isCab: true, decision: "approve", approverId: "c1" },
+    ])]} />)
+    expect(screen.getByText(/1\/2/).textContent).not.toContain("waiting for a CAB vote")
+  })
+})

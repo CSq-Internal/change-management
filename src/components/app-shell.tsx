@@ -9,6 +9,7 @@ import { useStore } from "@/lib/store"
 import { getNavCounts, setMyLocale } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
 import { OpCoSwitcher } from "@/components/opco-switcher"
+import { FeedbackWidget } from "@/components/feedback-widget"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import { resolveTheme, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme"
@@ -44,6 +45,7 @@ import {
   Building2,
   ScrollText,
   UserPlus,
+  Flag,
 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import ProductTour from "@/components/tour/product-tour"
@@ -68,6 +70,7 @@ const navGroups = [
       { href: "/delegations", labelKey: "nav.delegations", icon: ArrowLeftRight, gate: "admin" },
       { href: "/opcos", labelKey: "nav.opcos", icon: Building2, gate: "groupAdmin", tour: "nav-opcos" },
       { href: "/admin-audit", labelKey: "nav.audit", icon: ScrollText, gate: "adminOrAudit" },
+      { href: "/feedback", labelKey: "nav.feedback", icon: Flag, gate: "groupAdmin" },
     ],
   },
   {
@@ -94,7 +97,6 @@ const navGroups = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -105,7 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const currentUser = session?.user ?? null
   // A locally-uploaded blob wins; otherwise the inherited profile image (Google
   // `picture`, once Keycloak maps it); otherwise initials from name/email.
-  const displayAvatar = avatarUrl ?? currentUser?.image ?? null
+  const displayAvatar = currentUser?.image ?? null
   const initials = (() => {
     const src = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || ""
     const parts = src.split(/[\s._-]+/).filter(Boolean)
@@ -373,7 +375,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Home className="h-4 w-4" />
                 </Link>
                 <OpCoSwitcher />
-                <label className="flex cursor-pointer items-center gap-2 rounded-full bg-card px-2 py-1">
+                <div className="flex items-center gap-2 rounded-full bg-card px-2 py-1">
                   <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                     {displayAvatar ? (
                       <Image src={displayAvatar} alt="Profile" fill unoptimized className="object-cover" />
@@ -384,18 +386,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                   </span>
                   <span className="text-sm">{currentUser?.name ?? "Guest"}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      if (!file) return
-                      const url = URL.createObjectURL(file)
-                      setAvatarUrl(url)
-                    }}
-                  />
-                </label>
+                </div>
                 <button
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
                   onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -411,6 +402,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <HelpCircle className="h-4 w-4" />
                 </button>
+                {currentUser && <FeedbackWidget route={pathname} />}
                 <div className="relative">
                   <button
                     className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted"

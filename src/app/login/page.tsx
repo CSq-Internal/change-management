@@ -1,5 +1,7 @@
 "use client"
 
+import { Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
@@ -7,7 +9,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 
 export default function LoginPage() {
+  // useSearchParams needs a Suspense boundary so the page can still prerender.
+  return (
+    <Suspense>
+      <LoginCard />
+    </Suspense>
+  )
+}
+
+function LoginCard() {
   const { language } = useStore()
+  const error = useSearchParams().get("error")
 
   async function handleLogin() {
     await signIn("keycloak", { callbackUrl: "/" })
@@ -28,6 +40,12 @@ export default function LoginPage() {
           <CardDescription>{t(language, "auth.subtitle")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error && (
+            <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+              <p className="font-medium">{t(language, "auth.error.callback")}</p>
+              <p className="text-muted-foreground">{t(language, "auth.error.callbackDesc")}</p>
+            </div>
+          )}
           <Button variant="outline" className="w-full" onClick={handleGoogleLogin}>
             {t(language, "auth.google")}
           </Button>
