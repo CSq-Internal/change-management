@@ -36,6 +36,15 @@ export async function addApproverAssignment(input: { infrastructureType: string;
   const target = await db.user.findUnique({ where: { id: input.userId }, select: { id: true, isActive: true } })
   if (!target || !target.isActive) throw new Error("Approver must be an active user")
   const opcoId = opco?.id ?? null
+  // An override makes the user a routed approver, so hold it to the CAB rule (addCabMember):
+  // an approver or admin in that OpCo, or in at least one OpCo for a group-level override.
+  // Keeps auditors and requester-only users out of the approval path.
+  const eligible = await db.userOpCoAssignment.findFirst({
+    where: { userId: input.userId, isActive: true, role: { in: ["approver", "admin"] }, ...(opcoId ? { opcoId } : {}) },
+  })
+  if (!eligible) {
+    throw new Error(`Forbidden: approver must be an approver or admin in ${input.opcoSlug ?? "at least one OpCo"}`)
+  }
 
   return db.$transaction(async (tx) => {
     const actor = await tx.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })

@@ -14,6 +14,7 @@ import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-k
 import { StatusPill, RiskPill } from "@/components/change-badges"
 import { QuorumProgress } from "@/components/quorum-progress"
 import PirForm from "./pir-form"
+import { needsIndependentPir } from "@/lib/pir-policy"
 import AssigneesDialog from "./assignees-dialog"
 import ConfirmDialog from "../../users/confirm-dialog"
 
@@ -72,6 +73,7 @@ export type SerializedChange = {
 
 export type Caps = {
   isRequester: boolean
+  isImplementer: boolean
   canApprove: boolean
   isAdmin: boolean
   isCabMember: boolean
@@ -619,7 +621,11 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
             )}
 
             {change.status === "implemented" && (caps.canApprove || caps.isAdmin) && !change.hasPir && (
-              <PirForm changeId={change.id} />
+              (caps.isRequester || caps.isImplementer) && needsIndependentPir(change) ? (
+                <p className="text-sm text-muted-foreground">{t(language, "pir.needsIndependent")}</p>
+              ) : (
+                <PirForm changeId={change.id} />
+              )
             )}
 
             {a.close && (
