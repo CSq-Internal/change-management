@@ -87,12 +87,15 @@ describe('realm is parameterised, not hardcoded (C)', () => {
       }) // create user
     vi.stubGlobal('fetch', fetchMock)
 
-    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace', 'temp-pw')
+    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace')
     expect(id).toBe('uid-123')
 
     const [url, opts] = fetchMock.mock.calls[1]
     expect(url).toBe('https://kc.example.com/admin/realms/acme/users')
     expect((opts as RequestInit & { headers: Record<string, string> }).headers.Authorization).toBe('Bearer tok')
+    const body = JSON.parse((opts as RequestInit).body as string)
+    expect(body).not.toHaveProperty('credentials')
+    expect(body).toMatchObject({ username: 'a@x.com', email: 'a@x.com', enabled: true, emailVerified: true })
   })
 
   it('createKeycloakUser links an existing Keycloak user when create returns 409', async () => {
@@ -111,7 +114,7 @@ describe('realm is parameterised, not hardcoded (C)', () => {
       }) // exact email lookup
     vi.stubGlobal('fetch', fetchMock)
 
-    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace', 'temp-pw')
+    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace')
 
     expect(id).toBe('uid-existing')
     expect(fetchMock.mock.calls[2][0]).toBe(

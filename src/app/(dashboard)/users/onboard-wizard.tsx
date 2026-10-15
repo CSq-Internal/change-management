@@ -26,7 +26,6 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
   const [step, setStep] = useState(0)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [assignments, setAssignments] = useState<Assignment[]>(() => [
     { opcoSlug: availableSlugs[0] ?? "ghana", role: "requester" },
   ])
@@ -86,7 +85,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
     }
     startTransition(async () => {
       try {
-        await onboardUser({ name, email, tempPassword: password || "ChangeMe123!", assignments })
+        await onboardUser({ name, email, assignments })
         toast({
           title: t(language, "users.toast.created"),
           description: `${name} — ${assignments.length} OpCo(s)`,
@@ -177,16 +176,6 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
                   {t(language, "users.wizard.addAssignment")}
                 </Button>
               )}
-              <div>
-                <label className="text-sm font-medium">{t(language, "users.wizard.password")}</label>
-                <Input
-                  type="password"
-                  placeholder={t(language, "users.wizard.passwordPlaceholder")}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">{t(language, "users.wizard.passwordHint")}</p>
-              </div>
             </div>
           )}
 
@@ -202,7 +191,6 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
                   </li>
                 ))}
               </ul>
-              <p>{t(language, "users.wizard.passwordHint")}</p>
             </div>
           )}
 

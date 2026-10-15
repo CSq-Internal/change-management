@@ -55,25 +55,22 @@ export async function getAdminToken(): Promise<string> {
   return data.access_token as string
 }
 
-export async function createKeycloakUser(
-  email: string,
-  name: string,
-  tempPassword: string
-): Promise<string> {
-  const result = await createOrFindKeycloakUser(email, name, tempPassword)
+export async function createKeycloakUser(email: string, name: string): Promise<string> {
+  const result = await createOrFindKeycloakUser(email, name)
   return result.id
 }
 
 export async function createOrFindKeycloakUser(
   email: string,
-  name: string,
-  tempPassword: string
+  name: string
 ): Promise<{ id: string; created: boolean }> {
   const token = await getAdminToken()
   const { adminRealmUrl } = kcEndpoints()
   const [firstName, ...rest] = name.trim().split(" ")
   const lastName = rest.join(" ") || ""
 
+  // No credentials: CMS sign-in is Google-only. The first Google sign-in links to this
+  // account by verified email (first-broker-login auto-link on google-csquared).
   const res = await fetch(`${adminRealmUrl}/users`, {
     method: "POST",
     headers: {
@@ -87,7 +84,6 @@ export async function createOrFindKeycloakUser(
       lastName,
       enabled: true,
       emailVerified: true,
-      credentials: [{ type: "password", value: tempPassword, temporary: true }],
     }),
   })
 
@@ -250,42 +246,6 @@ export async function createKeycloakOrg(slug: string, name: string): Promise<str
   const id = location.split("/").at(-1)
   if (!id) throw new Error(`Could not parse org id from Location: ${location}`)
   return id
-}
-
-/** Federated identity links (e.g. a brokered Google login) for a Keycloak user. */
-export async function getFederatedIdentities(
-  keycloakUserId: string
-): Promise<Array<{ identityProvider: string }>> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(`${adminRealmUrl}/users/${keycloakUserId}/federated-identity`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (res.status === 404) return []
-  if (!res.ok) {
-    throw new Error(`Failed to read federated identities: ${res.status} ${await res.text()}`)
-  }
-  const links = await res.json()
-  if (!Array.isArray(links)) return []
-  return links.map((l: { identityProvider?: string }) => ({ identityProvider: l.identityProvider ?? "" }))
-}
-
-/** Reset a Keycloak user's password (temporary by default) so an emailed invite works. */
-export async function resetKeycloakPassword(
-  keycloakUserId: string,
-  password: string,
-  temporary = true
-): Promise<void> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(`${adminRealmUrl}/users/${keycloakUserId}/reset-password`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ type: "password", value: password, temporary }),
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to reset Keycloak password: ${res.status} ${await res.text()}`)
-  }
 }
 
 /** Ensure an adopted user can actually authenticate: enabled + email verified. */

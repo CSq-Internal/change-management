@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth"
 import Keycloak from "next-auth/providers/keycloak"
+import { isAllowedSignInEmail } from "@/lib/sign-in-domain"
 
 /**
  * Edge-safe NextAuth config: providers + token/profile extraction only.
@@ -34,6 +35,12 @@ const authConfig: NextAuthConfig = {
     },
   },
   callbacks: {
+    // Google @csquared.com only. Keycloak's cms-google-only flow already forces Google;
+    // this is the in-app lock if that client setting is ever reverted. A refusal lands on
+    // /login?error=AccessDenied and is logged through logger.error above.
+    signIn({ profile }) {
+      return profile?.email_verified === true && isAllowedSignInEmail(profile.email)
+    },
     jwt({ token, account, profile }) {
       if (account) token.accessToken = account.access_token
       if (profile) {
