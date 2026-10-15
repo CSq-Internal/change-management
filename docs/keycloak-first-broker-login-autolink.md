@@ -1,49 +1,53 @@
-# Re-invited SSO users: first-broker-login auto-link (Keycloak operator steps)
+# CMS first Google sign-in: link existing accounts silently (Keycloak operator steps)
 
-When the app DB is wiped but Keycloak is not, re-inviting a user adopts the existing
-Keycloak account (the app does this automatically — see Part B of the V3 auth-flow pass).
-For **Google-SSO** users to then sign in cleanly, Keycloak's brokered login must **link the
-incoming Google identity to the pre-existing account by verified email** instead of stopping
-with "an account already exists." Otherwise the user hits a manual link/verify prompt — the
-"can't sign in" symptom.
+Onboarding creates each user's Keycloak account before they ever sign in (with no
+password). On that user's first Google sign-in, Keycloak's default **first broker login**
+flow does **not** link the Google identity to the existing account by itself. It stops at
+"Account already exists", the user clicks **Add to existing account**, and Keycloak emails
+them a link to confirm (seen in prod on 15 Oct 2026). It works, but it is an extra screen
+and an inbox trip for every user, once.
 
-This is realm config on `id.csquarednet.com`, realm `csquared`. No app change is needed.
+This change makes that first sign-in link silently. It is set on the `google-csquared`
+identity provider only. The DMP signs in through `social-google`, so it is not affected,
+and the realm's own first broker login flow stays as it is.
 
-## 1. Trust the Google IdP's email
+Linking by email is safe here only because Google already refuses accounts outside the
+CSquared Workspace (`Error 403: org_internal`), so only a Google-verified `@csquared.com`
+identity can claim the matching Keycloak account.
 
-Identity Providers → **google-csquared** → ensure **Trust Email = ON**.
-(Already set during the self-registration work — confirm it's still on.) This makes brokered
-emails arrive verified, which is what lets Keycloak auto-link by email.
+## Before you start
 
-## 2. Ensure the First Broker Login flow auto-links
+Identity providers → **google-csquared**: **Trust Email** is ON and the hosted domain is
+`csquared.com`.
 
-Authentication → Flows → **First broker login**:
+## 1. Create the flow
 
-- The flow's *Detect existing broker user* / **"Confirm link existing account"** step should
-  resolve a match by email automatically rather than requiring the user to re-authenticate or
-  re-verify. With Trust Email ON, the built-in flow links the verified email automatically.
-- If your realm uses a customized first-broker-login flow, either:
-  - keep the default flow for `google-csquared`, **or**
-  - make a copy and set the *Verify existing account by Email* / link step so a verified
-    email auto-links (no user prompt).
+1. Authentication → Flows → **first broker login** → ⋮ → **Duplicate**. Name
+   `cms-google-autolink`.
+2. In the copy, open the **User creation or linking** sub-flow:
+   - **Create User If Unique**: **Alternative** (as it is).
+   - **Handle Existing Account**: **Disabled**.
+   - **Add step** → **Automatically set existing user**: **Alternative**.
 
-> The default Keycloak first-broker-login flow already auto-links when the incoming email is
-> verified and matches an existing user. The main failure mode is Trust Email being OFF or a
-> customized flow that forces re-verification — check those first.
+## 2. Attach it to google-csquared only
 
-## 3. Verify
+Identity providers → **google-csquared** → *Advanced settings* → **First login flow
+override** = `cms-google-autolink`. Save. It takes effect at once.
 
-1. Pick a test `@csquared.com` user that already exists in Keycloak.
-2. Remove (or simulate the absence of) their app DB row, then re-invite them from
-   **User Management → Onboard User**.
-3. Sign in with **Sign in with Google** as that user.
-4. Expected: Keycloak links to the existing account silently and the user lands
-   authenticated — no "account already exists" / manual-link prompt. The app's invite-time
-   reconcile has already ensured the account is enabled + email-verified.
+## 3. Check
+
+Use an onboarded `@csquared.com` user who has never signed in with Google (Users → user →
+*Identity provider links* is empty). Sign in at https://cms.csquarednet.com. Expected: no
+"Account already exists" screen and no email; the user lands in the CMS, and the user's
+*Identity provider links* now shows `google-csquared`.
+
+## Undo
+
+Identity providers → **google-csquared** → **First login flow override** =
+`first broker login`. Save. Users then get the email-confirm step again.
 
 ## Related
 
-- App-side reconcile: `onboardUser` in `src/server/actions/users.ts` (federated detection,
-  enable+verify, password reset for password users).
-- Avatar inheritance operator doc: `docs/keycloak-google-picture-mapper.md`.
-- Design: `docs/superpowers/specs/2026-06-27-v3-auth-flow-pass-design.md`.
+- App side: `createOrFindKeycloakUser` in `src/server/keycloak.ts` creates the account
+  enabled, email-verified and with no password.
+- Google-only browser flow: `docs/keycloak-cms-google-only-flow.md`.
