@@ -77,7 +77,7 @@ describe("onboardUser — authorization & ceiling", () => {
 
   it("rejects a non-admin (ghana/requester) onboarding a user", async () => {
     await expect(onboardUser({
-      name: "New", email: "new@csquared.com", tempPassword: "p",
+      name: "New", email: "new@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })).rejects.toThrow(/Forbidden/)
   })
@@ -85,7 +85,7 @@ describe("onboardUser — authorization & ceiling", () => {
   it("rejects an OpCo admin trying to grant the admin role", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
     await expect(onboardUser({
-      name: "New", email: "new@csquared.com", tempPassword: "p",
+      name: "New", email: "new@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "admin" }],
     })).rejects.toThrow(/Forbidden/)
   })
@@ -93,26 +93,26 @@ describe("onboardUser — authorization & ceiling", () => {
   it("lets a group_admin create a brand-new user and writes an audit row", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     const result = await onboardUser({
-      name: "New", email: "new@csquared.com", tempPassword: "p",
+      name: "New", email: "new@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })
     expect(result).toHaveProperty("id", "user-new")
     expect(mockDb.user.create).toHaveBeenCalledTimes(1)
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
-    expect(sendUserInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "new@csquared.com",
-        tempPassword: "p",
-        existingIdentity: false,
-      })
-    )
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith({
+      to: "new@csquared.com",
+      name: "New",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
+      locale: "en",
+    })
+    expect(createOrFindKeycloakUser).toHaveBeenCalledWith("new@csquared.com", "New")
   })
 
   it("localizes the invitation email by the first assignment's OpCo locale", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-gh", slug: "ghana", locale: "fr" })
     await onboardUser({
-      name: "Fr User", email: "fr@csquared.com", tempPassword: "p",
+      name: "Fr User", email: "fr@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })
     expect(sendUserInvitationEmail).toHaveBeenCalledWith(
@@ -124,35 +124,53 @@ describe("onboardUser — authorization & ceiling", () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     mockDb.user.findFirst.mockResolvedValueOnce({ id: "existing", keycloakId: "kc-existing" })
     await onboardUser({
-      name: "Existing", email: "exists@csquared.com", tempPassword: "p",
+      name: "Existing", email: "exists@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "approver" }],
     })
     expect(mockDb.user.create).not.toHaveBeenCalled()
     expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
     expect(sendUserInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "exists@csquared.com",
-        existingIdentity: true,
-      })
+      expect.objectContaining({ to: "exists@csquared.com" })
     )
   })
 
-  it("links a Keycloak-only existing email and sends an existing-password invite", async () => {
+  it("links a Keycloak-only existing email instead of creating a new identity", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
     vi.mocked(createOrFindKeycloakUser).mockResolvedValueOnce({ id: "kc-existing", created: false })
     await onboardUser({
-      name: "Keycloak Existing", email: "kc-exists@csquared.com", tempPassword: "p",
+      name: "Keycloak Existing", email: "kc-exists@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "requester" }],
     })
     expect(mockDb.user.create).toHaveBeenCalledWith({
       data: { keycloakId: "kc-existing", email: "kc-exists@csquared.com", name: "Keycloak Existing" },
     })
     expect(sendUserInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "kc-exists@csquared.com",
-        existingIdentity: true,
-      })
+      expect.objectContaining({ to: "kc-exists@csquared.com" })
     )
+  })
+
+  it("refuses an address outside @csquared.com before touching Keycloak", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    await expect(onboardUser({
+      name: "Partner", email: "pat@partner.com",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
+    })).rejects.toThrow("Only @csquared.com addresses can be onboarded.")
+    expect(createOrFindKeycloakUser).not.toHaveBeenCalled()
+    expect(mockDb.user.create).not.toHaveBeenCalled()
+  })
+
+  it("onboards a CSquared address typed with capitals or spaces, stored as Google will send it", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    await onboardUser({
+      name: "New", email: "New@CSquared.com ",
+      assignments: [{ opcoSlug: "ghana", role: "requester" }],
+    })
+    expect(mockDb.user.findFirst).toHaveBeenCalledWith({ where: { email: "new@csquared.com" } })
+    expect(createOrFindKeycloakUser).toHaveBeenCalledWith("new@csquared.com", "New")
+    expect(mockDb.user.create).toHaveBeenCalledWith({
+      data: { keycloakId: "kc-new", email: "new@csquared.com", name: "New" },
+    })
+    expect(sendUserInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "new@csquared.com" }))
   })
 })
 

@@ -566,7 +566,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               sidebarCollapsed ? "lg:pl-20" : "lg:pl-72"
             )}
           >
-            {children}
+            <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 md:px-6 lg:px-8">{children}</div>
           </main>
         </div>
       </div>

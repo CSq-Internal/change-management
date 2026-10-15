@@ -30,4 +30,31 @@ describe("auth config", () => {
       details: { error: "invalid_grant", provider: "keycloak" },
     })
   })
+  describe("signIn callback: verified @csquared.com accounts only", () => {
+    type SignInParams = Parameters<NonNullable<NonNullable<typeof authConfig.callbacks>["signIn"]>>[0]
+    const signIn = (profile: Record<string, unknown> | undefined) =>
+      authConfig.callbacks!.signIn!({ user: {}, account: null, profile } as unknown as SignInParams)
+
+    it("admits a verified CSquared account", async () => {
+      expect(await signIn({ email: "ada@csquared.com", email_verified: true })).toBe(true)
+    })
+
+    it("admits mixed case and stray whitespace", async () => {
+      expect(await signIn({ email: " Ada@CSquared.com ", email_verified: true })).toBe(true)
+    })
+
+    it("refuses an unverified email", async () => {
+      expect(await signIn({ email: "ada@csquared.com", email_verified: false })).toBe(false)
+      expect(await signIn({ email: "ada@csquared.com" })).toBe(false)
+    })
+
+    it("refuses another domain and lookalikes", async () => {
+      expect(await signIn({ email: "ada@gmail.com", email_verified: true })).toBe(false)
+      expect(await signIn({ email: "ada@csquared.com.evil.io", email_verified: true })).toBe(false)
+    })
+
+    it("refuses a sign-in with no profile", async () => {
+      expect(await signIn(undefined)).toBe(false)
+    })
+  })
 })

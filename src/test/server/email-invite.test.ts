@@ -11,33 +11,20 @@ beforeEach(() => {
 
 const lastHtml = () => send.mock.calls[0][0].html as string
 
-describe('sendUserInvitationEmail federated variant', () => {
-  it('omits the temp password and uses Google copy when federated (en)', async () => {
+describe('sendUserInvitationEmail', () => {
+  it.each([
+    ['en', /Sign in with Google/, /password/i],
+    ['fr', /Se connecter avec Google/, /mot de passe/i],
+  ] as const)('tells people to sign in with Google and never mentions a password (%s)', async (locale, google, password) => {
     const { sendUserInvitationEmail } = await import('@/server/email')
     await sendUserInvitationEmail({
       to: 'pat@csquared.com',
       name: 'Pat',
-      existingIdentity: true,
-      federated: true,
       assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
-      locale: 'en',
+      locale,
     })
     const html = lastHtml()
-    expect(html).toMatch(/Sign in with Google/i)
-    expect(html).not.toMatch(/temporary password/i)
-  })
-
-  it('includes the temp password when federated is falsy and existingIdentity is false (en)', async () => {
-    const { sendUserInvitationEmail } = await import('@/server/email')
-    await sendUserInvitationEmail({
-      to: 'pat@csquared.com',
-      name: 'Pat',
-      tempPassword: 'ChangeMe123!',
-      existingIdentity: false,
-      assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
-      locale: 'en',
-    })
-    const html = lastHtml()
-    expect(html).toMatch(/temporary password/i)
+    expect(html).toMatch(google)
+    expect(html).not.toMatch(password)
   })
 })

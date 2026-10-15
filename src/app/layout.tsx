@@ -43,11 +43,7 @@ export default function RootLayout({
       >
         <SessionProvider>
           <div className="flex min-h-dvh flex-col">
-            <AppShell>
-              <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 md:px-6 lg:px-8">
-                {children}
-              </div>
-            </AppShell>
+            <AppShell>{children}</AppShell>
           </div>
         </SessionProvider>
       </body>

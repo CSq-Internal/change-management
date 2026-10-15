@@ -47,8 +47,8 @@ describe('email localization', () => {
 
   it('invitation: French subject when locale=fr', async () => {
     const { sendUserInvitationEmail } = await import('@/server/email')
-    await sendUserInvitationEmail({ to: 'a@x.com', name: 'Ada', tempPassword: 'ChangeMe123!', existingIdentity: false, assignments: [{ opcoSlug: 'drc', role: 'requester' }], locale: 'fr' })
+    await sendUserInvitationEmail({ to: 'a@x.com', name: 'Ada', assignments: [{ opcoSlug: 'drc', role: 'requester' }], locale: 'fr' })
     expect(lastSubject()).toMatch(/invité/i)
-    expect(lastHtml()).toMatch(/mot de passe temporaire/i)
+    expect(lastHtml()).toMatch(/Se connecter avec Google/)
   })
 })
