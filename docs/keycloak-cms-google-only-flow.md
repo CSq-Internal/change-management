@@ -12,9 +12,10 @@ the realm's own browser flow.
 ## Before you start
 
 List the CMS's Keycloak accounts with no Google link (Users → user → Identity provider
-links). A real `@csquared.com` mailbox links itself on its first Google sign-in. An
-address with no mailbox loses CMS access once this is on; emergency access is the
-Keycloak admin console.
+links). A real `@csquared.com` mailbox links itself on its first Google sign-in (silently
+once `docs/keycloak-first-broker-login-autolink.md` is applied, otherwise through an
+emailed link). An address with no mailbox loses CMS access once this is on; emergency
+access is the Keycloak admin console.
 
 ## 1. Create the flow
 
@@ -45,5 +46,6 @@ Clients → `csquared-cms` → Advanced → clear the **Browser flow** override.
 
 ## Also required
 
-`google-csquared` keeps **Trust Email = ON** and hosted domain `csquared.com`
+`google-csquared` keeps **Trust Email = ON** and hosted domain `csquared.com`, and its
+first login flow override is `cms-google-autolink`
 (see `docs/keycloak-first-broker-login-autolink.md`).

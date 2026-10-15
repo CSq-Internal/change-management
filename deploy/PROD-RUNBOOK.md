@@ -113,6 +113,9 @@ In your org's prod realm (note its name; the app derives the realm from
 **3c. Google-only sign-in** (after the app is live)
 - Follow `docs/keycloak-cms-google-only-flow.md`: a `cms-google-only` browser-flow
   override on `csquared-cms`, so the CMS never shows a password form.
+- Follow `docs/keycloak-first-broker-login-autolink.md`: a `cms-google-autolink`
+  first-login override on `google-csquared`, so an onboarded user's first Google sign-in
+  links to their account without an "Account already exists" screen.
 
 > **About `manage-organizations` (verified on Keycloak 26.6):** don't bother — the
 > `realm-management` `manage-organizations` role is **not seeded** when you enable
