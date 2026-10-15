@@ -247,42 +247,42 @@ export default function CalendarClient({
               <p className="text-xs text-muted-foreground">{t(language, "calendar.blackout.subtitle")}</p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex min-w-52 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                 {t(language, "calendar.blackout.label")}
                 <input
                   type="text"
                   value={boLabel}
                   onChange={(e) => setBoLabel(e.target.value)}
                   placeholder={t(language, "calendar.blackout.labelPlaceholder")}
-                  className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                 />
               </label>
               {blackoutScopes.length > 1 && (
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                <label className="flex min-w-52 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                   {t(language, "calendar.blackout.scope")}
                   <select
                     value={boScope}
                     onChange={(e) => setBoScope(e.target.value)}
-                    className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                   >
                     {blackoutScopes.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
                   </select>
                 </label>
               )}
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <label className="flex min-w-52 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                 {t(language, "calendar.blackout.start")}
-                <input type="datetime-local" value={boStart} onChange={(e) => setBoStart(e.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground" />
+                <input type="datetime-local" value={boStart} onChange={(e) => setBoStart(e.target.value)} className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground" />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <label className="flex min-w-52 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                 {t(language, "calendar.blackout.end")}
-                <input type="datetime-local" value={boEnd} onChange={(e) => setBoEnd(e.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground" />
+                <input type="datetime-local" value={boEnd} onChange={(e) => setBoEnd(e.target.value)} className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground" />
               </label>
               <button
                 type="button"
                 onClick={addBlackout}
                 disabled={isPending}
-                className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-50"
+                className="h-9 shrink-0 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-50"
               >
                 {t(language, "calendar.blackout.add")}
               </button>
