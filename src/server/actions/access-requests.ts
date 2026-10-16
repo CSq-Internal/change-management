@@ -25,8 +25,12 @@ export async function requestRole(input: { opcoSlug: string; role: RequestableRo
   const session = await getAppSession()
   const db = getPrisma()
 
-  const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
+  const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true, isActive: true } })
   if (!me) throw new Error("User not found")
+  if (!me.isActive) throw new Error("Your account is deactivated")
+  // Role requests are for people already in the CMS; newcomers join an OpCo first.
+  const memberships = await db.userOpCoAssignment.count({ where: { userId: me.id, isActive: true } })
+  if (memberships === 0) throw new Error("Choose your OpCo first, then request a role")
 
   const opco = await db.opCo.findUnique({
     where: { slug: input.opcoSlug },
@@ -200,6 +204,7 @@ export async function listAccessRequests() {
   const rows = await db.accessRequest.findMany({
     where: {
       status: "pending",
+      user: { isActive: true },
       // Only group admins can grant admin (canAssignRole), so OpCo admins never see those.
       ...(scope === "all" ? {} : { opco: { slug: { in: scope } }, role: { not: "admin" as const } }),
     },
@@ -240,7 +245,7 @@ async function loadDecidableRequest(id: string) {
       userId: true,
       role: true,
       opco: { select: { id: true, slug: true, name: true } },
-      user: { select: { keycloakId: true, locale: true } },
+      user: { select: { keycloakId: true, locale: true, isActive: true } },
     },
   })
   if (!req) throw new Error("Access request not found")
@@ -250,13 +255,29 @@ async function loadDecidableRequest(id: string) {
   }
 
   const actor = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
+  // Separation of duties: nobody decides their own role request.
+  if (actor && actor.id === req.userId) throw new Error("You can't decide your own role request")
   return { session, db, req, actorId: actor?.id ?? null }
 }
 
 export async function approveAccessRequest(id: string) {
   const { session, db, req, actorId } = await loadDecidableRequest(id)
+  if (!req.user.isActive) throw new Error("This account is deactivated")
 
   await db.$transaction(async (tx) => {
+    // Approving replaces the user's role in this OpCo. Keep the Users page's rule:
+    // an OpCo can't lose its last admin this way.
+    const current = await tx.userOpCoAssignment.findUnique({
+      where: { userId_opcoId: { userId: req.userId, opcoId: req.opco.id } },
+      select: { role: true, isActive: true },
+    })
+    if (current?.isActive && current.role === "admin" && req.role !== "admin") {
+      const otherAdmins = await tx.userOpCoAssignment.count({
+        where: { opcoId: req.opco.id, role: "admin", isActive: true, userId: { not: req.userId } },
+      })
+      if (otherAdmins === 0) throw new Error("Forbidden: cannot remove the last admin of an OpCo")
+    }
+
     await tx.userOpCoAssignment.upsert({
       where: { userId_opcoId: { userId: req.userId, opcoId: req.opco.id } },
       update: { role: req.role, isActive: true, endedAt: null },

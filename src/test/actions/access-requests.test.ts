@@ -11,7 +11,7 @@ const mockDb = {
   $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   user: { findUnique: vi.fn(), findMany: vi.fn() },
   opCo: { findUnique: vi.fn() },
-  userOpCoAssignment: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn().mockResolvedValue({}), create: vi.fn().mockResolvedValue({}) },
+  userOpCoAssignment: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), upsert: vi.fn().mockResolvedValue({}), create: vi.fn().mockResolvedValue({}) },
   accessRequest: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue({}) },
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
@@ -32,6 +32,8 @@ beforeEach(() => {
   mockDb.user.findUnique.mockResolvedValue({ id: "bob-db", isActive: true })
   mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en" })
   mockDb.userOpCoAssignment.findFirst.mockResolvedValue(null)
+  mockDb.userOpCoAssignment.findUnique.mockResolvedValue(null)
+  mockDb.userOpCoAssignment.count.mockResolvedValue(1)
   mockDb.accessRequest.findFirst.mockResolvedValue(null)
   mockDb.accessRequest.create.mockResolvedValue({ id: "ar-1" })
   mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
@@ -46,7 +48,7 @@ describe("listAccessRequests", () => {
     ])
     const rows = await listAccessRequests()
     expect(mockDb.accessRequest.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: "pending" } })
+      expect.objectContaining({ where: { status: "pending", user: { isActive: true } } })
     )
     expect(rows[0]).toMatchObject({ id: "ar-1", opcoName: "Ghana", requesterName: "Bob" })
   })
@@ -59,7 +61,7 @@ describe("listAccessRequests", () => {
     mockDb.accessRequest.findMany.mockResolvedValue([])
     await listAccessRequests()
     expect(mockDb.accessRequest.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: "pending", opco: { slug: { in: ["ghana"] } }, role: { not: "admin" } } })
+      expect.objectContaining({ where: { status: "pending", user: { isActive: true }, opco: { slug: { in: ["ghana"] } }, role: { not: "admin" } } })
     )
   })
 
@@ -82,7 +84,7 @@ const pendingReq = {
   userId: "bob-db",
   role: "requester",
   opco: { id: "opco-ghana", slug: "ghana", name: "CSquared Ghana" },
-  user: { keycloakId: "kc-bob", locale: "en" },
+  user: { keycloakId: "kc-bob", locale: "en", isActive: true },
 }
 
 describe("approveAccessRequest", () => {
@@ -116,6 +118,36 @@ describe("approveAccessRequest", () => {
     vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
     mockDb.accessRequest.findUnique.mockResolvedValue({ ...pendingReq, status: "approved" })
     await expect(approveAccessRequest("ar-1")).rejects.toThrow(/already decided/i)
+  })
+
+  it("refuses an admin deciding their own role request", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue({ ...pendingReq, role: "approver" })
+    mockDb.user.findUnique.mockResolvedValue({ id: "bob-db" }) // the decider is the requester
+    await expect(approveAccessRequest("ar-1")).rejects.toThrow(/your own role request/i)
+    await expect(denyAccessRequest("ar-1")).rejects.toThrow(/your own role request/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+  })
+
+  it("refuses to replace an OpCo's last admin with a lower role", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue({ ...pendingReq, role: "approver" })
+    mockDb.user.findUnique.mockResolvedValue({ id: "ga-db" })
+    mockDb.userOpCoAssignment.findUnique.mockResolvedValue({ role: "admin", isActive: true })
+    mockDb.userOpCoAssignment.count.mockResolvedValue(0) // no other active admin
+    await expect(approveAccessRequest("ar-1")).rejects.toThrow(/last admin/i)
+    expect(mockDb.userOpCoAssignment.count).toHaveBeenCalledWith({
+      where: { opcoId: "opco-ghana", role: "admin", isActive: true, userId: { not: "bob-db" } },
+    })
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+  })
+
+  it("refuses to grant a role to a deactivated user", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue({ ...pendingReq, role: "approver", user: { ...pendingReq.user, isActive: false } })
+    mockDb.user.findUnique.mockResolvedValue({ id: "ga-db" })
+    await expect(approveAccessRequest("ar-1")).rejects.toThrow(/deactivated/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
   })
 })
 
@@ -257,6 +289,19 @@ describe("requestRole", () => {
   it("refuses an unknown OpCo", async () => {
     mockDb.opCo.findUnique.mockResolvedValue(null)
     await expect(ask({ opcoSlug: "nowhere" })).rejects.toThrow(/OpCo not found/i)
+  })
+
+  it("refuses a deactivated user", async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: "bob-db", isActive: false })
+    await expect(ask()).rejects.toThrow(/deactivated/i)
+    expect(mockDb.accessRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("refuses a user with no active OpCo role", async () => {
+    mockDb.userOpCoAssignment.count.mockResolvedValue(0)
+    await expect(ask()).rejects.toThrow(/choose your OpCo first/i)
+    expect(mockDb.userOpCoAssignment.count).toHaveBeenCalledWith({ where: { userId: "bob-db", isActive: true } })
+    expect(mockDb.accessRequest.create).not.toHaveBeenCalled()
   })
 
   it("sends approver and auditor requests to OpCo admins and group admins, deduped, never the requester", async () => {
