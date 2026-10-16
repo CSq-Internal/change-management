@@ -12,6 +12,7 @@ import AccessRequestsClient from "@/app/(dashboard)/access-requests/access-reque
 
 const row = {
   id: "ar-1",
+  role: "approver",
   note: "Need access",
   createdAt: "2026-06-24T00:00:00.000Z",
   opcoName: "CSquared Ghana",
@@ -25,12 +26,13 @@ describe("AccessRequestsClient", () => {
     render(<AccessRequestsClient requests={[row]} />)
     expect(screen.getByText("Bob")).toBeInTheDocument()
     expect(screen.getByText("CSquared Ghana")).toBeInTheDocument()
+    expect(screen.getByText("Approver")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Deny" })).toBeInTheDocument()
   })
 
   it("shows the empty state when there are no requests", () => {
     render(<AccessRequestsClient requests={[]} />)
-    expect(screen.getByText("No pending access requests.")).toBeInTheDocument()
+    expect(screen.getByText("No pending role requests.")).toBeInTheDocument()
   })
 })
