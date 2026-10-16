@@ -144,15 +144,16 @@ export async function sendSlaEscalationEmail(opts: {
 }
 
 export async function sendAccessRequestEmail(opts: {
-  to: string; adminName: string; requesterName: string; opcoName: string; locale?: Language
+  to: string; adminName: string; requesterName: string; opcoName: string; role: string; locale?: Language
 }) {
   const fr = opts.locale === "fr"
-  const subject = fr ? `Nouvelle demande d'accès : ${opts.opcoName}` : `New access request: ${opts.opcoName}`
+  const subject = fr ? `Nouvelle demande de rôle : ${opts.opcoName}` : `New role request: ${opts.opcoName}`
   const el = (
     <AccessRequestEmail
       adminName={opts.adminName}
       requesterName={opts.requesterName}
       opcoName={opts.opcoName}
+      role={opts.role}
       lang={opts.locale ?? "en"}
     />
   )

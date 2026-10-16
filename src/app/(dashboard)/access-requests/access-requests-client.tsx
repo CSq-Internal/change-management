@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 
 export type QueueRow = {
   id: string
+  role: string
   note: string | null
   createdAt: string
   opcoName: string
@@ -53,6 +54,9 @@ export default function AccessRequestsClient({ requests }: { requests: QueueRow[
                 </div>
                 <div>
                   <span className="font-medium">{tr("access.queue.opco")}:</span> <span>{r.opcoName}</span>
+                </div>
+                <div>
+                  <span className="font-medium">{tr("access.role.role")}:</span> <span>{tr(`roles.${r.role}`)}</span>
                 </div>
                 {r.note && (
                   <div>
