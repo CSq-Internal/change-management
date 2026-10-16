@@ -91,20 +91,16 @@ export async function requestAccess(input: { opcoSlug: string; note?: string }) 
 }
 
 // First sign-in: the user picks their OpCo and becomes a requester there at once.
-// Only for users with no active OpCo role, so it can't be used to collect OpCos;
-// anything more goes through a role request or an admin.
+// Only for active users who have never had an OpCo assignment: someone an admin
+// removed (ended rows) must not re-grant themselves, and it can't collect OpCos.
+// Anything more goes through a role request or an admin.
 export async function joinOpCo(opcoSlug: string) {
   const session = await getAppSession()
   const db = getPrisma()
 
-  const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
+  const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true, isActive: true } })
   if (!me) throw new Error("User not found")
-
-  const belongs = await db.userOpCoAssignment.findFirst({
-    where: { userId: me.id, isActive: true },
-    select: { id: true },
-  })
-  if (belongs) throw new Error("You already belong to an OpCo")
+  if (!me.isActive) throw new Error("Your account is deactivated")
 
   const opco = await db.opCo.findUnique({
     where: { slug: opcoSlug },
@@ -113,10 +109,17 @@ export async function joinOpCo(opcoSlug: string) {
   if (!opco || opco.archivedAt) throw new Error("OpCo not found")
 
   await db.$transaction(async (tx) => {
-    await tx.userOpCoAssignment.upsert({
-      where: { userId_opcoId: { userId: me.id, opcoId: opco.id } },
-      update: { role: "requester", isActive: true, endedAt: null },
-      create: { userId: me.id, opcoId: opco.id, role: "requester" },
+    // Lock the user's row so two concurrent joins run one after the other: the
+    // second then sees the first's assignment and is refused.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${me.id} FOR UPDATE`
+    const hadAccess = await tx.userOpCoAssignment.findFirst({
+      where: { userId: me.id },
+      select: { id: true },
+    })
+    if (hadAccess) throw new Error("You already have, or had, OpCo access. Ask an admin to change it.")
+
+    await tx.userOpCoAssignment.create({
+      data: { userId: me.id, opcoId: opco.id, role: "requester" },
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,

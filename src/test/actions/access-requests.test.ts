@@ -7,10 +7,11 @@ vi.mock("@/server/keycloak", () => ({ assignToOrganization: vi.fn().mockResolved
 vi.mock("@/server/email", () => ({ sendAccessRequestEmail: vi.fn().mockResolvedValue(undefined) }))
 
 const mockDb = {
+  $queryRaw: vi.fn().mockResolvedValue([]),
   $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   user: { findUnique: vi.fn(), findMany: vi.fn() },
   opCo: { findUnique: vi.fn() },
-  userOpCoAssignment: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn().mockResolvedValue({}) },
+  userOpCoAssignment: { findFirst: vi.fn(), findMany: vi.fn(), upsert: vi.fn().mockResolvedValue({}), create: vi.fn().mockResolvedValue({}) },
   accessRequest: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue({}) },
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
@@ -28,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
   vi.mocked(getAppSession).mockResolvedValue(member)
-  mockDb.user.findUnique.mockResolvedValue({ id: "bob-db" })
+  mockDb.user.findUnique.mockResolvedValue({ id: "bob-db", isActive: true })
   mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en" })
   mockDb.userOpCoAssignment.findFirst.mockResolvedValue(null)
   mockDb.accessRequest.findFirst.mockResolvedValue(null)
@@ -191,10 +192,8 @@ describe("joinOpCo", () => {
 
     await expect(joinOpCo("ghana")).resolves.toEqual({ ok: true })
 
-    expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledWith({
-      where: { userId_opcoId: { userId: "bob-db", opcoId: "opco-ghana" } },
-      update: { role: "requester", isActive: true, endedAt: null },
-      create: { userId: "bob-db", opcoId: "opco-ghana", role: "requester" },
+    expect(mockDb.userOpCoAssignment.create).toHaveBeenCalledWith({
+      data: { userId: "bob-db", opcoId: "opco-ghana", role: "requester" },
     })
     expect(recordAdminAction).toHaveBeenCalledWith(mockDb, expect.objectContaining({ action: "access.join", opcoId: "opco-ghana" }))
     expect(assignToOrganization).toHaveBeenCalledWith("kc-bob", "ghana")
@@ -202,19 +201,39 @@ describe("joinOpCo", () => {
     expect(sendAccessRequestEmail).not.toHaveBeenCalled()
   })
 
-  it("refuses a user who already has an active OpCo role (and a second click)", async () => {
+  it("refuses a user who already has an OpCo role (and a second click)", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en", archivedAt: null })
     mockDb.userOpCoAssignment.findFirst.mockResolvedValue({ id: "asg-1" })
-    await expect(joinOpCo("ghana")).rejects.toThrow(/already belong to an OpCo/i)
-    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+    await expect(joinOpCo("ghana")).rejects.toThrow(/ask an admin/i)
+    expect(mockDb.userOpCoAssignment.create).not.toHaveBeenCalled()
   })
 
-  it("only counts active assignments as belonging", async () => {
+  it("refuses a user whose OpCo access an admin removed (an ended assignment)", async () => {
     mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en", archivedAt: null })
-    await joinOpCo("ghana")
+    mockDb.userOpCoAssignment.findFirst.mockResolvedValue({ id: "asg-ended" })
+    await expect(joinOpCo("ghana")).rejects.toThrow(/ask an admin/i)
     expect(mockDb.userOpCoAssignment.findFirst).toHaveBeenCalledWith({
-      where: { userId: "bob-db", isActive: true },
+      where: { userId: "bob-db" },
       select: { id: true },
     })
+    expect(mockDb.userOpCoAssignment.create).not.toHaveBeenCalled()
+  })
+
+  it("refuses a deactivated user", async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: "bob-db", isActive: false })
+    await expect(joinOpCo("ghana")).rejects.toThrow(/deactivated/i)
+    expect(mockDb.userOpCoAssignment.create).not.toHaveBeenCalled()
+  })
+
+  it("locks the user row inside the transaction before checking, so two clicks can't join two OpCos", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en", archivedAt: null })
+    await joinOpCo("ghana")
+    expect(mockDb.$transaction).toHaveBeenCalled()
+    const lock = mockDb.$queryRaw.mock.invocationCallOrder[0]
+    const check = mockDb.userOpCoAssignment.findFirst.mock.invocationCallOrder[0]
+    const write = mockDb.userOpCoAssignment.create.mock.invocationCallOrder[0]
+    expect(lock).toBeLessThan(check)
+    expect(check).toBeLessThan(write)
   })
 
   it("refuses an unknown or archived OpCo", async () => {
@@ -222,7 +241,7 @@ describe("joinOpCo", () => {
     await expect(joinOpCo("nowhere")).rejects.toThrow(/OpCo not found/i)
     mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-old", name: "Old", slug: "old", locale: "en", archivedAt: new Date() })
     await expect(joinOpCo("old")).rejects.toThrow(/OpCo not found/i)
-    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+    expect(mockDb.userOpCoAssignment.create).not.toHaveBeenCalled()
   })
 
   it("never notifies the joiner even when they are also an admin elsewhere", async () => {
