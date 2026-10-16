@@ -97,9 +97,10 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     })
   } else if (
     token.keycloakId &&
-    Date.now() - (token.orgsRefreshedAt ?? 0) > ORGS_TTL_MS
+    (params.trigger === "update" || Date.now() - (token.orgsRefreshedAt ?? 0) > ORGS_TTL_MS)
   ) {
-    // No fresh sign-in, but the cached orgs are stale: reload OpCo assignments so an
+    // No fresh sign-in, but the cached orgs are stale (or the client called update(),
+    // as it does right after joining an OpCo): reload OpCo assignments so an
     // access grant / role edit reaches the live session without re-login. Group roles
     // (realmRoles) are Keycloak-sourced and intentionally not refreshed here.
     const db = getPrisma()

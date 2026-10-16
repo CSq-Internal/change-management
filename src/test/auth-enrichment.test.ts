@@ -318,6 +318,24 @@ describe('auth enrichment', () => {
     expect(token.keycloakId).toBe('kc-sub-1')
   })
 
+  it('re-enriches organizations on a session update even inside the TTL', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([
+      { role: 'requester', opco: { id: 'opco-ghana', name: 'CSquared Ghana', slug: 'ghana' } },
+    ])
+
+    const token = await enrichedJwt({
+      token: { keycloakId: 'kc-sub-1', organizations: [], orgsRefreshedAt: Date.now() }, // fresh
+      user: {},
+      account: null,
+      trigger: 'update',
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+
+    expect(token.organizations).toEqual([
+      { id: 'opco-ghana', name: 'CSquared Ghana', alias: 'ghana', roles: ['requester'] },
+    ])
+  })
+
   it('stamps orgsRefreshedAt on sign-in', async () => {
     mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
     findMany.mockResolvedValue([])
