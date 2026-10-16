@@ -15,8 +15,9 @@ const mockDb = {
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { requestAccess, listAccessRequests } from "@/server/actions/access-requests"
+import { requestAccess, listAccessRequests, joinOpCo } from "@/server/actions/access-requests"
 import { getAppSession } from "@/lib/session"
+import { recordAdminAction } from "@/server/audit"
 import { notifyUsers } from "@/server/notify"
 import { sendAccessRequestEmail } from "@/server/email"
 
@@ -180,5 +181,54 @@ describe("denyAccessRequest", () => {
     vi.mocked(getAppSession).mockResolvedValue(member)
     mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
     await expect(denyAccessRequest("ar-1")).rejects.toThrow(/Forbidden/i)
+  })
+})
+
+describe("joinOpCo", () => {
+  it("grants requester in the chosen OpCo, audits it and tells the OpCo's admins in-app", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en", archivedAt: null })
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: "admin-1" }])
+
+    await expect(joinOpCo("ghana")).resolves.toEqual({ ok: true })
+
+    expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledWith({
+      where: { userId_opcoId: { userId: "bob-db", opcoId: "opco-ghana" } },
+      update: { role: "requester", isActive: true, endedAt: null },
+      create: { userId: "bob-db", opcoId: "opco-ghana", role: "requester" },
+    })
+    expect(recordAdminAction).toHaveBeenCalledWith(mockDb, expect.objectContaining({ action: "access.join", opcoId: "opco-ghana" }))
+    expect(assignToOrganization).toHaveBeenCalledWith("kc-bob", "ghana")
+    expect(notifyUsers).toHaveBeenCalledWith([{ userId: "admin-1" }], expect.objectContaining({ type: "access.joined" }))
+    expect(sendAccessRequestEmail).not.toHaveBeenCalled()
+  })
+
+  it("refuses a user who already has an active OpCo role (and a second click)", async () => {
+    mockDb.userOpCoAssignment.findFirst.mockResolvedValue({ id: "asg-1" })
+    await expect(joinOpCo("ghana")).rejects.toThrow(/already belong to an OpCo/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+  })
+
+  it("only counts active assignments as belonging", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en", archivedAt: null })
+    await joinOpCo("ghana")
+    expect(mockDb.userOpCoAssignment.findFirst).toHaveBeenCalledWith({
+      where: { userId: "bob-db", isActive: true },
+      select: { id: true },
+    })
+  })
+
+  it("refuses an unknown or archived OpCo", async () => {
+    mockDb.opCo.findUnique.mockResolvedValueOnce(null)
+    await expect(joinOpCo("nowhere")).rejects.toThrow(/OpCo not found/i)
+    mockDb.opCo.findUnique.mockResolvedValueOnce({ id: "opco-old", name: "Old", slug: "old", locale: "en", archivedAt: new Date() })
+    await expect(joinOpCo("old")).rejects.toThrow(/OpCo not found/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+  })
+
+  it("never notifies the joiner even when they are also an admin elsewhere", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue({ id: "opco-ghana", name: "CSquared Ghana", slug: "ghana", locale: "en", archivedAt: null })
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: "bob-db" }, { userId: "admin-1" }])
+    await joinOpCo("ghana")
+    expect(vi.mocked(notifyUsers).mock.calls[0][0]).toEqual([{ userId: "admin-1" }])
   })
 })

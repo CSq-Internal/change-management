@@ -90,6 +90,66 @@ export async function requestAccess(input: { opcoSlug: string; note?: string }) 
   return { id: created.id }
 }
 
+// First sign-in: the user picks their OpCo and becomes a requester there at once.
+// Only for users with no active OpCo role, so it can't be used to collect OpCos;
+// anything more goes through a role request or an admin.
+export async function joinOpCo(opcoSlug: string) {
+  const session = await getAppSession()
+  const db = getPrisma()
+
+  const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
+  if (!me) throw new Error("User not found")
+
+  const belongs = await db.userOpCoAssignment.findFirst({
+    where: { userId: me.id, isActive: true },
+    select: { id: true },
+  })
+  if (belongs) throw new Error("You already belong to an OpCo")
+
+  const opco = await db.opCo.findUnique({
+    where: { slug: opcoSlug },
+    select: { id: true, name: true, slug: true, locale: true, archivedAt: true },
+  })
+  if (!opco || opco.archivedAt) throw new Error("OpCo not found")
+
+  await db.$transaction(async (tx) => {
+    await tx.userOpCoAssignment.upsert({
+      where: { userId_opcoId: { userId: me.id, opcoId: opco.id } },
+      update: { role: "requester", isActive: true, endedAt: null },
+      create: { userId: me.id, opcoId: opco.id, role: "requester" },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
+      action: "access.join",
+      summary: `Joined ${opco.name} as requester`,
+      opcoId: opco.id,
+      targetUserId: me.id,
+      metadata: { opcoSlug },
+    })
+  })
+
+  try {
+    await assignToOrganization(session.keycloakId, opco.slug)
+  } catch (err) {
+    console.warn(`[keycloak] org assignment skipped for ${opco.slug}:`, err)
+  }
+
+  const admins = await db.userOpCoAssignment.findMany({
+    where: { opcoId: opco.id, role: "admin", isActive: true, user: { isActive: true } },
+    select: { userId: true },
+  })
+  const recipients = admins.filter((a) => a.userId !== me.id).map((a) => ({ userId: a.userId }))
+  await notifyUsers(recipients, {
+    type: "access.joined",
+    title: t(coerceLocale(opco.locale), "notif.access.joined.title"),
+    body: `${session.name ?? session.email} → ${opco.name}`,
+  })
+
+  return { ok: true as const }
+}
+
 export async function listAccessRequests() {
   const session = await getAppSession()
   const db = getPrisma()
