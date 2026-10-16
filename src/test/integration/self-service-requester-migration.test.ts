@@ -17,11 +17,13 @@ beforeAll(async () => {
   const db = getTestDb()
   const ghana = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
   const uganda = await db.opCo.create({ data: { slug: 'uganda', name: 'Uganda', keycloakOrgId: 'org-ug' } })
+  const closed = await db.opCo.create({ data: { slug: 'closed', name: 'Closed', keycloakOrgId: 'org-cl', archivedAt: new Date() } })
   const ama = await db.user.create({ data: { keycloakId: 'kc-ama', email: 'ama@csquared.com' } })
   const kofi = await db.user.create({ data: { keycloakId: 'kc-kofi', email: 'kofi@csquared.com' } })
   const esi = await db.user.create({ data: { keycloakId: 'kc-esi', email: 'esi@csquared.com' } })
   const yaw = await db.user.create({ data: { keycloakId: 'kc-yaw', email: 'yaw@csquared.com', isActive: false } })
   const abena = await db.user.create({ data: { keycloakId: 'kc-abena', email: 'abena@csquared.com' } })
+  const kwame = await db.user.create({ data: { keycloakId: 'kc-kwame', email: 'kwame@csquared.com' } })
 
   // Ama: plain pending requester request → gets an assignment.
   await db.accessRequest.create({ data: { id: 'ar-ama', userId: ama.id, opcoId: ghana.id, role: 'requester' } })
@@ -35,6 +37,9 @@ beforeAll(async () => {
   // Abena: pending in two OpCos → only the earlier one is granted.
   await db.accessRequest.create({ data: { id: 'ar-abena-1', userId: abena.id, opcoId: uganda.id, role: 'requester', createdAt: new Date('2026-10-01T00:00:00Z') } })
   await db.accessRequest.create({ data: { id: 'ar-abena-2', userId: abena.id, opcoId: ghana.id, role: 'requester', createdAt: new Date('2026-10-02T00:00:00Z') } })
+
+  // Kwame: pending only for an archived OpCo → nothing granted (joinOpCo refuses archived OpCos).
+  await db.accessRequest.create({ data: { id: 'ar-kwame', userId: kwame.id, opcoId: closed.id, role: 'requester' } })
 
   await db.$executeRawUnsafe(SQL)
 }, 120_000)
@@ -76,5 +81,23 @@ describe('self-service requester migration', () => {
     expect(rows.map((r) => r.opco.slug)).toEqual(['uganda'])
     expect(await db.accessRequest.findUnique({ where: { id: 'ar-abena-1' } })).toMatchObject({ status: 'approved' })
     expect(await db.accessRequest.findUnique({ where: { id: 'ar-abena-2' } })).toMatchObject({ status: 'pending' })
+  })
+
+  it('grants nothing for an archived OpCo', async () => {
+    const db = getTestDb()
+    expect(await db.accessRequest.findUnique({ where: { id: 'ar-kwame' } })).toMatchObject({ status: 'pending' })
+    expect(await db.userOpCoAssignment.count({ where: { user: { email: 'kwame@csquared.com' } } })).toBe(0)
+  })
+
+  it('records each grant in the admin audit log as access.join, like joinOpCo', async () => {
+    const db = getTestDb()
+    const ama = await db.user.findUnique({ where: { email: 'ama@csquared.com' } })
+    const rows = await db.adminAuditLog.findMany({ where: { action: 'access.join' } })
+    expect(rows).toHaveLength(2) // Ama and Abena's earliest request
+    expect(rows.find((r) => r.targetUserId === ama!.id)).toMatchObject({
+      actorId: ama!.id,
+      summary: 'Joined Ghana as requester (auto-approved at deploy)',
+      metadata: { accessRequestId: 'ar-ama', autoApproved: true },
+    })
   })
 })
