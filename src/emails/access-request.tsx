@@ -12,7 +12,7 @@ export interface AccessRequestEmailProps {
   lang: Language
 }
 
-const ROLE_FR: Record<string, string> = { approver: "approbateur", auditor: "auditeur", admin: "administrateur" }
+const ROLE_FR = new Map([["approver", "approbateur"], ["auditor", "auditeur"], ["admin", "administrateur"]])
 
 export default function AccessRequestEmail({
   adminName, requesterName, opcoName, role, lang,
@@ -25,7 +25,7 @@ export default function AccessRequestEmail({
       </Heading>
       <Text className="text-sm text-slate-700">
         <strong>{requesterName}</strong>{" "}
-        {fr ? `a demandé le rôle ${ROLE_FR[role] ?? role} pour ` : `asked for the ${role} role in `}
+        {fr ? `a demandé le rôle ${ROLE_FR.get(role) ?? role} pour ` : `asked for the ${role} role in `}
         <strong>{opcoName}</strong>.
       </Text>
       <CtaButton href={`${EMAIL_BASE_URL}/access-requests`}>

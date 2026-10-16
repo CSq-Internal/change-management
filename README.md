@@ -34,7 +34,7 @@ Governance controls wrap that spine:
   scoped list views, change detail/edit, and a **calendar** with conflict detection and drag-to-reschedule.
 - **Approvals** — approvals queue, approval matrix, CAB management, delegations.
 - **Governance** — risk register, immutable audit trails, compliance **reports** (CSV + PDF evidence).
-- **Administration** — users, teams, OpCos, and self-service **access requests**.
+- **Administration** — users, teams, OpCos, self-service requester access on first sign-in, and **role requests** for higher roles.
 - **Notifications** — in-app feed + bell, preference matrix, email (Resend), and Google Chat webhooks;
   SLA-escalation cron.
 - **Document uploads** backed by Google Drive (shared drive per OpCo).
