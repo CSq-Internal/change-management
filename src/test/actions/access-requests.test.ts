@@ -16,7 +16,7 @@ const mockDb = {
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
-import { requestAccess, listAccessRequests, joinOpCo } from "@/server/actions/access-requests"
+import { requestRole, listMyRoleRequests, listAccessRequests, joinOpCo } from "@/server/actions/access-requests"
 import { getAppSession } from "@/lib/session"
 import { recordAdminAction } from "@/server/audit"
 import { notifyUsers } from "@/server/notify"
@@ -36,59 +36,6 @@ beforeEach(() => {
   mockDb.accessRequest.create.mockResolvedValue({ id: "ar-1" })
   mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
   mockDb.user.findMany.mockResolvedValue([])
-})
-
-describe("requestAccess", () => {
-  it("creates a pending requester request and notifies OpCo admins", async () => {
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
-      { userId: "admin-1", user: { email: "admin1@csquared.com", name: "Admin One", locale: "en" } },
-    ])
-    const res = await requestAccess({ opcoSlug: "ghana", note: "Need access" })
-    expect(res).toEqual({ id: "ar-1" })
-    expect(mockDb.accessRequest.create).toHaveBeenCalledWith({
-      data: { userId: "bob-db", opcoId: "opco-ghana", role: "requester", note: "Need access" },
-    })
-    expect(notifyUsers).toHaveBeenCalledWith(
-      [{ userId: "admin-1" }],
-      expect.objectContaining({ type: "access.requested" })
-    )
-    expect(sendAccessRequestEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "admin1@csquared.com", opcoName: "CSquared Ghana", requesterName: "Bob" })
-    )
-  })
-
-  it("notifies group admins and the target OpCo's admins, deduped and excluding the requester", async () => {
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
-      { userId: "admin-1", user: { email: "admin1@csquared.com", name: "Admin One", locale: "en" } },
-    ])
-    mockDb.user.findMany.mockResolvedValue([
-      { id: "admin-1", email: "admin1@csquared.com", name: "Admin One", locale: "en" }, // also a group admin → dedup
-      { id: "ga-2", email: "ga2@csquared.com", name: "Group Admin Two", locale: "fr" },
-      { id: "bob-db", email: "bob@csquared.com", name: "Bob", locale: "en" }, // the requester → excluded
-    ])
-    await requestAccess({ opcoSlug: "ghana" })
-    const notified = vi.mocked(notifyUsers).mock.calls[0][0]
-    expect(notified).toEqual(expect.arrayContaining([{ userId: "admin-1" }, { userId: "ga-2" }]))
-    expect(notified).toHaveLength(2) // deduped admin-1, excluded bob-db
-    expect(sendAccessRequestEmail).toHaveBeenCalledTimes(2)
-  })
-
-  it("rejects when the user is already an active requester there", async () => {
-    mockDb.userOpCoAssignment.findFirst.mockResolvedValue({ id: "asg-1" })
-    await expect(requestAccess({ opcoSlug: "ghana" })).rejects.toThrow(/already have requester access/i)
-    expect(mockDb.accessRequest.create).not.toHaveBeenCalled()
-  })
-
-  it("rejects a duplicate pending request", async () => {
-    mockDb.accessRequest.findFirst.mockResolvedValue({ id: "ar-existing" })
-    await expect(requestAccess({ opcoSlug: "ghana" })).rejects.toThrow(/pending request/i)
-    expect(mockDb.accessRequest.create).not.toHaveBeenCalled()
-  })
-
-  it("rejects an unknown OpCo", async () => {
-    mockDb.opCo.findUnique.mockResolvedValue(null)
-    await expect(requestAccess({ opcoSlug: "atlantis" })).rejects.toThrow(/OpCo not found/i)
-  })
 })
 
 describe("listAccessRequests", () => {
@@ -112,8 +59,17 @@ describe("listAccessRequests", () => {
     mockDb.accessRequest.findMany.mockResolvedValue([])
     await listAccessRequests()
     expect(mockDb.accessRequest.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: "pending", opco: { slug: { in: ["ghana"] } } } })
+      expect.objectContaining({ where: { status: "pending", opco: { slug: { in: ["ghana"] } }, role: { not: "admin" } } })
     )
+  })
+
+  it("returns each request's role", async () => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findMany.mockResolvedValue([
+      { id: "ar-1", role: "approver", note: "Lead", createdAt: new Date("2026-10-16T09:00:00Z"), opco: { name: "CSquared Ghana", slug: "ghana" }, user: { name: "Bob", email: "bob@csquared.com" } },
+    ])
+    const rows = await listAccessRequests()
+    expect(rows[0].role).toBe("approver")
   })
 })
 
@@ -249,5 +205,96 @@ describe("joinOpCo", () => {
     mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: "bob-db" }, { userId: "admin-1" }])
     await joinOpCo("ghana")
     expect(vi.mocked(notifyUsers).mock.calls[0][0]).toEqual([{ userId: "admin-1" }])
+  })
+})
+
+describe("requestRole", () => {
+  const ask = (over: Partial<{ opcoSlug: string; role: "approver" | "auditor" | "admin"; reason: string }> = {}) =>
+    requestRole({ opcoSlug: "ghana", role: "approver", reason: "I lead the Ghana NOC", ...over })
+
+  it("creates a pending request with the reason and audits it", async () => {
+    await expect(ask()).resolves.toEqual({ id: "ar-1" })
+    expect(mockDb.accessRequest.create).toHaveBeenCalledWith({
+      data: { userId: "bob-db", opcoId: "opco-ghana", role: "approver", note: "I lead the Ghana NOC" },
+    })
+    expect(recordAdminAction).toHaveBeenCalledWith(mockDb, expect.objectContaining({ action: "access.request" }))
+  })
+
+  it("refuses the requester and group roles", async () => {
+    await expect(ask({ role: "requester" as never })).rejects.toThrow(/cannot be requested/i)
+    await expect(ask({ role: "group_admin" as never })).rejects.toThrow(/cannot be requested/i)
+    expect(mockDb.accessRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("refuses an empty or whitespace reason, and one over 500 characters", async () => {
+    await expect(ask({ reason: "   " })).rejects.toThrow(/reason is required/i)
+    await expect(ask({ reason: "x".repeat(501) })).rejects.toThrow(/500 characters/i)
+  })
+
+  it("refuses a role the user already holds in that OpCo", async () => {
+    mockDb.userOpCoAssignment.findFirst.mockResolvedValue({ id: "asg-1" })
+    await expect(ask()).rejects.toThrow(/already have this role/i)
+    expect(mockDb.userOpCoAssignment.findFirst).toHaveBeenCalledWith({
+      where: { userId: "bob-db", opcoId: "opco-ghana", role: "approver", isActive: true },
+      select: { id: true },
+    })
+  })
+
+  it("refuses a second pending request for the same OpCo", async () => {
+    mockDb.accessRequest.findFirst.mockResolvedValue({ id: "ar-0" })
+    await expect(ask()).rejects.toThrow(/pending request for this OpCo/i)
+  })
+
+  it("checks for a pending request behind a lock on the user row, so two clicks can't file two", async () => {
+    await ask()
+    const lock = mockDb.$queryRaw.mock.invocationCallOrder[0]
+    const check = mockDb.accessRequest.findFirst.mock.invocationCallOrder[0]
+    const write = mockDb.accessRequest.create.mock.invocationCallOrder[0]
+    expect(lock).toBeLessThan(check)
+    expect(check).toBeLessThan(write)
+  })
+
+  it("refuses an unknown OpCo", async () => {
+    mockDb.opCo.findUnique.mockResolvedValue(null)
+    await expect(ask({ opcoSlug: "nowhere" })).rejects.toThrow(/OpCo not found/i)
+  })
+
+  it("sends approver and auditor requests to OpCo admins and group admins, deduped, never the requester", async () => {
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
+      { userId: "admin-1", user: { email: "admin1@csquared.com", name: "Admin One", locale: "en" } },
+    ])
+    mockDb.user.findMany.mockResolvedValue([
+      { id: "admin-1", email: "admin1@csquared.com", name: "Admin One", locale: "en" },
+      { id: "ga-2", email: "ga2@csquared.com", name: "Group Admin Two", locale: "fr" },
+      { id: "bob-db", email: "bob@csquared.com", name: "Bob", locale: "en" },
+    ])
+    await ask({ role: "auditor" })
+    const notified = vi.mocked(notifyUsers).mock.calls[0][0]
+    expect(notified).toEqual(expect.arrayContaining([{ userId: "admin-1" }, { userId: "ga-2" }]))
+    expect(notified).toHaveLength(2)
+    expect(sendAccessRequestEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "admin1@csquared.com", role: "auditor" }))
+    expect(sendAccessRequestEmail).toHaveBeenCalledTimes(2)
+  })
+
+  it("sends admin requests to group admins only", async () => {
+    mockDb.user.findMany.mockResolvedValue([{ id: "ga-2", email: "ga2@csquared.com", name: "Group Admin Two", locale: "fr" }])
+    await ask({ role: "admin" })
+    expect(mockDb.userOpCoAssignment.findMany).not.toHaveBeenCalled()
+    expect(vi.mocked(notifyUsers).mock.calls[0][0]).toEqual([{ userId: "ga-2" }])
+  })
+})
+
+describe("listMyRoleRequests", () => {
+  it("returns the caller's requests newest first", async () => {
+    mockDb.accessRequest.findMany.mockResolvedValue([
+      { id: "ar-2", role: "approver", status: "pending", decisionReason: null, createdAt: new Date("2026-10-16T09:00:00Z"), opco: { name: "CSquared Ghana" } },
+    ])
+    await expect(listMyRoleRequests()).resolves.toEqual([
+      { id: "ar-2", opcoName: "CSquared Ghana", role: "approver", status: "pending", decisionReason: null, createdAt: "2026-10-16T09:00:00.000Z" },
+    ])
+    expect(mockDb.accessRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "bob-db" },
+      orderBy: { createdAt: "desc" },
+    }))
   })
 })
