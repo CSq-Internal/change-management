@@ -185,6 +185,32 @@ const rejectedChange = {
   isEmergency: false,
 }
 
+describe('updateChangeStatus — votes go through submitApproval only', () => {
+  // A pending change is approved or rejected by votes (quorum, CAB, SoD in submitApproval),
+  // never by setting its status directly.
+  const pendingChange = {
+    id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'user-ap',
+    opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'high',
+    isEmergency: false, approvals: [],
+  }
+
+  it.each(['approved', 'rejected'] as const)('refuses pending → %s from an approver', async (toStatus) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(pendingChange)
+    await expect(updateChangeStatus('cr-1', toStatus)).rejects.toThrow(/Invalid transition/)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it.each(['approved', 'rejected'] as const)('refuses pending → %s from a group admin', async (toStatus) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdminSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ga', keycloakId: 'kc-ga' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(pendingChange)
+    await expect(updateChangeStatus('cr-1', toStatus)).rejects.toThrow(/Invalid transition/)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+})
+
 describe('updateChangeStatus — OpCo authorization', () => {
   it('rejects a non-member acting on another OpCo\'s change', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)

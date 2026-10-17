@@ -300,7 +300,8 @@ export async function discardChange(id: string) {
 
 const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {
   draft: ["pending"],
-  pending: ["approved", "rejected"],
+  // No `pending` entry: a pending change is approved or rejected only by votes through
+  // submitApproval (quorum, CAB, SoD). The emergency pending → implemented path is below.
   approved: ["implemented"],
   implemented: ["verified"],
   verified: ["closed"],
