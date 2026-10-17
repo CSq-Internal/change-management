@@ -11,7 +11,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 | Variable | Example | Meaning |
 |----------|---------|---------|
 | `GCP_PROJECT_ID` | `csquared-cms` | GCP project id |
-| `AR_REGION` | `us-central1` | Artifact Registry region |
+| `AR_REGION` | `europe-west1` | Artifact Registry region |
 | `AR_REPO` | `cms` | Artifact Registry repository name |
 | `GCP_SA_EMAIL` | `github-ci@csquared-cms.iam.gserviceaccount.com` | Deploy service account |
 | `GCP_WIF_PROVIDER` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github-oidc` | WIF provider resource name |
