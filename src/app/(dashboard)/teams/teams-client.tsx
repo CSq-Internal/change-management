@@ -33,7 +33,10 @@ export default function TeamsClient({ teams, manageableSlugs }: TeamsClientProps
 
   const [formTeam, setFormTeam] = useState<DbTeam | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const [membersTeam, setMembersTeam] = useState<DbTeam | null>(null)
+  // Keep the id, not the team: after an add or remove, router.refresh() brings new props
+  // and the open dialog must show them.
+  const [membersTeamId, setMembersTeamId] = useState<string | null>(null)
+  const membersTeam = teams.find((tm) => tm.id === membersTeamId) ?? null
   const [confirmTeam, setConfirmTeam] = useState<DbTeam | null>(null)
   const [pending, setPending] = useState(false)
 
@@ -81,7 +84,7 @@ export default function TeamsClient({ teams, manageableSlugs }: TeamsClientProps
         teams={teams}
         language={language}
         onEdit={(team) => { setFormTeam(team); setFormOpen(true) }}
-        onMembers={(team) => setMembersTeam(team)}
+        onMembers={(team) => setMembersTeamId(team.id)}
         onDelete={(team) => setConfirmTeam(team)}
       />
 
@@ -99,7 +102,7 @@ export default function TeamsClient({ teams, manageableSlugs }: TeamsClientProps
         <TeamMembersDialog
           language={language}
           team={membersTeam}
-          onClose={() => setMembersTeam(null)}
+          onClose={() => setMembersTeamId(null)}
           onChanged={refresh}
         />
       )}
