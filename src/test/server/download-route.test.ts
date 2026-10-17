@@ -22,6 +22,18 @@ describe("GET /api/changes/[id]/documents/[attachmentId]", () => {
     expect(await res.text()).toBe("PDFDATA")
   })
 
+  it("serves a file whose name has characters outside Latin-1", async () => {
+    // Word's curly apostrophe and an accent: a raw header value throws on these.
+    vi.mocked(getDocumentForDownload).mockResolvedValueOnce({
+      buffer: Buffer.from("DOC"), filename: "Plan d’implémentation (v2).docx", mimeType: "application/msword",
+    })
+    const res = await GET(new Request("http://localhost"), ctx)
+    expect(res.status).toBe(200)
+    const cd = res.headers.get("content-disposition")!
+    expect(cd).toContain(`filename*=UTF-8''Plan%20d%E2%80%99impl%C3%A9mentation%20%28v2%29.docx`)
+    expect(cd).toMatch(/^attachment; filename="[\x20-\x7e]+"; /)
+  })
+
   it("returns 403 on Forbidden", async () => {
     vi.mocked(getDocumentForDownload).mockRejectedValueOnce(new Error("Forbidden: not a member"))
     const res = await GET(new Request("http://localhost"), ctx)
