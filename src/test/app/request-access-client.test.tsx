@@ -41,7 +41,9 @@ describe("RequestAccessClient (choose your OpCo)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }))
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/"))
     expect(joinOpCo).toHaveBeenCalledWith("uganda")
-    expect(update).toHaveBeenCalled()
+    // update() with no argument is a plain GET that never reaches the jwt callback as
+    // trigger "update"; passing data makes it a POST, so the new OpCo lands at once.
+    expect(update).toHaveBeenCalledWith(expect.any(Object))
   })
 
   it("shows the error and stays put when joining fails", async () => {
