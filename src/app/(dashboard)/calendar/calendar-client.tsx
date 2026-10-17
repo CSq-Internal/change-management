@@ -20,7 +20,7 @@ export type CalChipData = {
   blackoutLabels: string[]; canReschedule: boolean
 }
 export type BlackoutScope = { value: string; label: string }
-export type BlackoutRow = { id: string; label: string; scopeName: string; startMs: number; endMs: number }
+export type BlackoutRow = { id: string; label: string; scopeName: string; opcoSlug: string | null; startMs: number; endMs: number }
 
 const SEVERITY_RING: Record<string, string> = {
   low: "ring-emerald-400", medium: "ring-amber-400", high: "ring-orange-500", emergency: "ring-rose-500",
@@ -313,14 +313,15 @@ export default function CalendarClient({
                       <span className="font-medium">{b.label}</span>
                       <span className="text-muted-foreground"> · {b.scopeName} · {hydrated && `${formatDayLabel(localDayKey(b.startMs), language)} → ${formatDayLabel(localDayKey(b.endMs), language)}`}</span>
                     </span>
-                    <button
+                    {/* The scopes the viewer may set are the ones they may remove ("" is group-wide). */}
+                    {blackoutScopes.some((s) => s.value === (b.opcoSlug ?? "")) && <button
                       type="button"
                       onClick={() => removeBlackout(b.id)}
                       disabled={isPending}
                       className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
                     >
                       {t(language, "calendar.blackout.remove")}
-                    </button>
+                    </button>}
                   </div>
                 ))
               )}

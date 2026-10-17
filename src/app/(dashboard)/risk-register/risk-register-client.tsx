@@ -59,6 +59,11 @@ export default function RiskRegisterClient({
     ...manageableOpcos.map((o) => ({ value: o.slug, label: o.name })),
   ]
 
+  // Same rule as the server's assertCanManage: group risks need a group admin, OpCo risks
+  // a group admin or that OpCo's admin.
+  const canEdit = (r: RiskRow) =>
+    canManageGroup || (r.opcoSlug !== null && manageableOpcos.some((o) => o.slug === r.opcoSlug))
+
   const openNew = () => setEditing({ id: null, form: emptyForm(scopeOptions[0]?.value || null) })
   const openEdit = (r: RiskRow) => setEditing({
     id: r.id,
@@ -131,7 +136,7 @@ export default function RiskRegisterClient({
                     <td className="px-4 py-2" data-label={t(language, "risk.col.scope")}>{r.opcoName ?? t(language, "risk.scope.group")}</td>
                     {canManage && (
                       <td className="px-4 py-2 text-right" data-label="">
-                        <button onClick={() => openEdit(r)} className="text-xs text-primary hover:underline">{t(language, "risk.edit")}</button>
+                        {canEdit(r) && <button onClick={() => openEdit(r)} className="text-xs text-primary hover:underline">{t(language, "risk.edit")}</button>}
                       </td>
                     )}
                   </tr>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 
 vi.mock("@/lib/store", () => ({ useStore: () => ({ language: "en" }) }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
@@ -35,5 +35,19 @@ describe("CalendarClient", () => {
     )
     expect(dayOf("Early fix")).toBe("1")
     expect(dayOf("Long migration")).toBe("1")
+  })
+
+  it("offers Remove only on blackouts the viewer may delete", () => {
+    render(
+      <CalendarClient monthLabel="October 2026" prevMonth="2026-09" nextMonth="2026-11" cells={october} chips={[]}
+        canManageBlackouts blackoutScopes={[{ value: "ghana", label: "Ghana" }]}
+        blackouts={[
+          { id: "b1", label: "Ghana freeze", scopeName: "Ghana", opcoSlug: "ghana", startMs: 0, endMs: 1 },
+          { id: "b2", label: "Group freeze", scopeName: "Group", opcoSlug: null, startMs: 0, endMs: 1 },
+        ]} />,
+    )
+    const row = (label: string) => screen.getByText(label).closest("div.flex")! as HTMLElement
+    expect(within(row("Ghana freeze")).queryByRole("button", { name: "Remove" })).toBeInTheDocument()
+    expect(within(row("Group freeze")).queryByRole("button", { name: "Remove" })).not.toBeInTheDocument()
   })
 })
