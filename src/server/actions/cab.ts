@@ -27,8 +27,8 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
     })
     if (!eligible) throw new Error("Forbidden: user must be an approver or admin in at least one OpCo")
 
-    // Postgres treats NULL opcoId as distinct, so upsert can't dedupe group rows —
-    // find-then-create/update guards against duplicates.
+    // Prisma's compound-unique upsert can't target a NULL opcoId, so find-then-create/update.
+    // The unique index is NULLS NOT DISTINCT, so a racing second create fails instead of duplicating.
     const existing = await db.cABMembership.findFirst({ where: { userId, opcoId: null } })
     return db.$transaction(async (tx) => {
       const member = existing

@@ -63,8 +63,18 @@ function emailFor(
   }
 }
 
-export async function postToChat(url: string, text: string): Promise<void> {
-  await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+// The caller's action waits on this, so a slow webhook gets five seconds. A failure is
+// logged by webhook id: the URL itself carries the webhook's key and token.
+export async function postToChat(hook: { id: string; url: string }, text: string): Promise<void> {
+  try {
+    const res = await fetch(hook.url, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) console.warn(`[chat] webhook ${hook.id} answered ${res.status}`)
+  } catch (err) {
+    console.warn(`[chat] webhook ${hook.id} failed: ${err instanceof Error ? err.name : "error"}`)
+  }
 }
 
 export async function notifyEvent(input: {
@@ -73,6 +83,8 @@ export async function notifyEvent(input: {
   change: { id: string; title: string; opcoId: string }
   context?: NotifyContext
   emailDetail?: EmailDetail
+  /** The caller already wrote the dispatch rows (the reminder sweep claims before sending). */
+  dispatchClaimed?: boolean
 }): Promise<void> {
   const { type, recipients, change } = input
   const ctx = input.context ?? {}
@@ -101,13 +113,15 @@ export async function notifyEvent(input: {
     }
     // Ledger row per recipient regardless of channel — it records that this person was
     // notified about this event, which is what the reminder sweep needs to know.
-    tasks.push(db.notificationDispatch.create({ data: { userId: r.userId, changeId: change.id, type } }))
+    if (!input.dispatchClaimed) {
+      tasks.push(db.notificationDispatch.create({ data: { userId: r.userId, changeId: change.id, type } }))
+    }
   }
 
   if (CHAT_BROADCAST_TYPES.includes(type)) {
     const hooks = await db.chatWebhook.findMany({ where: { isActive: true, OR: [{ opcoId: change.opcoId }, { opcoId: null }] } })
     const text = chatMessageText(type, change.title, ctx, opcoLocale)
-    for (const h of hooks) tasks.push(postToChat(h.url, text))
+    for (const h of hooks) tasks.push(postToChat(h, text))
   }
 
   await Promise.allSettled(tasks)
@@ -168,7 +182,7 @@ function detailRows(
 export async function notifyChange(
   type: NotifyEventType,
   changeId: string,
-  ctx: NotifyContext & { actorId?: string; recipients?: NotifyRecipient[] } = {},
+  ctx: NotifyContext & { actorId?: string; recipients?: NotifyRecipient[]; dispatchClaimed?: boolean } = {},
 ): Promise<void> {
   try {
     const db = getPrisma()
@@ -182,7 +196,7 @@ export async function notifyChange(
     })
     if (!change) return
 
-    const { actorId, recipients: explicit, ...rest } = ctx
+    const { actorId, recipients: explicit, dispatchClaimed, ...rest } = ctx
     const recipients = explicit ?? await resolveAudience(type, {
       id: change.id, opcoId: change.opcoId,
       infrastructureType: change.infrastructureType, requesterId: change.requesterId,
@@ -199,6 +213,7 @@ export async function notifyChange(
       recipients,
       change: { id: change.id, title: change.title, opcoId: change.opcoId },
       context: rest,
+      dispatchClaimed,
       emailDetail: {
         subject: `${title}: ${change.title}`,
         headline: title,

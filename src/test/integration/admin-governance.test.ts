@@ -28,19 +28,6 @@ describe('TC-INT-CAB-001: CABMembership uniqueness', () => {
     ).rejects.toThrow(/Unique constraint|P2002/)
   })
 
-  it('allows multiple group rows (opcoId NULL) — Postgres treats NULL as distinct', async () => {
-    const db = getTestDb()
-    const user = await db.user.findUniqueOrThrow({ where: { keycloakId: 'kc-cab' } })
-
-    await db.cABMembership.create({ data: { userId: user.id, opcoId: null } })
-    // The DB does NOT block a second NULL-opcoId row — this is exactly why
-    // addCabMember must guard group membership in application code.
-    await db.cABMembership.create({ data: { userId: user.id, opcoId: null } })
-
-    const groupRows = await db.cABMembership.count({ where: { userId: user.id, opcoId: null } })
-    expect(groupRows).toBe(2)
-  })
-
   it('supports soft-remove then upsert-revive of a per-OpCo membership', async () => {
     const db = getTestDb()
     const user = await db.user.findUniqueOrThrow({ where: { keycloakId: 'kc-cab' } })

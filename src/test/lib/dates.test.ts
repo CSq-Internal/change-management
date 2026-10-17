@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { toDateTimeLocal } from '@/lib/dates'
+import { toDateTimeLocal, dayStart, dayEnd } from '@/lib/dates'
 
 // datetime-local inputs hold local wall-clock time, and the form reads them back with
 // new Date(value), which is local too. Run in a non-UTC zone so a UTC slice would show.
@@ -23,5 +23,18 @@ describe('toDateTimeLocal', () => {
 
   it('is empty for no value', () => {
     expect(toDateTimeLocal(null)).toBe('')
+  })
+})
+
+describe('dayStart / dayEnd', () => {
+  // A date input gives "YYYY-MM-DD"; new Date() of that is UTC midnight, which drops the
+  // last day of an "until" range and three local hours from the start of a "from".
+  it('a delegation "until" today lasts to the end of today, local time', () => {
+    expect(dayEnd('2026-10-17').toISOString()).toBe('2026-10-17T20:59:59.999Z')
+  })
+
+  it('a From = To = today search covers the whole local day', () => {
+    expect(dayStart('2026-10-17').toISOString()).toBe('2026-10-16T21:00:00.000Z')
+    expect(dayEnd('2026-10-17').getTime() - dayStart('2026-10-17').getTime()).toBe(86_400_000 - 1)
   })
 })

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
+import { dayStart, dayEnd } from "@/lib/dates"
 import { listAdminAudit } from "@/server/actions/audit-log"
 import AuditList from "./audit-list"
 import type { AuditRow } from "./types"
@@ -37,8 +38,8 @@ export default function AuditClient({ initialRows }: AuditClientProps) {
     try {
       const next = await listAdminAudit({
         action: action || undefined,
-        from: from ? new Date(from) : undefined,
-        to: to ? new Date(to) : undefined,
+        from: from ? dayStart(from) : undefined,
+        to: to ? dayEnd(to) : undefined,
       })
       setRows(next)
     } catch (err) {

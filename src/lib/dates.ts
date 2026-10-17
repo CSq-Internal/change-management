@@ -32,3 +32,7 @@ export function toDateTimeLocal(value: string | Date | null | undefined): string
   const d = new Date(value)
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
+
+/** A date input's "YYYY-MM-DD" as the first or last instant of that day in the viewer's zone. */
+export const dayStart = (ymd: string) => new Date(`${ymd}T00:00:00`)
+export const dayEnd = (ymd: string) => new Date(`${ymd}T23:59:59.999`)

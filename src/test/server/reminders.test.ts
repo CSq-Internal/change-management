@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockDb = {
   changeRequest: { findMany: vi.fn() },
-  notificationDispatch: { findFirst: vi.fn() },
+  notificationDispatch: { findFirst: vi.fn(), create: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb)),
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
@@ -19,6 +21,7 @@ const now = Date.now()
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockDb.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(mockDb))
   mockDb.changeRequest.findMany.mockResolvedValue([])
   mockDb.notificationDispatch.findFirst.mockResolvedValue(null)
   notifyChange.mockResolvedValue(undefined)
