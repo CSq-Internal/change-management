@@ -9,8 +9,18 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl
   const opcoSlug = searchParams.get("opco")
-  const from = searchParams.get("from")
-  const to = searchParams.get("to")
+  // Dates are whole days (yyyy-mm-dd from the date pickers): "to" includes all of that day.
+  const from = searchParams.get("from") ? new Date(searchParams.get("from")!) : null
+  const to = searchParams.get("to") ? new Date(searchParams.get("to")!) : null
+  if ((from && isNaN(from.getTime())) || (to && isNaN(to.getTime()))) {
+    return NextResponse.json({ error: "Invalid date" }, { status: 400 })
+  }
+  const at = from || to
+    ? {
+        ...(from && { gte: from }),
+        ...(to && { lt: new Date(to.getTime() + 24 * 60 * 60 * 1000) }),
+      }
+    : undefined
 
   const db = getPrisma()
   const groupLevel = isGroupLevel(session.user.realmRoles)
@@ -21,8 +31,7 @@ export async function GET(req: NextRequest) {
   const entries = await db.auditLog.findMany({
     where: {
       change: opcoSlugs ? { opco: { slug: { in: opcoSlugs } } } : undefined,
-      ...(from && { at: { gte: new Date(from) } }),
-      ...(to && { at: { lte: new Date(to) } }),
+      at,
     },
     include: { actor: true, change: { include: { opco: true } } },
     orderBy: { at: "desc" },
