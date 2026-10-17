@@ -854,3 +854,29 @@ describe('lifecycle notifications', () => {
     await expect(submitChange('cr-1')).resolves.toBeDefined()
   })
 })
+
+describe('planned window: the end must come after the start', () => {
+  const backwards = { plannedStart: new Date('2026-07-02T10:00Z'), plannedEnd: new Date('2026-07-02T08:00Z') }
+  const form = {
+    title: 'Router update', description: 'BGP config', category: 'config' as const, riskLevel: 'low' as const,
+    contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+  }
+
+  it('createChange refuses a backwards window and stores nothing', async () => {
+    await expect(createChange('ghana', { ...form, ...backwards })).rejects.toThrow(/end must be after/i)
+    expect(tx.changeRequest.create).not.toHaveBeenCalled()
+  })
+
+  it('updateChange refuses an end moved before the stored start', async () => {
+    await expect(updateChange('cr-1', { plannedEnd: new Date('2026-06-30') })).rejects.toThrow(/end must be after/i)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('submitChange refuses a draft whose window is backwards', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      ...(await mockDb.changeRequest.findUnique()), ...backwards,
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/end must be after/i)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+})

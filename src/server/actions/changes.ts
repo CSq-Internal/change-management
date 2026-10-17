@@ -98,6 +98,13 @@ export async function listChanges(opcoSlug: string) {
   })
 }
 
+// A draft may leave either date empty, but once both are set the end must come after the start.
+function assertWindow(start: Date | null | undefined, end: Date | null | undefined) {
+  if (start && end && !(new Date(end) > new Date(start))) {
+    throw new Error("Invalid planned window: the end must be after the start")
+  }
+}
+
 export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   const session = await getAppSession()
   if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
@@ -115,6 +122,7 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
 
   const { approverIds = [] } = data
   const changeData = pickFormFields<ChangeFormFields>(data)
+  assertWindow(changeData.plannedStart, changeData.plannedEnd)
 
   // Validate before opening the transaction so a bad id leaves nothing behind.
   for (const userId of approverIds) {
@@ -161,7 +169,9 @@ export async function updateChange(id: string, data: UpdateChangeInput) {
     throw new Error("Forbidden: only the requester or an admin can edit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be edited")
 
-  return db.changeRequest.update({ where: { id }, data: pickFormFields(data) })
+  const fields = pickFormFields(data)
+  assertWindow(fields.plannedStart ?? change.plannedStart, fields.plannedEnd ?? change.plannedEnd)
+  return db.changeRequest.update({ where: { id }, data: fields })
 }
 
 export async function submitChange(id: string) {
@@ -197,6 +207,7 @@ export async function submitChange(id: string) {
   if (missingFields.length > 0) {
     throw new Error(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
   }
+  assertWindow(change.plannedStart, change.plannedEnd)
 
   // At least one approver must be named before a change can enter the approval flow.
   // Requester-named approvers are additive — the routed CAB keeps its authority — but
