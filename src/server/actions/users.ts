@@ -298,6 +298,9 @@ export async function setUserAssignments(
     }
   }
 
+  // Keycloak calls wait until the transaction commits: a slow Keycloak inside it ran past
+  // Prisma's 5 s limit and failed the role change, and a rollback can't undo a Keycloak call.
+  const kcAssign: string[] = []
   await db.$transaction(async (tx) => {
     for (const slug of changed) {
       const currentOpcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)?.opco.id
@@ -323,11 +326,7 @@ export async function setUserAssignments(
           update: { role: desiredRole, isActive: true, endedAt: null },
           create: { userId, opcoId: opco.id, role: desiredRole },
         })
-        try {
-          await assignToOrganization(user.keycloakId, slug)
-        } catch (err) {
-          console.warn(`[keycloak] org assignment skipped for ${slug}:`, err)
-        }
+        kcAssign.push(slug)
       }
     }
 
@@ -341,6 +340,14 @@ export async function setUserAssignments(
       metadata: { changed: [...changed], desired },
     })
   })
+
+  for (const slug of kcAssign) {
+    try {
+      await assignToOrganization(user.keycloakId, slug)
+    } catch (err) {
+      console.warn(`[keycloak] org assignment skipped for ${slug}:`, err)
+    }
+  }
 }
 
 export async function listOpCoApprovers(opcoSlug: string | null) {
