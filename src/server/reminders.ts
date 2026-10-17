@@ -35,7 +35,7 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
     where: { status: "pending" },
     select: {
       id: true, riskLevel: true, opcoId: true, infrastructureType: true,
-      requesterId: true, createdAt: true, slaDeadline: true,
+      requesterId: true, slaDeadline: true,
     },
   })
   const expedited = await db.changeRequest.findMany({
@@ -47,10 +47,11 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
 
   let nudged = 0
   for (const c of pending) {
-    // Nudge only in the back half of the SLA window. Once breached, sla_escalated owns it.
-    const windowMs = SLA_HOURS[c.riskLevel as RiskLevel] * HOUR
-    if (now - c.createdAt.getTime() < windowMs / 2) continue
-    if (c.slaDeadline && now >= c.slaDeadline.getTime()) continue
+    // Nudge only in the back half of the SLA window, which submission starts (slaDeadline is
+    // set then). Once breached, sla_escalated owns it.
+    if (!c.slaDeadline) continue
+    const leftMs = c.slaDeadline.getTime() - now
+    if (leftMs > (SLA_HOURS[c.riskLevel as RiskLevel] * HOUR) / 2 || leftMs <= 0) continue
 
     const recipients = await resolveAudience("approver_nudge", {
       id: c.id, opcoId: c.opcoId, infrastructureType: c.infrastructureType, requesterId: c.requesterId,

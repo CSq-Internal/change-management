@@ -128,9 +128,6 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
     }
   }
 
-  const slaDeadline = new Date()
-  slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
-
   const { approverIds = [] } = data
   const changeData = pickFormFields<ChangeFormFields>(data)
 
@@ -148,7 +145,7 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
 
   const change = await db.$transaction(async (tx) => {
     const created = await tx.changeRequest.create({
-      data: { ...changeData, opcoId: opco.id, requesterId: user.id, status: "draft", slaDeadline },
+      data: { ...changeData, opcoId: opco.id, requesterId: user.id, status: "draft" },
     })
     for (const userId of approverIds) {
       await tx.changeAssignee.create({ data: { changeId: created.id, userId, role: "approver" } })
@@ -179,14 +176,7 @@ export async function updateChange(id: string, data: UpdateChangeInput) {
     throw new Error("Forbidden: only the requester or an admin can edit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be edited")
 
-  const updateData: UpdateChangeInput & { slaDeadline?: Date } = pickFormFields(data)
-  if (data.riskLevel) {
-    const slaDeadline = new Date()
-    slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
-    updateData.slaDeadline = slaDeadline
-  }
-
-  return db.changeRequest.update({ where: { id }, data: updateData })
+  return db.changeRequest.update({ where: { id }, data: pickFormFields(data) })
 }
 
 export async function submitChange(id: string) {
@@ -250,7 +240,13 @@ export async function submitChange(id: string) {
     }
   }
 
-  const updated = await db.changeRequest.update({ where: { id }, data: { status: "pending" } })
+  // The SLA clock starts here, and restarts on each resubmission, so a draft's age and an
+  // earlier round's escalations don't count against this round.
+  const slaDeadline = new Date(Date.now() + SLA_HOURS[change.riskLevel] * 3_600_000)
+  const updated = await db.changeRequest.update({
+    where: { id },
+    data: { status: "pending", slaDeadline, escalationLevel: 0, lastEscalatedAt: null },
+  })
   await db.auditLog.create({
     data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
   })

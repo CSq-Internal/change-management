@@ -431,13 +431,33 @@ describe('submitChange', () => {
     expect(result).toHaveProperty('status', 'pending')
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
       where: { id: 'cr-1' },
-      data: { status: 'pending' },
+      data: { status: 'pending', slaDeadline: expect.any(Date), escalationLevel: 0, lastEscalatedAt: null },
     })
     expect(mockDb.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ action: 'submitted', fromStatus: 'draft', toStatus: 'pending' }),
       })
     )
+  })
+
+  it('starts the SLA clock at submission, not at draft creation', async () => {
+    // The default change is low risk: 48h from now, whenever the draft was saved.
+    const before = Date.now()
+    await submitChange('cr-1')
+    const { data } = mockDb.changeRequest.update.mock.calls[0][0] as { data: { slaDeadline: Date } }
+    expect(data.slaDeadline.getTime()).toBeGreaterThanOrEqual(before + 48 * 3_600_000)
+    expect(data.slaDeadline.getTime()).toBeLessThanOrEqual(Date.now() + 48 * 3_600_000)
+  })
+
+  it('does not start an SLA clock on a draft', async () => {
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'high',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+    })
+    expect(tx.changeRequest.create.mock.calls[0][0].data).not.toHaveProperty('slaDeadline')
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'draft' })
+    await updateChange('cr-1', { riskLevel: 'high' })
+    expect(mockDb.changeRequest.update).toHaveBeenLastCalledWith({ where: { id: 'cr-1' }, data: { riskLevel: 'high' } })
   })
 
   it('notifies the routed CAB members on submit', async () => {
@@ -717,7 +737,7 @@ describe('submitChange — mandatory approver', () => {
     })
     await submitChange('cr-1')
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'pending' } })
+      expect.objectContaining({ where: { id: 'cr-1' }, data: expect.objectContaining({ status: 'pending' }) })
     )
   })
 

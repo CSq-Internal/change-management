@@ -39,12 +39,9 @@ export default async function EditChangePage({
     implementationPlan: change.implementationPlan ?? null,
     testingPlan: change.testingPlan ?? null,
     backoutPlan: change.backoutPlan ?? null,
-    plannedStart: change.plannedStart
-      ? change.plannedStart.toISOString().slice(0, 16)
-      : null,
-    plannedEnd: change.plannedEnd
-      ? change.plannedEnd.toISOString().slice(0, 16)
-      : null,
+    // Full ISO instants: the form shows them in the viewer's zone (toDateTimeLocal).
+    plannedStart: change.plannedStart?.toISOString() ?? null,
+    plannedEnd: change.plannedEnd?.toISOString() ?? null,
     opcoSlug: change.opco.slug,
   }
 

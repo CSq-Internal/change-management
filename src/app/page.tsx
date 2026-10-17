@@ -4,7 +4,6 @@ import { getPrisma } from "@/server/db"
 import { viewerTier, requestScopedSlugs } from "@/lib/permissions"
 import { requestScope } from "@/server/request-scope"
 import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
-import { runDueEscalations } from "@/server/sla"
 import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
 import type { FeedEvent } from "@/components/dashboard/monitor-view"
@@ -43,9 +42,6 @@ export default async function Home() {
     : groupLevel
       ? {}
       : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }
-
-  // Fire-and-forget SLA escalation sweep — never block render.
-  void runDueEscalations({ opcoSlugs: groupLevel ? undefined : opcoSlugs }).catch(() => {})
 
   const [rows, blackoutRows, auditRows] = await Promise.all([
     db.changeRequest.findMany({

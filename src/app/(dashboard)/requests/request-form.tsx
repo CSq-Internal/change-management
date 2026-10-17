@@ -18,6 +18,7 @@ import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { toDateTimeLocal } from "@/lib/dates"
 import type { AttachmentKind } from "@prisma/client"
 
 const infraTypes = [
@@ -78,8 +79,8 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   const [category, setCategory] = useState<"config" | "infrastructure" | "software" | "process">(
     (initial?.category as "config" | "infrastructure" | "software" | "process") ?? "software"
   )
-  const [plannedStart, setPlannedStart] = useState(initial?.plannedStart ?? "")
-  const [plannedEnd, setPlannedEnd] = useState(initial?.plannedEnd ?? "")
+  const [plannedStart, setPlannedStart] = useState(() => toDateTimeLocal(initial?.plannedStart))
+  const [plannedEnd, setPlannedEnd] = useState(() => toDateTimeLocal(initial?.plannedEnd))
   const [impactScope, setImpactScope] = useState(initial?.impactScope ?? "")
   const [implementationPlan, setImplementationPlan] = useState(initial?.implementationPlan ?? "")
   const [testingPlan, setTestingPlan] = useState(initial?.testingPlan ?? "")
