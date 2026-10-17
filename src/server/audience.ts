@@ -2,6 +2,7 @@
 // Maps an event type to the people who should hear about it. Call sites say what
 // happened; this decides who to tell.
 import { getPrisma } from "@/server/db"
+import { votesSince } from "@/lib/approval-cycle"
 import { getRoutedApprovers, getNamedApprovers } from "@/server/approval-authority"
 import type { NotifyEventType } from "@/lib/notifications"
 import type { NotifyRecipient } from "@/server/notify"
@@ -66,12 +67,16 @@ async function idsForRole(role: AudienceRole, change: AudienceChange): Promise<s
       return rows.map((r) => r.approverId)
     }
     case "approversPending": {
-      const [routed, named, votes] = await Promise.all([
+      const [routed, named, lastSubmission, votes] = await Promise.all([
         getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId }),
         getNamedApprovers(change.id),
-        db.approval.findMany({ where: { changeId: change.id }, select: { approverId: true } }),
+        db.auditLog.findFirst({
+          where: { changeId: change.id, action: "submitted" }, orderBy: { at: "desc" }, select: { at: true },
+        }),
+        db.approval.findMany({ where: { changeId: change.id }, select: { approverId: true, decidedAt: true } }),
       ])
-      const voted = new Set(votes.map((v) => v.approverId))
+      // Only this round's votes: someone who voted before a resubmission still has to act.
+      const voted = new Set(votesSince(votes, lastSubmission?.at ?? null).map((v) => v.approverId))
       return [...routed, ...named].map((u) => u.id).filter((id) => !voted.has(id))
     }
     case "opcoAdmins": {
