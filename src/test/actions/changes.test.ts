@@ -185,6 +185,32 @@ const rejectedChange = {
   isEmergency: false,
 }
 
+describe('updateChangeStatus — votes go through submitApproval only', () => {
+  // A pending change is approved or rejected by votes (quorum, CAB, SoD in submitApproval),
+  // never by setting its status directly.
+  const pendingChange = {
+    id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'user-ap',
+    opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'high',
+    isEmergency: false, approvals: [],
+  }
+
+  it.each(['approved', 'rejected'] as const)('refuses pending → %s from an approver', async (toStatus) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(pendingChange)
+    await expect(updateChangeStatus('cr-1', toStatus)).rejects.toThrow(/Invalid transition/)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it.each(['approved', 'rejected'] as const)('refuses pending → %s from a group admin', async (toStatus) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdminSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ga', keycloakId: 'kc-ga' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(pendingChange)
+    await expect(updateChangeStatus('cr-1', toStatus)).rejects.toThrow(/Invalid transition/)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+})
+
 describe('updateChangeStatus — OpCo authorization', () => {
   it('rejects a non-member acting on another OpCo\'s change', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
@@ -553,6 +579,40 @@ describe('updateChange', () => {
     // change.requesterId is 'user-1', not 'user-ga', but groupAdminSession has group_admin role
     const result = await updateChange('cr-1', { title: 'Admin edit' })
     expect(result).toHaveProperty('title', 'Admin edit')
+  })
+})
+
+describe('change writes keep to the form fields', () => {
+  // Server actions take arbitrary JSON from the browser, whatever their TypeScript types say.
+  const forged = {
+    status: 'approved', opcoId: 'opco-other', requesterId: 'user-other',
+    implementedById: 'user-other', implementedAt: new Date(), expedited: true,
+    retroApprovedAt: new Date(), driveFolderId: 'folder-x', escalationLevel: 2,
+    approvals: { create: [{ approverId: 'cab-1', decision: 'approve', isCab: true }] },
+    auditTrail: { create: [{ actorId: 'user-other', action: 'approved' }] },
+  }
+
+  it('updateChange drops fields the edit form does not have', async () => {
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'draft' })
+    await updateChange('cr-1', { title: 'Updated title', ...forged } as never)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-1' },
+      data: { title: 'Updated title' },
+    })
+  })
+
+  it('createChange drops fields the request form does not have', async () => {
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'low',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+      ...forged,
+    } as never)
+    const data = tx.changeRequest.create.mock.calls[0][0].data
+    for (const key of Object.keys(forged)) {
+      if (key === 'status' || key === 'opcoId' || key === 'requesterId') continue
+      expect(data).not.toHaveProperty(key)
+    }
+    expect(data).toMatchObject({ status: 'draft', opcoId: 'opco-1', requesterId: 'user-1', title: 'Router update' })
   })
 })
 

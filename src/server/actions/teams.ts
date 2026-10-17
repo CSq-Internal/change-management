@@ -62,9 +62,12 @@ export async function createTeam(input: { opcoSlug: string; name: string; descri
 
 export async function updateTeam(teamId: string, data: { name?: string; description?: string }) {
   const { session, db, opcoId } = await authorizeTeamAction(teamId)
+  // Copy the two editable fields: a server action gets whatever JSON the browser sends, and
+  // passing it through would let a caller move the team (opcoId) or skip addTeamMember's checks.
+  const fields = { name: data.name, description: data.description }
 
   return db.$transaction(async (tx) => {
-    const team = await tx.team.update({ where: { id: teamId }, data })
+    const team = await tx.team.update({ where: { id: teamId }, data: fields })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
       actorEmail: session.email,
@@ -72,7 +75,7 @@ export async function updateTeam(teamId: string, data: { name?: string; descript
       action: "team.update",
       opcoId,
       summary: `Updated team ${teamId}`,
-      metadata: data,
+      metadata: fields,
     })
     return team
   })

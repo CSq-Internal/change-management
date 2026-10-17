@@ -293,6 +293,19 @@ describe('submitApproval — retrospective stage scoping', () => {
     expect(mockDb.approval.create).toHaveBeenCalled()
   })
 
+  it('refuses a retrospective vote from the person who expedited the change', async () => {
+    // Implementing an emergency without approval stands in for that approval; the
+    // retrospective vote is the check on it, so the implementer cannot cast it.
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED, implementedById: 'user-requester', approvals: [],
+    })
+    for (const decision of ['approve', 'reject'] as const) {
+      await expect(submitApproval('cr-1', decision, 'ok', true)).rejects.toThrow(/implemented this change/i)
+    }
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
   it('allows a retrospective vote from an approver who has not voted in this stage', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValue({
       ...EXPEDITED,
