@@ -119,6 +119,11 @@ interface Props {
 
 export default function ChangeDetailClient({ change, caps, assigneeCandidates, approverCandidates }: Props) {
   const { language } = useStore()
+  // Stored values (audit actions, categories) with a translation, else shown as stored.
+  const label = (key: string, raw: string) => {
+    const text = t(language, key)
+    return text === key ? raw : text
+  }
   const { toast } = useToast()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -306,7 +311,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
               <span>•</span>
               <RiskPill risk={change.riskLevel} />
               <span>•</span>
-              <span className="capitalize">{change.category}</span>
+              <span className="capitalize">{label(`requests.category.${change.category}`, change.category)}</span>
             </div>
           </CardHeader>
         </Card>
@@ -390,7 +395,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
                     <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-border" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                        <span className="font-medium capitalize">{log.action.replace(/_/g, " ")}</span>
+                        <span className="font-medium capitalize">{label(`audit.action.${log.action}`, log.action.replace(/_/g, " "))}</span>
                         {log.fromStatus && log.toStatus && (
                           <span className="text-muted-foreground text-xs">
                             <StatusPill status={log.fromStatus} />
@@ -505,7 +510,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
                           : "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
                       }`}
                     >
-                      {ap.decision}
+                      {label(`detail.vote.${ap.decision}`, ap.decision)}
                     </span>
                   </div>
                   {ap.comment && (

@@ -4,9 +4,14 @@
 
 // `utc` renders a fixed "en-US, UTC" form that the server and the browser agree on, for
 // the pass before hydration (see components/date-time.tsx).
-export function formatDateTime(value: string | Date | null | undefined, utc = false): string {
+/** French screens get French dates; English keeps the browser's own English variant. */
+export function dateLocale(language: string): string | undefined {
+  return language === "fr" ? "fr-FR" : undefined
+}
+
+export function formatDateTime(value: string | Date | null | undefined, utc = false, locale?: string): string {
   if (!value) return "—"
-  return new Date(value).toLocaleString(utc ? "en-US" : undefined, {
+  return new Date(value).toLocaleString(utc ? "en-US" : locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -16,9 +21,9 @@ export function formatDateTime(value: string | Date | null | undefined, utc = fa
   })
 }
 
-export function formatDate(value: string | Date | null | undefined, utc = false): string {
+export function formatDate(value: string | Date | null | undefined, utc = false, locale?: string): string {
   if (!value) return "—"
-  return new Date(value).toLocaleDateString(utc ? "en-US" : undefined, {
+  return new Date(value).toLocaleDateString(utc ? "en-US" : locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
