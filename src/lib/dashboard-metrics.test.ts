@@ -151,3 +151,16 @@ test("whenLabel with utc gives the same text on a UTC server and in a Nairobi br
   expect(server).toBe("Tonight 20:30")
   expect(local).toBe("Tonight 23:30")
 })
+
+import { feedTone } from "./dashboard-metrics"
+
+test("feedTone colours the actions the audit log actually stores", () => {
+  expect(feedTone("submitted", null)).toBe("bg-amber-500")
+  expect(feedTone("approved", null)).toBe("bg-emerald-500")
+  expect(feedTone("rejected", null)).toBe("bg-rose-500")
+  expect(feedTone("sla_escalated", null)).toBe("bg-rose-500")
+  // implement and verify are status_changed rows; the target status says which.
+  expect(feedTone("status_changed", "implemented")).toBe("bg-blue-500")
+  expect(feedTone("status_changed", "verified")).toBe("bg-violet-500")
+  expect(feedTone("document_uploaded", null)).toBe("bg-slate-400")
+})

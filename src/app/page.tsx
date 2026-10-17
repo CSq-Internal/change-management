@@ -4,7 +4,7 @@ import { getPrisma } from "@/server/db"
 import { viewerTier, requestScopedSlugs } from "@/lib/permissions"
 import { requestScope, openOrRecent } from "@/server/request-scope"
 import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
-import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
+import { durLabel, feedTone, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
 import type { FeedEvent } from "@/components/dashboard/monitor-view"
 
@@ -12,10 +12,6 @@ const initials = (name: string | null, email: string) => {
   const src = (name ?? email.split("@")[0] ?? "").trim()
   const parts = src.split(/[ .]+/).filter(Boolean)
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?"
-}
-const FEED_TONE: Record<string, string> = {
-  submit: "bg-amber-500", approve: "bg-emerald-500", reject: "bg-rose-500",
-  implement: "bg-blue-500", verify: "bg-violet-500", breach: "bg-rose-500",
 }
 // A blackout ending within this window is flagged amber (vs. red) in the UI.
 const BLACKOUT_ENDING_SOON_MS = 12 * 3600_000
@@ -62,7 +58,7 @@ export default async function Home() {
       where: { change: opcoFilter },
       orderBy: { at: "desc" },
       take: 8,
-      select: { id: true, action: true, at: true, change: { select: { id: true, title: true } }, actor: { select: { name: true, email: true } } },
+      select: { id: true, action: true, toStatus: true, at: true, change: { select: { id: true, title: true } }, actor: { select: { name: true, email: true } } },
     }),
   ])
 
@@ -94,7 +90,7 @@ export default async function Home() {
     label: a.action,
     actor: a.actor.name ?? a.actor.email.split("@")[0],
     ago: `${durLabel(now - a.at.getTime())} ago`,
-    tone: FEED_TONE[a.action] ?? "bg-slate-400",
+    tone: feedTone(a.action, a.toStatus),
   }))
 
   return (

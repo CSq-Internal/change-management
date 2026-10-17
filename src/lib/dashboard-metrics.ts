@@ -201,3 +201,17 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number, ut
     report: { statusCounts, riskOpen, opcoOpen },
   }
 }
+
+// Keyed by the AuditLog action names; implement and verify are status_changed rows, so
+// their colour comes from the target status.
+const FEED_TONE = new Map(Object.entries({
+  submitted: "bg-amber-500", approved: "bg-emerald-500", retro_approved: "bg-emerald-500",
+  rejected: "bg-rose-500", retro_rejected: "bg-rose-500", sla_escalated: "bg-rose-500",
+  implemented: "bg-blue-500", verified: "bg-violet-500",
+}))
+
+/** The activity feed dot colour for an audit entry. */
+export function feedTone(action: string, toStatus: string | null): string {
+  const key = action === "status_changed" ? (toStatus ?? "") : action
+  return FEED_TONE.get(key) ?? "bg-slate-400"
+}
