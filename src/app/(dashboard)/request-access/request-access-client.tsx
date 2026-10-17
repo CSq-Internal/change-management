@@ -25,8 +25,9 @@ export default function RequestAccessClient({ opcos }: { opcos: OpCoOption[] }) 
     try {
       await joinOpCo(opcoSlug)
       // Reload the session's OpCo roles now; otherwise the gate holds the user
-      // until the 60s refresh. update() rewrites the session cookie the proxy reads.
-      await update()
+      // until the 60s refresh. update() rewrites the session cookie the proxy reads;
+      // it needs an argument, or next-auth sends a GET that skips trigger "update".
+      await update({})
       router.replace("/")
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
