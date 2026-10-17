@@ -41,3 +41,14 @@ describe('GET /api/audit-export date range', () => {
     expect(findMany).not.toHaveBeenCalled()
   })
 })
+
+describe('GET /api/audit-export cells', () => {
+  it('does not let a change title run as a spreadsheet formula', async () => {
+    findMany.mockResolvedValue([{
+      at: new Date('2026-10-01T00:00:00Z'), action: 'submitted', fromStatus: null, toStatus: 'pending', note: null,
+      actor: { email: 'a@csquared.com' }, change: { title: '=HYPERLINK("http://x","y")', opco: { slug: 'ghana' } },
+    }])
+    const body = await (await get('')).text()
+    expect(body).toContain(`"'=HYPERLINK(""http://x"",""y"")"`)
+  })
+})

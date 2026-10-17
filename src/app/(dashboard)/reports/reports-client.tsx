@@ -2,6 +2,7 @@
 
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import { csvRow } from "@/lib/csv"
 import type { SlaReportCell } from "@/lib/sla-report"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -91,9 +92,7 @@ export default function ReportsClient({ data }: ReportsClientProps) {
         new Date(c.updatedAt).toISOString(),
       ]),
     ]
-    const csv = rows
-      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-      .join("\n")
+    const csv = rows.map(csvRow).join("\n")
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
