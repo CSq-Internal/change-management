@@ -21,3 +21,14 @@ export function formatDate(value: string | Date | null | undefined): string {
     day: "numeric",
   })
 }
+
+/**
+ * A stored instant as a `datetime-local` input value ("YYYY-MM-DDTHH:mm") in the viewer's
+ * zone. The form reads the input back with new Date(value), also local, so the two match;
+ * slicing toISOString() would show UTC and move the time on every save outside UTC.
+ */
+export function toDateTimeLocal(value: string | Date | null | undefined): string {
+  if (!value) return ""
+  const d = new Date(value)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
