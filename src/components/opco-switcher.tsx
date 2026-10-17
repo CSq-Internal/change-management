@@ -21,7 +21,6 @@ export function OpCoSwitcher() {
   const { data: session } = useSession()
 
   const userIsGroupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
-  const userOpCos = useMemo(() => session?.user.organizations.map((o) => o.alias) ?? [], [session])
   // A group admin can switch to any OpCo, so the list comes from the database, not the session.
   const [allOpCos, setAllOpCos] = useState<{ slug: string; name: string }[]>([])
   useEffect(() => {
@@ -35,7 +34,9 @@ export function OpCoSwitcher() {
         ...allOpCos.map((o) => ({ value: o.slug, label: o.name })),
       ]
     }
-    return session?.user.organizations.map((o) => ({ value: o.alias, label: o.name })) ?? []
+    const own = session?.user.organizations.map((o) => ({ value: o.alias, label: o.name })) ?? []
+    // With more than one OpCo, "All" is the way back to seeing every one of them.
+    return own.length > 1 ? [{ value: "all", label: "All OpCos" }, ...own] : own
   }, [userIsGroupAdmin, allOpCos, session])
 
   if (!session) return null
@@ -44,8 +45,7 @@ export function OpCoSwitcher() {
   // Reflect the persisted active OpCo (cookie) so the dropdown shows the current
   // selection after the reload. A ref callback sets it when the <select> actually
   // mounts (the session/options aren't ready on the first render), which keeps SSR
-  // rendering the neutral fallback with no hydration mismatch or setState-in-effect.
-  const fallback = userIsGroupAdmin ? "all" : (userOpCos[0] ?? "all")
+  // rendering the neutral "all" with no hydration mismatch or setState-in-effect.
 
   return (
     <select
@@ -53,7 +53,7 @@ export function OpCoSwitcher() {
         const active = readActiveOpCoCookie()
         if (el && active) el.value = active
       }}
-      defaultValue={fallback}
+      defaultValue="all"
       onChange={(e) => setActiveOpCo(e.target.value)}
       className="rounded border bg-background px-2 py-1 text-sm"
     >
