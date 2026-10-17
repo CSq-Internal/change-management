@@ -28,6 +28,7 @@ declare module "next-auth/jwt" {
     organizations?: SessionOrganization[]
     realmRoles?: string[]
     accessToken?: string
+    idToken?: string // sign-in ID token, the hint for Keycloak end-session on Log out
     orgsRefreshedAt?: number // epoch ms of the last DB org load (Part A TTL re-enrichment)
     orphaned?: boolean // set when keycloakId maps to no DB user, or a deactivated one
   }
