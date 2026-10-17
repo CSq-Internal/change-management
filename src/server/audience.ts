@@ -99,14 +99,22 @@ export async function resolveAudience(
   change: AudienceChange,
   actorId?: string,
 ): Promise<NotifyRecipient[]> {
-  const roles = AUDIENCE[type] ?? []
+  // The actor already knows what they just did. The exception is a receipt, where telling
+  // them is the entire point.
+  return audienceFor(AUDIENCE[type] ?? [], change, RECEIPT_TYPES.includes(type) ? undefined : actorId)
+}
+
+/** Active users holding any of these roles on the change, minus `exclude`. */
+export async function audienceFor(
+  roles: AudienceRole[],
+  change: AudienceChange,
+  exclude?: string,
+): Promise<NotifyRecipient[]> {
   if (roles.length === 0) return []
 
   const idLists = await Promise.all(roles.map((r) => idsForRole(r, change)))
   const ids = new Set(idLists.flat())
-  // The actor already knows what they just did. The exception is a receipt, where telling
-  // them is the entire point.
-  if (actorId && !RECEIPT_TYPES.includes(type)) ids.delete(actorId)
+  if (exclude) ids.delete(exclude)
   if (ids.size === 0) return []
 
   const db = getPrisma()

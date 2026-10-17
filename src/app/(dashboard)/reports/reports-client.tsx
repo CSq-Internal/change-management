@@ -3,6 +3,7 @@
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { csvRow } from "@/lib/csv"
+import { SLA_HOURS } from "@/lib/sla"
 import type { SlaReportCell } from "@/lib/sla-report"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -34,9 +35,10 @@ const reportCards = [
 ]
 
 const slaTargets = [
-  { labelKey: "reports.sla.lowRisk", targetHours: 48 },
-  { labelKey: "reports.sla.mediumRisk", targetHours: 24 },
-  { labelKey: "reports.sla.highRisk", targetHours: 4 },
+  { labelKey: "reports.sla.lowRisk", targetHours: SLA_HOURS.low },
+  { labelKey: "reports.sla.mediumRisk", targetHours: SLA_HOURS.medium },
+  { labelKey: "reports.sla.highRisk", targetHours: SLA_HOURS.high },
+  { labelKey: "reports.sla.emergencyRisk", targetHours: SLA_HOURS.emergency },
   { labelKey: "reports.sla.closure", targetHours: 72 },
 ]
 

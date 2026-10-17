@@ -2,22 +2,11 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { activeOpCos } from "@/server/opco-scope"
-import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { isGroupLevelInfra, INFRA_TYPES } from "@/lib/approver-routing"
 import { canManageAnyOpCo, hasRoleInOpCo, isGroupAdmin } from "@/lib/permissions"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { listApproverAssignments } from "@/server/actions/approval-matrix"
 import ApprovalMatrixClient from "./approval-matrix-client"
-
-const INFRA_TYPES = [
-  "Equiano Optics",
-  "Equiano IP",
-  "Backbone Transport Network",
-  "Metro Transport Network",
-  "Wifi",
-  "Internal IT Infrastructure",
-  "Backbone IP Network",
-  "Power",
-]
 
 export default async function ApprovalMatrixPage() {
   const session = await auth()
