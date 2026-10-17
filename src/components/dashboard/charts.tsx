@@ -59,7 +59,7 @@ export function OpcoBars({ data }: { data: NamedCount[] }) {
 
 export function StatusDistribution({ counts }: { counts: Record<ChangeStatusName, number> }) {
   const language = useStore((s) => s.language)
-  const order: ChangeStatusName[] = ["pending", "approved", "implemented", "verified", "draft", "rejected", "closed"]
+  const order: ChangeStatusName[] = ["pending", "approved", "implemented", "verified", "draft", "rejected", "closed", "cancelled"]
   const segs = order.map((s) => ({ s, n: counts[s] })).filter((x) => x.n > 0)
   const total = segs.reduce((a, x) => a + x.n, 0)
   return (
