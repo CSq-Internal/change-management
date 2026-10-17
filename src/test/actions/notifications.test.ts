@@ -45,10 +45,10 @@ describe('getNavCounts', () => {
       where: { requesterId: 'user-me', status: { in: ['draft', 'rejected'] } },
     })
   })
-  it('scopes pendingAccessRequests to manageable OpCos', async () => {
+  it('counts exactly the role requests the queue shows: no deactivated users, no admin requests for OpCo admins', async () => {
     await getNavCounts()
     expect(mockDb.accessRequest.count).toHaveBeenCalledWith({
-      where: { status: 'pending', opco: { slug: { in: [] } } },
+      where: { status: 'pending', user: { isActive: true }, opco: { slug: { in: [] } }, role: { not: 'admin' } },
     })
   })
 })
