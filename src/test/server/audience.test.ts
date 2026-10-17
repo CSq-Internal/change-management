@@ -4,6 +4,7 @@ const mockDb = {
   user: { findMany: vi.fn() },
   changeAssignee: { findMany: vi.fn() },
   approval: { findMany: vi.fn() },
+  auditLog: { findFirst: vi.fn().mockResolvedValue(null) },
   userOpCoAssignment: { findMany: vi.fn() },
   cABMembership: { findMany: vi.fn() },
 }
@@ -110,6 +111,17 @@ describe("resolveAudience", () => {
     seedUsers(user("a1"), user("a3"))
     const out = await resolveAudience("approver_nudge", CHANGE)
     expect(out.map((r) => r.userId).sort()).toEqual(["a1", "a3"])
+  })
+
+  it("approversPending counts only votes since the last submission", async () => {
+    // a2 voted in round 1; the change was rejected, reworked and submitted again.
+    getRoutedApprovers.mockResolvedValue([{ id: "a1" }, { id: "a2" }])
+    getNamedApprovers.mockResolvedValue([])
+    mockDb.auditLog.findFirst.mockResolvedValueOnce({ at: new Date("2026-10-10T00:00:00Z") })
+    mockDb.approval.findMany.mockResolvedValue([{ approverId: "a2", decidedAt: new Date("2026-10-05T00:00:00Z") }])
+    seedUsers(user("a1"), user("a2"))
+    const out = await resolveAudience("approver_nudge", CHANGE)
+    expect(out.map((r) => r.userId).sort()).toEqual(["a1", "a2"])
   })
 
   it("retro_overdue reaches the requester and the group CAB", async () => {

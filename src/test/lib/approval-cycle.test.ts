@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { votesSince, hasVotedSince } from '@/lib/approval-cycle'
+import { votesSince, hasVotedSince, currentDecisionAt } from '@/lib/approval-cycle'
 
 const SUBMITTED = new Date('2026-07-20T10:00:00Z')
 const BEFORE = new Date('2026-07-19T09:00:00Z')
@@ -49,5 +49,27 @@ describe('hasVotedSince', () => {
     const votes = [vote('user-1', BEFORE), vote('user-2', AFTER)]
     expect(hasVotedSince(votes, SUBMITTED, 'user-1')).toBe(false)
     expect(hasVotedSince(votes, SUBMITTED, 'user-2')).toBe(true)
+  })
+})
+
+describe('currentDecisionAt', () => {
+  const at = (iso: string) => new Date(iso)
+  it('is the first decision after the latest submission', () => {
+    expect(currentDecisionAt([
+      { action: 'submitted', at: at('2026-10-01') },
+      { action: 'rejected', at: at('2026-10-02') },
+      { action: 'submitted', at: at('2026-10-05') },
+      { action: 'approved', at: at('2026-10-06') },
+    ])).toEqual(at('2026-10-06'))
+  })
+  it('is null while the latest round is undecided, whatever earlier rounds did', () => {
+    expect(currentDecisionAt([
+      { action: 'submitted', at: at('2026-10-01') },
+      { action: 'rejected', at: at('2026-10-02') },
+      { action: 'submitted', at: at('2026-10-05') },
+    ])).toBeNull()
+  })
+  it('counts every decision when there is no submission row (legacy changes)', () => {
+    expect(currentDecisionAt([{ action: 'approved', at: at('2026-10-02') }])).toEqual(at('2026-10-02'))
   })
 })

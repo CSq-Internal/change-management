@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel } from "@/lib/permissions"
 import { computeSlaReport, type SlaReportRow } from "@/lib/sla-report"
+import { currentDecisionAt } from "@/lib/approval-cycle"
 import ReportsClient from "./reports-client"
 
 /** Time from the last submission to the approval that followed it; null if never approved. */
@@ -73,7 +74,7 @@ export default async function ReportsPage() {
     opcoName: c.opco.name,
     riskLevel: c.riskLevel,
     slaDeadline: c.slaDeadline ? c.slaDeadline.getTime() : null,
-    decidedAt: c.auditTrail.find((e) => e.action !== "submitted")?.at.getTime() ?? null,
+    decidedAt: currentDecisionAt(c.auditTrail)?.getTime() ?? null,
   }))
   const slaCompliance = computeSlaReport(slaRows, now)
 

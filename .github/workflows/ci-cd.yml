@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a prod run: it may be inside `prisma migrate deploy`, and a killed
+  # migration blocks every later deploy (P3009) until it is resolved by hand.
+  cancel-in-progress: ${{ github.ref_name != 'prod' }}
 
 # gitleaks-action lists PR commits via the API on pull_request events; without
 # pull-requests:read the default token returns 403 "Resource not accessible".

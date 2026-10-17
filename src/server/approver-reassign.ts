@@ -1,14 +1,18 @@
 import { getPrisma } from "@/server/db"
-import { getRoutedApprovers, getNamedApprovers } from "@/server/approval-authority"
+import { getRoutedApprovers, getNamedApprovers, isEligibleApprover } from "@/server/approval-authority"
 import { notifyEvent } from "@/server/notify"
 
 export type FootprintChange = { id: string; reference: number; title: string; infrastructureType: string; opcoId: string }
 
-/** Pending changes the user is a routed or named approver of. Call BEFORE deactivation. */
+/**
+ * Changes awaiting a decision the user could give, as a routed or named approver: pending
+ * ones, and expedited emergencies still owed their retrospective decision. Call BEFORE
+ * deactivation.
+ */
 export async function approverPendingFootprint(userId: string): Promise<FootprintChange[]> {
   const db = getPrisma()
   const pending = await db.changeRequest.findMany({
-    where: { status: "pending" },
+    where: { OR: [{ status: "pending" }, { status: "implemented", expedited: true, retroApprovedAt: null }] },
     select: { id: true, reference: true, title: true, infrastructureType: true, opcoId: true },
   })
   const out: FootprintChange[] = []
@@ -27,7 +31,11 @@ export async function notifyRemainingAndDetectOrphans(
   const orphaned: { id: string; reference: number; title: string }[] = []
   for (const c of footprint) {
     const routed = await getRoutedApprovers({ infrastructureType: c.infrastructureType, opcoId: c.opcoId })
-    const named = await getNamedApprovers(c.id)
+    // A nominee counts only while still eligible, as canUserApproveChange checks at vote time.
+    const named = []
+    for (const u of await getNamedApprovers(c.id)) {
+      if (await isEligibleApprover(u.id, c.opcoId, c.infrastructureType)) named.push(u)
+    }
     const seen = new Set<string>()
     const remaining = [...routed, ...named].filter((u) => { if (seen.has(u.id)) return false; seen.add(u.id); return true })
     if (remaining.length === 0) {

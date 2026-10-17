@@ -1,6 +1,7 @@
 import { getPrisma } from "@/server/db"
 import { isGroupAdmin } from "@/lib/permissions"
 import { routedCabOpcoId, isGroupLevelInfra } from "@/lib/approver-routing"
+import { hasVotedSince } from "@/lib/approval-cycle"
 
 type ChangeForAuth = { infrastructureType: string; opcoId: string }
 type ApproverUser = { id: string; name: string | null; email: string }
@@ -40,12 +41,16 @@ export async function getRoutedApprovers(change: ChangeForAuth): Promise<Approve
       fromUserId: { in: routedIds },
       validFrom: { lte: now }, validUntil: { gte: now },
     },
-    include: { toUser: { select: { id: true, name: true, email: true } } },
+    include: { toUser: { select: { id: true, name: true, email: true, isActive: true } } },
   })
+  // Deactivating a user leaves delegations to them in place; they must not count.
+  const delegates = delegations
+    .filter((d) => d.toUser.isActive)
+    .map((d) => ({ id: d.toUser.id, name: d.toUser.name, email: d.toUser.email }))
 
   const seen = new Set<string>()
   const out: ApproverUser[] = []
-  for (const u of [...routedUsers, ...delegations.map((d) => d.toUser)]) {
+  for (const u of [...routedUsers, ...delegates]) {
     if (!seen.has(u.id)) { seen.add(u.id); out.push(u) }
   }
   return out
@@ -93,17 +98,18 @@ export async function canUserApproveChange(args: {
 export async function listApprovableChanges(args: { userId: string; realmRoles: string[] }) {
   const db = getPrisma()
   // Exclude the user's own requests — an approver can never act on a change they
-  // requested (SoD, ISO 27001 A.5.3) — and changes they have already approved, which
-  // now await *other* approvers, not this user. Both should be absent from the queue.
-  const pending = await db.changeRequest.findMany({
-    where: {
-      status: "pending",
-      requesterId: { not: args.userId },
-      approvals: { none: { approverId: args.userId, decision: "approve" } },
+  // requested (SoD, ISO 27001 A.5.3) — and changes they have voted on in this round,
+  // which now await *other* approvers. A vote from before the latest submission was on
+  // an earlier version of the plan, so that change is back in their queue.
+  const all = await db.changeRequest.findMany({
+    where: { status: "pending", requesterId: { not: args.userId } },
+    include: {
+      requester: true, opco: true, approvals: true,
+      auditTrail: { where: { action: "submitted" }, orderBy: { at: "desc" }, take: 1, select: { at: true } },
     },
-    include: { requester: true, opco: true, approvals: true },
     orderBy: { createdAt: "asc" },
   })
+  const pending = all.filter((c) => !hasVotedSince(c.approvals, c.auditTrail[0]?.at ?? null, args.userId))
   if (isGroupAdmin(args.realmRoles)) return pending
 
   // The queue backs the nav badge on every page, so look up each routed CAB once (pending

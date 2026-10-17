@@ -35,3 +35,16 @@ export function hasVotedSince(
 ): boolean {
   return votesSince(votes, since).some((v) => v.approverId === userId)
 }
+
+/**
+ * When the current round was decided: the first approval or rejection after the latest
+ * `submitted` entry, or null while that round is still open. `trail` is in time order.
+ */
+export function currentDecisionAt(trail: { action: string; at: Date }[]): Date | null {
+  let decided: Date | null = null
+  for (const e of trail) {
+    if (e.action === "submitted") decided = null
+    else if (decided === null && (e.action === "approved" || e.action === "rejected")) decided = e.at
+  }
+  return decided
+}

@@ -4,6 +4,7 @@ import { getPrisma } from "@/server/db"
 import { viewerTier } from "@/lib/permissions"
 import { requestScope } from "@/server/request-scope"
 import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
+import { votesSince } from "@/lib/approval-cycle"
 import RequestsTableClient, { type RequestRow } from "./requests-table-client"
 
 export default async function RequestsPage({
@@ -25,7 +26,8 @@ export default async function RequestsPage({
       id: true, title: true, status: true, riskLevel: true, infrastructureType: true,
       opco: { select: { name: true } },
       requester: { select: { name: true, email: true } },
-      approvals: { select: { decision: true } },
+      approvals: { select: { decision: true, approverId: true, decidedAt: true } },
+      auditTrail: { where: { action: "submitted" }, orderBy: { at: "desc" }, take: 1, select: { at: true } },
     },
   })
 
@@ -36,7 +38,8 @@ export default async function RequestsPage({
     riskLevel: c.riskLevel,
     infrastructureType: c.infrastructureType,
     opcoName: c.opco?.name ?? "—",
-    approvalsGiven: c.approvals.filter((a) => a.decision === "approve").length,
+    // This round only: approvals from before a resubmission were for an earlier plan.
+    approvalsGiven: votesSince(c.approvals, c.auditTrail[0]?.at ?? null).filter((a) => a.decision === "approve").length,
     requesterName: c.requester?.name ?? c.requester?.email ?? "—",
   }))
 
