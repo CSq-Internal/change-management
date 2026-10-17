@@ -54,6 +54,16 @@ function pickFormFields<T extends Partial<ChangeFormFields>>(data: T): T {
   ) as T
 }
 
+/** A blackout (this OpCo's or group-wide) overlapping the window [start, end), if any. */
+async function blockingBlackout(
+  db: ReturnType<typeof getPrisma>, opcoId: string, start: Date, end: Date,
+) {
+  const [blackout] = await db.blackoutPeriod.findMany({
+    where: { OR: [{ opcoId }, { opcoId: null }], startsAt: { lt: end }, endsAt: { gt: start } },
+  })
+  return blackout
+}
+
 export async function getChange(id: string) {
   const session = await getAppSession()
   const db = getPrisma()
@@ -114,19 +124,6 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
 
   if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
   if (!user) throw new Error("User not found in database")
-
-  if (!data.isEmergency) {
-    const now = new Date()
-    const activeBlackouts = await db.blackoutPeriod.findMany({
-      where: {
-        OR: [{ opcoId: opco.id }, { opcoId: null }],
-        startsAt: { lte: now }, endsAt: { gte: now },
-      },
-    })
-    if (activeBlackouts.length > 0) {
-      throw new Error(`Blocked by blackout: "${activeBlackouts[0].label}". Submit as emergency to override.`)
-    }
-  }
 
   const { approverIds = [] } = data
   const changeData = pickFormFields<ChangeFormFields>(data)
@@ -227,16 +224,12 @@ export async function submitChange(id: string) {
     throw new Error("Cannot submit: at least one approver must be named")
   }
 
+  // The planned window must clear every blackout, whenever it is submitted. Planned dates
+  // are required above, and checked here rather than on the draft, which may still move.
   if (!change.isEmergency) {
-    const now = new Date()
-    const activeBlackouts = await db.blackoutPeriod.findMany({
-      where: {
-        OR: [{ opcoId: change.opcoId }, { opcoId: null }],
-        startsAt: { lte: now }, endsAt: { gte: now },
-      },
-    })
-    if (activeBlackouts.length > 0) {
-      throw new Error(`Blocked by blackout: "${activeBlackouts[0].label}". Submit as emergency to override.`)
+    const blackout = await blockingBlackout(db, change.opcoId, change.plannedStart!, change.plannedEnd!)
+    if (blackout) {
+      throw new Error(`Blocked by blackout: "${blackout.label}". Submit as emergency to override.`)
     }
   }
 
@@ -455,15 +448,8 @@ export async function rescheduleChange(id: string, newStartIso: string, newEndIs
 
   // Blackout is a hard block (overlap is only a soft calendar warning), unless emergency.
   if (!change.isEmergency) {
-    const blackouts = await db.blackoutPeriod.findMany({
-      where: {
-        OR: [{ opcoId: change.opcoId }, { opcoId: null }],
-        startsAt: { lt: newEnd },
-        endsAt: { gt: newStart },
-      },
-    })
-    if (blackouts.length > 0)
-      throw new Error(`Blocked by blackout: "${blackouts[0].label}". Emergencies may override.`)
+    const blackout = await blockingBlackout(db, change.opcoId, newStart, newEnd)
+    if (blackout) throw new Error(`Blocked by blackout: "${blackout.label}". Emergencies may override.`)
   }
 
   const oldWindow = change.plannedStart && change.plannedEnd

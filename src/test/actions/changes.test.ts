@@ -67,14 +67,17 @@ import { getAppSession } from '@/lib/session'
 import { notifyEvent, notifyChange } from '@/server/notify'
 import { isEligibleApprover } from '@/server/approval-authority'
 
+// Status writes and their audit rows go through the transaction client; it shares the
+// update and audit mocks with mockDb so assertions read the same either way.
 const tx = {
   changeRequest: {
     create: vi.fn().mockImplementation(({ data }: { data: unknown }) =>
       Promise.resolve({ id: 'cr-new', status: 'draft', ...(data as object) })
     ),
+    update: mockDb.changeRequest.update,
   },
   changeAssignee: { create: vi.fn().mockResolvedValue({}) },
-  auditLog: { create: vi.fn().mockResolvedValue({}) },
+  auditLog: mockDb.auditLog,
 }
 
 beforeEach(() => {
@@ -124,6 +127,15 @@ describe('listChanges', () => {
 })
 
 describe('createChange', () => {
+  it('does not check blackouts for a draft (submission does)', async () => {
+    mockDb.blackoutPeriod.findMany.mockClear()
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'low',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+    })
+    expect(mockDb.blackoutPeriod.findMany).not.toHaveBeenCalled()
+  })
+
   it('creates a change request', async () => {
     const result = await createChange('ghana', {
       title: 'Router update', description: 'BGP config',
@@ -490,6 +502,18 @@ describe('submitChange', () => {
     mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
     // change.requesterId is 'user-1', not 'user-ug', and ugandaSession has no admin role
     await expect(submitChange('cr-1')).rejects.toThrow(/Forbidden/)
+  })
+
+  it('checks blackouts against the planned window, not the time of submission', async () => {
+    // The default change is planned for 1-2 Jul 2026.
+    await submitChange('cr-1')
+    expect(mockDb.blackoutPeriod.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [{ opcoId: 'opco-1' }, { opcoId: null }],
+        startsAt: { lt: new Date('2026-07-02') },
+        endsAt: { gt: new Date('2026-07-01') },
+      },
+    })
   })
 
   it('throws "Blocked by blackout" when submitting a non-emergency draft during an active blackout', async () => {
