@@ -44,7 +44,7 @@ export type SerializedChange = {
   createdAt: string
   updatedAt: string
   opco: { slug: string; name: string }
-  requester: { keycloakId: string; name: string | null; email: string }
+  requester: { name: string | null; email: string }
   approvals: Array<{
     id: string
     approverId: string

@@ -35,7 +35,6 @@ function serialize(
     updatedAt: change.updatedAt.toISOString(),
     opco: { slug: change.opco.slug, name: change.opco.name },
     requester: {
-      keycloakId: change.requester.keycloakId,
       name: change.requester.name ?? null,
       email: change.requester.email,
     },
