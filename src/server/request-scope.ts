@@ -5,7 +5,8 @@ import type { SessionOrganization } from "@/types/next-auth"
 /**
  * Prisma `where` selecting the change requests a user may browse:
  *   group  → {} (all)
- *   opco   → { opco: { slug: { in: <admin/approver slugs> } } }
+ *   opco   → changes in their admin/approver OpCos, plus their own anywhere (an OpCo
+ *            where they are only a requester still has their drafts)
  *   member → { requester: { keycloakId } } (own only)
  */
 export function requestScope(user: {
@@ -15,6 +16,7 @@ export function requestScope(user: {
 }): Prisma.ChangeRequestWhereInput {
   const tier = viewerTier(user.organizations, user.realmRoles)
   if (tier === "group") return {}
-  if (tier === "opco") return { opco: { slug: { in: requestScopedSlugs(user.organizations) } } }
-  return { requester: { keycloakId: user.keycloakId } }
+  const own = { requester: { keycloakId: user.keycloakId } }
+  if (tier === "opco") return { OR: [{ opco: { slug: { in: requestScopedSlugs(user.organizations) } } }, own] }
+  return own
 }
