@@ -87,7 +87,7 @@ export default async function CalendarPage({
 
   const calChanges: CalChange[] = changeRows.map((c) => ({
     id: c.id, opcoId: c.opcoId, infrastructureType: c.infrastructureType,
-    riskLevel: c.riskLevel as RiskLevel, isEmergency: c.isEmergency,
+    riskLevel: c.riskLevel as RiskLevel, isEmergency: c.isEmergency, status: c.status,
     start: c.plannedStart!.getTime(), end: c.plannedEnd!.getTime(),
   }))
   const calBlackouts: CalBlackout[] = blackoutRows.map((b) => ({
