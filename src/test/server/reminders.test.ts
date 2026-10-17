@@ -50,6 +50,14 @@ describe("approver_nudge", () => {
     }))
   })
 
+  it("measures the midpoint from submission, not from when the draft was saved", async () => {
+    // Saved as a draft 5 days ago, submitted 10h ago: 38h of the 48h window are left.
+    const resubmitted = { ...pendingChange(120), slaDeadline: new Date(now + 38 * HOUR) }
+    mockDb.changeRequest.findMany.mockResolvedValueOnce([resubmitted]).mockResolvedValueOnce([])
+    const out = await runDueReminders()
+    expect(out.nudged).toBe(0)
+  })
+
   it("does not nudge once the SLA has breached — sla_escalated takes over", async () => {
     const breached = { ...pendingChange(30), slaDeadline: new Date(now - HOUR) }
     mockDb.changeRequest.findMany.mockResolvedValueOnce([breached]).mockResolvedValueOnce([])
