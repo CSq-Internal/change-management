@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo, manageableOpCoSlugs } from "@/lib/permissions"
+import { canManageAnyOpCo } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
@@ -18,9 +18,10 @@ import type { DbTeam } from "./types"
 
 interface TeamsClientProps {
   teams: DbTeam[]
+  manageableSlugs: string[]
 }
 
-export default function TeamsClient({ teams }: TeamsClientProps) {
+export default function TeamsClient({ teams, manageableSlugs }: TeamsClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
   const router = useRouter()
@@ -29,11 +30,6 @@ export default function TeamsClient({ teams }: TeamsClientProps) {
   const isAdmin = session
     ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
     : false
-  const scope = session
-    ? manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
-    : []
-  const manageableSlugs =
-    scope === "all" ? Array.from(new Set(teams.map((tm) => tm.opco.slug))) : scope
 
   const [formTeam, setFormTeam] = useState<DbTeam | null>(null)
   const [formOpen, setFormOpen] = useState(false)

@@ -13,7 +13,15 @@ describe("requestScope", () => {
   })
   it("opco admin/approver → scoped by opco slug", () => {
     const where = requestScope(user([{ alias: "ghana", roles: ["approver"] }, { alias: "uganda", roles: ["admin"] }], []))
-    expect(where).toEqual({ opco: { slug: { in: ["ghana", "uganda"] } } })
+    expect(where).toEqual({
+      OR: [{ opco: { slug: { in: ["ghana", "uganda"] } } }, { requester: { keycloakId: "kc-1" } }],
+    })
+  })
+  it("opco approver still sees their own requests in an OpCo where they are only a requester", () => {
+    const where = requestScope(user([{ alias: "ghana", roles: ["approver"] }, { alias: "nigeria", roles: ["requester"] }], []))
+    expect(where).toEqual({
+      OR: [{ opco: { slug: { in: ["ghana"] } } }, { requester: { keycloakId: "kc-1" } }],
+    })
   })
   it("member → own requests by requester keycloakId", () => {
     expect(requestScope(user([{ alias: "ghana", roles: ["requester"] }], []))).toEqual({

@@ -26,7 +26,7 @@ const APPROVERS = [
 ]
 
 function renderForm() {
-  return render(<RequestForm opcoOptions={["ghana"]} defaultEmail="me@csquared.com" />)
+  return render(<RequestForm opcoOptions={[{ slug: "ghana", name: "CSquared Ghana" }]} defaultEmail="me@csquared.com" />)
 }
 
 // The form labels its fields with card headings, not <label>/aria-label, so the
@@ -148,7 +148,7 @@ describe("request form approver picker", () => {
     render(
       <RequestForm
         mode="edit"
-        opcoOptions={["ghana"]}
+        opcoOptions={[{ slug: "ghana", name: "CSquared Ghana" }]}
         initialApproverIds={["appr1"]}
         initial={{
           id: "cr-1",
@@ -221,7 +221,7 @@ describe("submit button gating", () => {
   })
 
   it("stays enabled on an untouched form so submitting shows the missing-fields toast", async () => {
-    render(<RequestForm opcoOptions={["ghana"]} />)
+    render(<RequestForm opcoOptions={[{ slug: "ghana", name: "CSquared Ghana" }]} />)
     const submit = submitButton()
     expect(submit).toBeEnabled()
 

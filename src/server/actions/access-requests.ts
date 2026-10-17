@@ -265,6 +265,14 @@ export async function approveAccessRequest(id: string) {
   if (!req.user.isActive) throw new Error("This account is deactivated")
 
   await db.$transaction(async (tx) => {
+    // The pending check above runs outside this transaction, so a second admin can pass it
+    // too. Deciding first, conditionally, lets exactly one decision land.
+    const { count } = await tx.accessRequest.updateMany({
+      where: { id: req.id, status: "pending" },
+      data: { status: "approved", decidedById: actorId, decidedAt: new Date() },
+    })
+    if (count !== 1) throw new Error("Access request already decided")
+
     // Approving replaces the user's role in this OpCo. Keep the Users page's rule:
     // an OpCo can't lose its last admin this way.
     const current = await tx.userOpCoAssignment.findUnique({
@@ -282,10 +290,6 @@ export async function approveAccessRequest(id: string) {
       where: { userId_opcoId: { userId: req.userId, opcoId: req.opco.id } },
       update: { role: req.role, isActive: true, endedAt: null },
       create: { userId: req.userId, opcoId: req.opco.id, role: req.role },
-    })
-    await tx.accessRequest.update({
-      where: { id: req.id },
-      data: { status: "approved", decidedById: actorId, decidedAt: new Date() },
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
@@ -319,10 +323,11 @@ export async function denyAccessRequest(id: string, reason?: string) {
   const { session, db, req, actorId } = await loadDecidableRequest(id)
 
   await db.$transaction(async (tx) => {
-    await tx.accessRequest.update({
-      where: { id: req.id },
+    const { count } = await tx.accessRequest.updateMany({
+      where: { id: req.id, status: "pending" },
       data: { status: "denied", decidedById: actorId, decidedAt: new Date(), decisionReason: reason ?? null },
     })
+    if (count !== 1) throw new Error("Access request already decided")
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
       actorEmail: session.email,

@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import type { Role } from "@/lib/types"
-import { OPCO_SLUGS, OPCO_NAMES, type OpCoSlug } from "@/lib/opco"
 import { setUserAssignments } from "@/server/actions/users"
 import type { DbUser } from "./types"
 
@@ -16,15 +15,16 @@ type Row = { opcoSlug: string; role: Role }
 interface EditUserDialogProps {
   user: DbUser
   language: Language
-  manageable: string[] | "all"
+  opcos: { slug: string; name: string }[]
   onClose: () => void
   onSaved: () => void
 }
 
-export default function EditUserDialog({ user, language, manageable, onClose, onSaved }: EditUserDialogProps) {
+export default function EditUserDialog({ user, language, opcos, onClose, onSaved }: EditUserDialogProps) {
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
-  const availableSlugs = (manageable === "all" ? [...OPCO_SLUGS] : manageable) as string[]
+  const availableSlugs = opcos.map((o) => o.slug)
+  const opcoName = (slug: string) => opcos.find((o) => o.slug === slug)?.name ?? slug
   const canManageSlug = (slug: string) => availableSlugs.includes(slug)
 
   const activeAssignments = useMemo(() => user.opcoAssignments.filter((a) => a.isActive), [user])
@@ -102,7 +102,7 @@ export default function EditUserDialog({ user, language, manageable, onClose, on
           )}
           {rows.map((row) => (
             <div key={row.opcoSlug} className="flex items-center gap-2">
-              <span className="w-40 text-sm">{OPCO_NAMES[row.opcoSlug as OpCoSlug] ?? row.opcoSlug}</span>
+              <span className="w-40 text-sm">{opcoName(row.opcoSlug)}</span>
               <select
                 className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
                 value={row.role}

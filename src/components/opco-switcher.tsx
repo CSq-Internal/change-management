@@ -2,9 +2,9 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { getUserOpCos, OPCO_NAMES, OPCO_SLUGS } from "@/lib/opco"
 import { isGroupAdmin } from "@/lib/permissions"
-import { useMemo } from "react"
+import { listActiveOpCos } from "@/server/actions/opcos"
+import { useEffect, useMemo, useState } from "react"
 
 // Stores active OpCo in a cookie; server components read it from request headers
 function setActiveOpCo(slug: string) {
@@ -21,17 +21,22 @@ export function OpCoSwitcher() {
   const { data: session } = useSession()
 
   const userIsGroupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
-  const userOpCos = useMemo(() => session ? getUserOpCos(session.user.organizations) : [], [session])
+  const userOpCos = useMemo(() => session?.user.organizations.map((o) => o.alias) ?? [], [session])
+  // A group admin can switch to any OpCo, so the list comes from the database, not the session.
+  const [allOpCos, setAllOpCos] = useState<{ slug: string; name: string }[]>([])
+  useEffect(() => {
+    if (userIsGroupAdmin) listActiveOpCos().then(setAllOpCos).catch(() => {})
+  }, [userIsGroupAdmin])
 
   const options = useMemo(() => {
     if (userIsGroupAdmin) {
       return [
         { value: "all", label: "All OpCos" },
-        ...OPCO_SLUGS.map((s) => ({ value: s, label: OPCO_NAMES[s] })),
+        ...allOpCos.map((o) => ({ value: o.slug, label: o.name })),
       ]
     }
-    return userOpCos.map((s) => ({ value: s, label: OPCO_NAMES[s] }))
-  }, [userIsGroupAdmin, userOpCos])
+    return session?.user.organizations.map((o) => ({ value: o.alias, label: o.name })) ?? []
+  }, [userIsGroupAdmin, allOpCos, session])
 
   if (!session) return null
   if (options.length <= 1) return null

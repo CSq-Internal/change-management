@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo, manageableOpCoSlugs } from "@/lib/permissions"
+import { canManageAnyOpCo } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
@@ -18,9 +18,10 @@ import ConfirmDialog from "./confirm-dialog"
 
 interface UsersClientProps {
   users: DbUser[]
+  opcos: { slug: string; name: string }[]
 }
 
-export default function UsersClient({ users }: UsersClientProps) {
+export default function UsersClient({ users, opcos }: UsersClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
   const router = useRouter()
@@ -29,9 +30,6 @@ export default function UsersClient({ users }: UsersClientProps) {
   const isAdmin = session
     ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles)
     : false
-  const manageable = session
-    ? manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
-    : []
 
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editUser, setEditUser] = useState<DbUser | null>(null)
@@ -117,7 +115,7 @@ export default function UsersClient({ users }: UsersClientProps) {
       {wizardOpen && (
         <OnboardWizard
           language={language}
-          manageable={manageable}
+          opcos={opcos}
           onClose={() => setWizardOpen(false)}
           onCreated={() => {
             setWizardOpen(false)
@@ -130,7 +128,7 @@ export default function UsersClient({ users }: UsersClientProps) {
         <EditUserDialog
           user={editUser}
           language={language}
-          manageable={manageable}
+          opcos={opcos}
           onClose={() => setEditUser(null)}
           onSaved={() => {
             setEditUser(null)

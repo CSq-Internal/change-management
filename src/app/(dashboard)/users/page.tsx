@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel, manageableOpCoSlugs } from "@/lib/permissions"
+import { activeOpCos } from "@/server/opco-scope"
 import UsersClient from "./users-client"
 
 export default async function UsersPage() {
@@ -41,5 +42,8 @@ export default async function UsersPage() {
     })),
   }))
 
-  return <UsersClient users={serializable} />
+  // The OpCos the onboard and edit dialogs may assign: managed ones, never archived.
+  const opcos = await activeOpCos(manageableOpCoSlugs(session.user.organizations, session.user.realmRoles))
+
+  return <UsersClient users={serializable} opcos={opcos} />
 }

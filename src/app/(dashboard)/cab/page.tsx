@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel, manageableOpCoSlugs } from "@/lib/permissions"
-import { activeOpCoSlugFilter } from "@/server/opco-scope"
+import { activeOpCoSlugFilter, activeOpCos } from "@/server/opco-scope"
 import CabClient from "./cab-client"
 import type { CabMember } from "./types"
 
@@ -27,12 +27,7 @@ export default async function CabPage() {
     : []
 
   // OpCos this admin may target when adding a per-OpCo CAB member.
-  const scope = manageableOpCoSlugs(session.user.organizations, session.user.realmRoles)
-  const manageableOpcos = await db.opCo.findMany({
-    where: { archivedAt: null, ...(scope === "all" ? {} : { slug: { in: scope } }) },
-    orderBy: { name: "asc" },
-    select: { slug: true, name: true },
-  })
+  const manageableOpcos = await activeOpCos(manageableOpCoSlugs(session.user.organizations, session.user.realmRoles))
 
   const perOpco: CabMember[] = perOpcoRows.map((r) => ({
     id: r.id, userId: r.userId, name: r.user.name, email: r.user.email,

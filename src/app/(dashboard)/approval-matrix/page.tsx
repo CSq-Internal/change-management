@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { OPCO_SLUGS, OPCO_NAMES } from "@/lib/opco"
-import type { OpCoSlug } from "@/lib/opco"
+import { activeOpCos } from "@/server/opco-scope"
 import { isGroupLevelInfra } from "@/lib/approver-routing"
-import { canManageAnyOpCo, isGroupAdmin } from "@/lib/permissions"
+import { canManageAnyOpCo, hasRoleInOpCo, isGroupAdmin } from "@/lib/permissions"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { listApproverAssignments } from "@/server/actions/approval-matrix"
 import ApprovalMatrixClient from "./approval-matrix-client"
@@ -56,10 +55,11 @@ export default async function ApprovalMatrixPage() {
     include: { user: { select: { id: true, name: true, email: true } } },
   })).map((m) => ({ id: m.user.id, label: m.user.name ?? m.user.email }))
   const candidateUsers = Array.from(new Map(candidates.map((c) => [c.id, c])).values())
-  const scopes = [
-    ...(isGroupAdmin(session.user.realmRoles) ? [{ slug: "", name: "Group" }] : []),
-    ...session.user.organizations.filter((o) => o.roles.includes("admin")).map((o) => ({ slug: o.alias, name: o.name })),
-  ]
+  const opcos = await activeOpCos("all")
+  // A group admin may set overrides for any OpCo (assertCanManage), not just ones they hold admin in.
+  const scopes = isGroupAdmin(session.user.realmRoles)
+    ? [{ slug: "", name: "Group" }, ...opcos]
+    : opcos.filter((o) => hasRoleInOpCo(session.user.organizations, o.slug, "admin"))
 
   return (
     <div className="space-y-6">
@@ -95,9 +95,9 @@ export default async function ApprovalMatrixPage() {
           <CardDescription>Resident approvers for each operating company. The Group CTO is secondee on all non-Equiano changes.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          {OPCO_SLUGS.map((slug) => (
+          {opcos.map(({ slug, name }) => (
             <div key={slug} className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3">
-              <div className="text-sm font-medium text-foreground">{OPCO_NAMES[slug as OpCoSlug] ?? slug}</div>
+              <div className="text-sm font-medium text-foreground">{name}</div>
               <div className="text-xs text-muted-foreground mt-1">
                 {approversBySlug[slug]?.length > 0 ? approversBySlug[slug].join(", ") : "No resident approver assigned"}
               </div>

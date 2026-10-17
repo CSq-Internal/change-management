@@ -11,10 +11,9 @@
 # are additive no-ops. Safe to re-run.
 #
 # Usage:
-#   PROJECT_ID=my-gcp-project ./scripts/provision-gcp-cicd.sh
+#   PROJECT_ID=my-gcp-project REGION=europe-west1 ./scripts/provision-gcp-cicd.sh
 #
 # Optional overrides (shown with defaults):
-#   REGION=us-central1            Artifact Registry location
 #   AR_REPO=cms                   Artifact Registry repository name
 #   GH_REPO=CSq-Internal/change-management   owner/repo allowed to authenticate
 #   SA_NAME=github-ci             service account id
@@ -29,7 +28,7 @@ set -euo pipefail
 
 # ---- config (env-overridable) ----
 PROJECT_ID="${PROJECT_ID:-}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:?REGION is required (prod is europe-west1)}"
 AR_REPO="${AR_REPO:-cms}"
 GH_REPO="${GH_REPO:-CSq-Internal/change-management}"
 SA_NAME="${SA_NAME:-github-ci}"

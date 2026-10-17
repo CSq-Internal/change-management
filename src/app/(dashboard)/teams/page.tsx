@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { activeOpCoSlugFilter } from "@/server/opco-scope"
+import { manageableOpCoSlugs } from "@/lib/permissions"
+import { activeOpCoSlugFilter, activeOpCos } from "@/server/opco-scope"
 import TeamsClient from "./teams-client"
 import type { DbTeam } from "./types"
 
@@ -48,5 +49,7 @@ export default async function TeamsPage() {
     }),
   }))
 
-  return <TeamsClient teams={serializable} />
+  const manageable = await activeOpCos(manageableOpCoSlugs(session.user.organizations, session.user.realmRoles))
+
+  return <TeamsClient teams={serializable} manageableSlugs={manageable.map((o) => o.slug)} />
 }

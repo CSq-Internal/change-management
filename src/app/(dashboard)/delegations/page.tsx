@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { activeOpCoSlugFilter } from "@/server/opco-scope"
+import { manageableOpCoSlugs } from "@/lib/permissions"
+import { activeOpCoSlugFilter, activeOpCos } from "@/server/opco-scope"
 import DelegationsClient from "./delegations-client"
 import type { DbDelegation } from "./types"
 
@@ -38,5 +39,7 @@ export default async function DelegationsPage() {
     }
   })
 
-  return <DelegationsClient delegations={delegations} />
+  const manageable = await activeOpCos(manageableOpCoSlugs(session.user.organizations, session.user.realmRoles))
+
+  return <DelegationsClient delegations={delegations} manageableSlugs={manageable.map((o) => o.slug)} />
 }
