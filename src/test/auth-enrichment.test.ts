@@ -385,4 +385,18 @@ describe('auth enrichment', () => {
 
     expect(typeof token.orgsRefreshedAt).toBe('number')
   })
+
+  it('keeps the sign-in ID token so Log out can end the Keycloak session', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([])
+
+    const token = await enrichedJwt({
+      token: {},
+      user: {},
+      account: { ...account, id_token: 'id.jwt.sig' },
+      profile: { sub: 'kc-sub-1', email: 'devops@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: [] } } },
+    })
+
+    expect(token.idToken).toBe('id.jwt.sig')
+  })
 })

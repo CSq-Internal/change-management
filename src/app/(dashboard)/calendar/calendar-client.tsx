@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useStore } from "@/lib/store"
+import { dateLocale } from "@/lib/dates"
 import { t } from "@/lib/i18n"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
@@ -114,7 +115,7 @@ export default function CalendarClient({
   const placed = hydrated
     ? chips.flatMap((c) => {
         const day = chipDay(c.startMs, firstKey, lastKey)
-        const timeLabel = new Date(c.startMs).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+        const timeLabel = new Date(c.startMs).toLocaleTimeString(dateLocale(language), { hour: "2-digit", minute: "2-digit" })
         return day ? [{ ...c, day, timeLabel }] : []
       })
     : []

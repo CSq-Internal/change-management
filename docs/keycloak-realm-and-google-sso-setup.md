@@ -10,7 +10,10 @@ hosting/IdP live on `csquarednet.com`.
 - Valid redirect URIs:
   - `https://csq-cms.vercel.app/api/auth/callback/keycloak`
   - `http://localhost:3000/api/auth/callback/keycloak`
-- Valid post-logout redirect URIs: `https://csq-cms.vercel.app/*` (+ localhost).
+- Valid post-logout redirect URIs: `https://csq-cms.vercel.app/*` (+ `http://localhost:3000/*`).
+  In prod this must include `https://cms.csquarednet.com/*`: Log out sends the user to
+  Keycloak's end-session endpoint with `post_logout_redirect_uri=<app>/login`, and Keycloak
+  rejects a URI not listed here (the user would see a Keycloak error instead of signing out).
 - Web origins: `+`.
 - Credentials tab → copy secret → Vercel `KEYCLOAK_CLIENT_SECRET`.
 

@@ -42,7 +42,11 @@ const authConfig: NextAuthConfig = {
       return profile?.email_verified === true && isAllowedSignInEmail(profile.email)
     },
     jwt({ token, account, profile }) {
-      if (account) token.accessToken = account.access_token
+      if (account) {
+        token.accessToken = account.access_token
+        // Kept server-side in the encrypted cookie: Log out passes it to Keycloak.
+        token.idToken = account.id_token
+      }
       if (profile) {
         const p = profile as Record<string, unknown>
         token.keycloakId = p.sub as string

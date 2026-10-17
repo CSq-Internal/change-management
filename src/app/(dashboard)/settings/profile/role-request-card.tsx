@@ -23,14 +23,17 @@ const fieldClass = "mt-1 block w-full rounded-md border border-border bg-backgro
 export default function RoleRequestCard({
   opcos,
   requests,
+  defaultOpco,
 }: {
   opcos: { name: string; slug: string }[]
   requests: MyRoleRequest[]
+  /** The user's own OpCo, where a role request is most likely meant. */
+  defaultOpco?: string
 }) {
   const { language } = useStore()
   const tr = (k: string) => t(language, k)
   const router = useRouter()
-  const [opcoSlug, setOpcoSlug] = useState(opcos[0]?.slug ?? "")
+  const [opcoSlug, setOpcoSlug] = useState(defaultOpco ?? opcos[0]?.slug ?? "")
   const [role, setRole] = useState<RequestableRole>("approver")
   const [reason, setReason] = useState("")
   const [busy, setBusy] = useState(false)

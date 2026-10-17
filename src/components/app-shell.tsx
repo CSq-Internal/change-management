@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
+import { keycloakLogoutUrl } from "@/server/actions/logout"
 import { useStore } from "@/lib/store"
 import { getNavCounts, setMyLocale } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
@@ -93,6 +94,15 @@ const navGroups = [
     ],
   },
 ]
+
+// Clear the app session, then end the Keycloak one too; otherwise "Sign in" goes
+// straight back in as the same person. Falls back to an app-only logout.
+async function logOut() {
+  const keycloakUrl = await keycloakLogoutUrl().catch(() => null)
+  if (!keycloakUrl) return nextAuthSignOut({ callbackUrl: "/login" })
+  await nextAuthSignOut({ redirect: false })
+  window.location.href = keycloakUrl
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -449,7 +459,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {currentUser && (
                   <button
                     className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                    onClick={() => nextAuthSignOut({ callbackUrl: "/login" })}
+                    onClick={logOut}
                     aria-label="Log out"
                   >
                     <LogOut className="h-4 w-4" />
