@@ -45,7 +45,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
       toast({
         title: t(language, "users.toast.deactivated"),
         description: orphans.length > 0
-          ? `⚠ ${orphans.length} pending change(s) now have no approver: ${orphans.map((o) => `#${o.reference}`).join(", ")}`
+          ? `⚠ ${orphans.length} ${t(language, "users.toast.orphaned")}: ${orphans.map((o) => `#${o.reference}`).join(", ")}`
           : confirmUser.email,
         variant: orphans.length > 0 ? "error" : "success",
       })
@@ -53,8 +53,8 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
       router.refresh()
     } catch (err) {
       toast({
-        title: "Failed",
-        description: err instanceof Error ? err.message : "Unknown error",
+        title: t(language, "common.failed"),
+        description: err instanceof Error ? err.message : t(language, "common.unknownError"),
         variant: "error",
       })
     } finally {
@@ -73,8 +73,8 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
       router.refresh()
     } catch (err) {
       toast({
-        title: "Failed",
-        description: err instanceof Error ? err.message : "Unknown error",
+        title: t(language, "common.failed"),
+        description: err instanceof Error ? err.message : t(language, "common.unknownError"),
         variant: "error",
       })
     }

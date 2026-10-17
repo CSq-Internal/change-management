@@ -30,9 +30,10 @@ const STATUSES = ["open", "mitigating", "closed"] as const
 function ScoreBadge({ likelihood, impact }: { likelihood: number; impact: number }) {
   const score = riskScore(likelihood, impact)
   const band = riskBand(score)
+  const { language } = useStore()
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${BAND_COLOR[band]}`}>
-      {score} · {band}
+      {score} · {t(language, `risk.band.${band}`)}
     </span>
   )
 }
@@ -128,10 +129,10 @@ export default function RiskRegisterClient({
                       <div className="font-medium">{r.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-2">{r.description}</div>
                     </td>
-                    <td className="px-4 py-2 capitalize" data-label={t(language, "risk.col.category")}>{r.category}</td>
+                    <td className="px-4 py-2 capitalize" data-label={t(language, "risk.col.category")}>{t(language, `risk.category.${r.category}`)}</td>
                     <td className="px-4 py-2" data-label={t(language, "risk.col.score")}><ScoreBadge likelihood={r.likelihood} impact={r.impact} /></td>
                     <td className="px-4 py-2" data-label={t(language, "risk.col.owner")}>{r.owner}</td>
-                    <td className="px-4 py-2 capitalize" data-label={t(language, "risk.col.status")}>{r.status}</td>
+                    <td className="px-4 py-2 capitalize" data-label={t(language, "risk.col.status")}>{t(language, `risk.status.${r.status}`)}</td>
                     <td className="px-4 py-2" data-label={t(language, "risk.col.review")}>{r.reviewDate ? r.reviewDate.slice(0, 10) : "—"}</td>
                     <td className="px-4 py-2" data-label={t(language, "risk.col.scope")}>{r.opcoName ?? t(language, "risk.scope.group")}</td>
                     {canManage && (
@@ -153,16 +154,16 @@ export default function RiskRegisterClient({
             <CardHeader><CardTitle className="text-base">{editing.id ? t(language, "risk.edit") : t(language, "risk.new")}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Input placeholder={t(language, "risk.col.title")} value={editing.form.title} onChange={(e) => set({ title: e.target.value })} />
-              <Textarea placeholder="Description" value={editing.form.description} onChange={(e) => set({ description: e.target.value })} />
+              <Textarea placeholder={t(language, "common.description")} value={editing.form.description} onChange={(e) => set({ description: e.target.value })} />
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs">{t(language, "risk.col.category")}
                   <select className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm capitalize" value={editing.form.category} onChange={(e) => set({ category: e.target.value as RiskInput["category"] })}>
-                    {CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
+                    {CATEGORIES.map((c) => (<option key={c} value={c}>{t(language, `risk.category.${c}`)}</option>))}
                   </select>
                 </label>
                 <label className="text-xs">{t(language, "risk.col.status")}
                   <select className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm capitalize" value={editing.form.status} onChange={(e) => set({ status: e.target.value as RiskInput["status"] })}>
-                    {STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
+                    {STATUSES.map((s) => (<option key={s} value={s}>{t(language, `risk.status.${s}`)}</option>))}
                   </select>
                 </label>
                 <label className="text-xs">{t(language, "risk.field.likelihood")}

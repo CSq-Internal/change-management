@@ -2,6 +2,8 @@
 "use client"
 
 import { useSession } from "next-auth/react"
+import { useStore } from "@/lib/store"
+import { t } from "@/lib/i18n"
 import { isGroupAdmin } from "@/lib/permissions"
 import { listActiveOpCos } from "@/server/actions/opcos"
 import { useEffect, useMemo, useState } from "react"
@@ -19,6 +21,7 @@ function readActiveOpCoCookie(): string | null {
 
 export function OpCoSwitcher() {
   const { data: session } = useSession()
+  const language = useStore((s) => s.language)
 
   const userIsGroupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
   // A group admin can switch to any OpCo, so the list comes from the database, not the session.
@@ -30,14 +33,14 @@ export function OpCoSwitcher() {
   const options = useMemo(() => {
     if (userIsGroupAdmin) {
       return [
-        { value: "all", label: "All OpCos" },
+        { value: "all", label: t(language, "requests.filter.allOpcos") },
         ...allOpCos.map((o) => ({ value: o.slug, label: o.name })),
       ]
     }
     const own = session?.user.organizations.map((o) => ({ value: o.alias, label: o.name })) ?? []
     // With more than one OpCo, "All" is the way back to seeing every one of them.
-    return own.length > 1 ? [{ value: "all", label: "All OpCos" }, ...own] : own
-  }, [userIsGroupAdmin, allOpCos, session])
+    return own.length > 1 ? [{ value: "all", label: t(language, "requests.filter.allOpcos") }, ...own] : own
+  }, [userIsGroupAdmin, allOpCos, session, language])
 
   if (!session) return null
   if (options.length <= 1) return null

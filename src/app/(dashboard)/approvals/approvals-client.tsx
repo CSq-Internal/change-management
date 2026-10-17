@@ -64,14 +64,14 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
       })
       startTransition(() => router.refresh())
     } catch (err) {
-      const message = err instanceof Error ? err.message : "An error occurred"
+      const message = err instanceof Error ? err.message : t(language, "common.errorOccurred")
       setRemoved((prev) => {
         const next = new Set(prev)
         next.delete(changeId)
         return next
       })
       setError(message)
-      toast({ title: "Error", description: message, variant: "error" })
+      toast({ title: t(language, "common.error"), description: message, variant: "error" })
     } finally {
       setBusyId(null)
     }
@@ -119,7 +119,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
                 <textarea
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   rows={2}
-                  placeholder="Comment (required for rejection)"
+                  placeholder={t(language, "approvals.commentPlaceholder")}
                   value={comments[c.id] ?? ""}
                   onChange={(e) =>
                     setComments((prev) => ({ ...prev, [c.id]: e.target.value }))
