@@ -164,3 +164,10 @@ test("feedTone colours the actions the audit log actually stores", () => {
   expect(feedTone("status_changed", "verified")).toBe("bg-violet-500")
   expect(feedTone("document_uploaded", null)).toBe("bg-slate-400")
 })
+
+test("whenLabel names a past day instead of calling it Today", () => {
+  const nowMs = Date.parse("2026-06-10T09:00:00Z")
+  expect(whenLabel(Date.parse("2026-06-09T14:00:00Z"), nowMs, true)).toBe("Yesterday 14:00")
+  expect(whenLabel(Date.parse("2026-06-03T14:00:00Z"), nowMs, true)).toBe("3 Jun 14:00")
+  expect(whenLabel(Date.parse("2026-06-10T07:00:00Z"), nowMs, true)).toBe("Today 07:00")
+})

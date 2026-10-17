@@ -59,15 +59,18 @@ const startOfDayMs = (ms: number, utc = false) => {
   return x.getTime()
 }
 
-/** "Tonight 21:00" / "Tomorrow 08:00" / "Wed 14:00", relative to nowMs. */
+/** "Yesterday 14:00" / "3 Jun 14:00" / "Tonight 21:00" / "Tomorrow 08:00" / "Wed 14:00", relative to nowMs. */
 export function whenLabel(whenMs: number, nowMs: number, utc = false): string {
   const d = new Date(whenMs)
   const [hours, minutes] = utc ? [d.getUTCHours(), d.getUTCMinutes()] : [d.getHours(), d.getMinutes()]
   const dayDelta = Math.round((startOfDayMs(whenMs, utc) - startOfDayMs(nowMs, utc)) / 86_400_000)
   const hm = `${pad(hours)}:${pad(minutes)}`
-  if (dayDelta <= 0) return `${hours >= 18 ? "Tonight" : "Today"} ${hm}`
+  const timeZone = utc ? "UTC" : undefined
+  if (dayDelta === -1) return `Yesterday ${hm}`
+  if (dayDelta < -1) return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone })} ${hm}`
+  if (dayDelta === 0) return `${hours >= 18 ? "Tonight" : "Today"} ${hm}`
   if (dayDelta === 1) return `Tomorrow ${hm}`
-  return `${d.toLocaleDateString("en-US", { weekday: "short", timeZone: utc ? "UTC" : undefined })} ${hm}`
+  return `${d.toLocaleDateString("en-US", { weekday: "short", timeZone })} ${hm}`
 }
 
 export type WorklistAction = "review" | "start" | "advance" | "verify"
