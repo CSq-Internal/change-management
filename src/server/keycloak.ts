@@ -177,52 +177,6 @@ export async function assignToOrganization(
   }
 }
 
-export async function deactivateKeycloakUser(keycloakUserId: string): Promise<void> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(
-    `${adminRealmUrl}/users/${keycloakUserId}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ enabled: false }),
-    }
-  )
-  if (res.status === 404) {
-    console.warn(`Keycloak user ${keycloakUserId} not found (404) — already absent; treating as no-op.`)
-    return
-  }
-  if (!res.ok) {
-    throw new Error(`Failed to deactivate Keycloak user: ${res.status} ${await res.text()}`)
-  }
-}
-
-export async function reactivateKeycloakUser(keycloakUserId: string): Promise<void> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(
-    `${adminRealmUrl}/users/${keycloakUserId}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ enabled: true }),
-    }
-  )
-  if (res.status === 404) {
-    console.warn(`Keycloak user ${keycloakUserId} not found (404) — already absent; treating as no-op.`)
-    return
-  }
-  if (!res.ok) {
-    throw new Error(`Failed to reactivate Keycloak user: ${res.status} ${await res.text()}`)
-  }
-}
-
 export async function createKeycloakOrg(slug: string, name: string): Promise<string> {
   const token = await getAdminToken()
   const { adminRealmUrl } = kcEndpoints()
@@ -248,20 +202,24 @@ export async function createKeycloakOrg(slug: string, name: string): Promise<str
   return id
 }
 
-/** Ensure an adopted user can actually authenticate: enabled + email verified. */
-export async function ensureKeycloakUserEnabledVerified(keycloakUserId: string): Promise<void> {
+/**
+ * Check an adopted account (one that already existed on the shared realm) and mark its email
+ * verified, which CMS sign-in requires. Never enables it: a disabled account may have been
+ * switched off by IT for another app, so the caller refuses the invite instead.
+ */
+export async function verifyAdoptedKeycloakUser(keycloakUserId: string): Promise<"verified" | "disabled"> {
   const token = await getAdminToken()
   const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(`${adminRealmUrl}/users/${keycloakUserId}`, {
+  const url = `${adminRealmUrl}/users/${keycloakUserId}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`Failed to read Keycloak user: ${res.status} ${await res.text()}`)
+  const { enabled } = (await res.json()) as { enabled?: boolean }
+  if (!enabled) return "disabled"
+  const put = await fetch(url, {
     method: "PUT",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ enabled: true, emailVerified: true }),
+    body: JSON.stringify({ emailVerified: true }),
   })
-  if (res.status === 404) {
-    console.warn(`Keycloak user ${keycloakUserId} not found (404) — treating as no-op.`)
-    return
-  }
-  if (!res.ok) {
-    throw new Error(`Failed to ensure user enabled/verified: ${res.status} ${await res.text()}`)
-  }
+  if (!put.ok) throw new Error(`Failed to mark email verified: ${put.status} ${await put.text()}`)
+  return "verified"
 }

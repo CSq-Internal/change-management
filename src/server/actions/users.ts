@@ -5,24 +5,25 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
-import { createOrFindKeycloakUser, assignToOrganization, deactivateKeycloakUser, reactivateKeycloakUser, ensureKeycloakUserEnabledVerified } from "@/server/keycloak"
+import { createOrFindKeycloakUser, assignToOrganization, verifyAdoptedKeycloakUser } from "@/server/keycloak"
 import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
 import { sendUserInvitationEmail } from "@/server/email"
 import { coerceLocale } from "@/lib/i18n"
 import { isAllowedSignInEmail } from "@/lib/sign-in-domain"
 import type { Role, Prisma } from "@prisma/client"
-import type { SessionOrganization } from "@/types/next-auth"
 
-// Throws unless the caller may manage a user — a group_admin, or an admin of any
-// OpCo the user is assigned to.
-function assertCanManageUser(
-  session: { organizations: SessionOrganization[]; realmRoles: string[] },
-  assignments: Array<{ opco: { slug: string } }>
+// Deactivating or reactivating acts on the whole user, so a caller below group_admin must
+// hold the right (`rights`, one per role touched) for every role, and may not act on a
+// group admin. With nothing to check, only a group_admin may act.
+function assertCanActOnEveryRole(
+  session: { realmRoles: string[] },
+  target: { isGroupAdmin: boolean },
+  rights: boolean[]
 ) {
-  const authorized =
-    isGroupAdmin(session.realmRoles) ||
-    assignments.some((a) => canManageUsers(session.organizations, session.realmRoles, a.opco.slug))
-  if (!authorized) throw new Error("Forbidden: cannot manage this user")
+  if (isGroupAdmin(session.realmRoles)) return
+  if (target.isGroupAdmin || rights.length === 0 || rights.includes(false)) {
+    throw new Error("Forbidden: this user has roles you cannot manage. Ask a group admin.")
+  }
 }
 
 export async function onboardUser(input: {
@@ -44,6 +45,9 @@ export async function onboardUser(input: {
 
   const db = getPrisma()
   const existing = await db.user.findFirst({ where: { email } })
+  if (existing && !existing.isActive) {
+    throw new Error("This user is deactivated. Reactivate them from the Users page instead.")
+  }
 
   // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
   let keycloakId: string
@@ -58,13 +62,17 @@ export async function onboardUser(input: {
   }
 
   // An ADOPTED Keycloak account (a re-invite after a DB wipe, or someone already on the
-  // shared realm) must be able to sign in: enable + verify it. Its password is never
-  // touched, so a CMS invite cannot lock anyone out of another app on the realm.
+  // shared realm) gets its email verified so it can sign in. The CMS never enables it or
+  // touches its password: the realm is shared, so a disabled account refuses the invite.
   if (!createdKeycloakIdentity) {
+    let state: "verified" | "disabled" | undefined
     try {
-      await ensureKeycloakUserEnabledVerified(keycloakId)
+      state = await verifyAdoptedKeycloakUser(keycloakId)
     } catch (err) {
       console.warn(`[onboardUser] Keycloak reconcile skipped for ${email}:`, err)
+    }
+    if (state === "disabled") {
+      throw new Error("This account is disabled in Keycloak, which other CSquared apps share. Ask IT before inviting.")
     }
   }
 
@@ -154,7 +162,10 @@ export async function deactivateUser(userId: string) {
     throw new Error("Forbidden: cannot deactivate yourself")
   }
 
-  assertCanManageUser(session, user.opcoAssignments)
+  assertCanActOnEveryRole(
+    session, user,
+    user.opcoAssignments.map((a) => canManageUsers(session.organizations, session.realmRoles, a.opco.slug)),
+  )
 
   for (const a of user.opcoAssignments) {
     if (a.isActive && a.role === "admin") {
@@ -162,14 +173,15 @@ export async function deactivateUser(userId: string) {
     }
   }
 
-  await deactivateKeycloakUser(user.keycloakId)
-
+  // The Keycloak account stays enabled: the realm is shared with other apps, and the CMS
+  // session check (enrichedJwt) refuses an inactive user on its own.
   const footprint = await approverPendingFootprint(userId)
 
   await db.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { isActive: false } })
+    // Only active rows, so roles ended earlier keep their date and stay ended on reactivation.
     await tx.userOpCoAssignment.updateMany({
-      where: { userId },
+      where: { userId, isActive: true },
       data: { isActive: false, endedAt: new Date() },
     })
     await tx.cABMembership.updateMany({ where: { userId, isActive: true }, data: { isActive: false, endedAt: new Date() } })
@@ -181,6 +193,7 @@ export async function deactivateUser(userId: string) {
       action: "user.deactivate",
       targetUserId: userId,
       summary: `Deactivated user ${userId}`,
+      metadata: { endedAssignmentIds: user.opcoAssignments.map((a) => a.id) },
     })
   })
 
@@ -192,22 +205,35 @@ export async function reactivateUser(userId: string) {
   const session = await getAppSession()
 
   const db = getPrisma()
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: { opcoAssignments: { include: { opco: true } } },
-  })
+  const user = await db.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error("User not found")
+  if (user.isActive) throw new Error("User is already active")
 
-  assertCanManageUser(session, user.opcoAssignments)
+  // Restore only the roles the last deactivation ended; roles removed before it stay
+  // removed. Deactivations recorded before this metadata existed restore none.
+  const last = await db.adminAuditLog.findFirst({
+    where: { action: "user.deactivate", targetUserId: userId },
+    orderBy: { at: "desc" },
+    select: { metadata: true },
+  })
+  const ids = (last?.metadata as { endedAssignmentIds?: string[] } | null)?.endedAssignmentIds ?? []
+  const rows = ids.length
+    ? await db.userOpCoAssignment.findMany({ where: { id: { in: ids }, userId }, include: { opco: true } })
+    : []
 
-  await reactivateKeycloakUser(user.keycloakId)
+  assertCanActOnEveryRole(
+    session, user,
+    rows.map((r) => canAssignRole(session.organizations, session.realmRoles, r.opco.slug, r.role)),
+  )
 
   await db.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { isActive: true } })
-    await tx.userOpCoAssignment.updateMany({
-      where: { userId },
-      data: { isActive: true, endedAt: null },
-    })
+    if (rows.length) {
+      await tx.userOpCoAssignment.updateMany({
+        where: { id: { in: rows.map((r) => r.id) }, userId },
+        data: { isActive: true, endedAt: null },
+      })
+    }
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
       actorEmail: session.email,
