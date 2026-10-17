@@ -181,7 +181,13 @@ export function isChannelEnabled(
   return DEFAULT_CHANNELS[type][channel]
 }
 
-export function chatMessageText(type: NotifyEventType, changeTitle: string, ctx: NotifyContext, locale: Language): string {
+// Chat reads <url|text>, <users/all> and [text](url) as markup and has no escape for them,
+// so a requester's title swaps those brackets for look-alikes.
+const chatSafe = (s: string) =>
+  s.replaceAll("<", "‹").replaceAll(">", "›").replaceAll("[", "⁅").replaceAll("]", "⁆")
+
+export function chatMessageText(type: NotifyEventType, title: string, ctx: NotifyContext, locale: Language): string {
+  const changeTitle = chatSafe(title)
   if (locale === "fr") {
     switch (type) {
       case "emergency_submitted": return `🚨 Changement d'urgence soumis : « ${changeTitle} »`
