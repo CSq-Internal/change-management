@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { NextRequest, NextResponse } from "next/server"
 import { isGroupLevel } from "@/lib/permissions"
+import { csvRow } from "@/lib/csv"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -42,9 +43,7 @@ export async function GET(req: NextRequest) {
     e.at.toISOString(), e.actor.email, e.action, e.change.title,
     e.change.opco.slug, e.fromStatus ?? "", e.toStatus ?? "", e.note ?? "",
   ])
-  const csv = [headers, ...rows]
-    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n")
+  const csv = [headers, ...rows].map(csvRow).join("\n")
 
   return new NextResponse(csv, {
     headers: {

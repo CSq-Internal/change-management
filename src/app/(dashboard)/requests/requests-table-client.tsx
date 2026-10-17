@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Plus } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
+import { csvRow } from "@/lib/csv"
 import { Button } from "@/components/ui/button"
 import { StatusPill, RiskPill } from "@/components/change-badges"
 
@@ -21,10 +22,6 @@ export type RequestRow = {
 
 const STATUSES = ["draft", "pending", "approved", "implemented", "verified", "rejected", "closed"]
 const RISKS = ["low", "medium", "high", "emergency"]
-
-function csvEscape(s: string) {
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
 
 export default function RequestsTableClient({
   rows, showRequester, initialStatus = "",
@@ -56,8 +53,7 @@ export default function RequestsTableClient({
     const header = ["Title", "Status", "Risk", "Infrastructure", "OpCo", "Approvals", "Requester"]
     const lines = [header.join(",")].concat(
       filtered.map((r) =>
-        [r.title, r.status, r.riskLevel, r.infrastructureType, r.opcoName, String(r.approvalsGiven), r.requesterName]
-          .map(csvEscape).join(",")
+        csvRow([r.title, r.status, r.riskLevel, r.infrastructureType, r.opcoName, r.approvalsGiven, r.requesterName])
       )
     )
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" })

@@ -67,14 +67,17 @@ import { getAppSession } from '@/lib/session'
 import { notifyEvent, notifyChange } from '@/server/notify'
 import { isEligibleApprover } from '@/server/approval-authority'
 
+// Status writes and their audit rows go through the transaction client; it shares the
+// update and audit mocks with mockDb so assertions read the same either way.
 const tx = {
   changeRequest: {
     create: vi.fn().mockImplementation(({ data }: { data: unknown }) =>
       Promise.resolve({ id: 'cr-new', status: 'draft', ...(data as object) })
     ),
+    update: mockDb.changeRequest.update,
   },
   changeAssignee: { create: vi.fn().mockResolvedValue({}) },
-  auditLog: { create: vi.fn().mockResolvedValue({}) },
+  auditLog: mockDb.auditLog,
 }
 
 beforeEach(() => {
@@ -124,6 +127,15 @@ describe('listChanges', () => {
 })
 
 describe('createChange', () => {
+  it('does not check blackouts for a draft (submission does)', async () => {
+    mockDb.blackoutPeriod.findMany.mockClear()
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'low',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+    })
+    expect(mockDb.blackoutPeriod.findMany).not.toHaveBeenCalled()
+  })
+
   it('creates a change request', async () => {
     const result = await createChange('ghana', {
       title: 'Router update', description: 'BGP config',
@@ -492,6 +504,28 @@ describe('submitChange', () => {
     await expect(submitChange('cr-1')).rejects.toThrow(/Forbidden/)
   })
 
+  it('checks blackouts against the planned window, not the time of submission', async () => {
+    // The default change is planned for 1-2 Jul 2026.
+    await submitChange('cr-1')
+    expect(mockDb.blackoutPeriod.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [{ opcoId: 'opco-1' }, { opcoId: null }],
+        startsAt: { lt: new Date('2026-07-02') },
+        endsAt: { gt: new Date('2026-07-01') },
+      },
+    })
+  })
+
+  it('writes the status and its audit row in one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    await submitChange('cr-1')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.changeRequest.update).toHaveBeenCalled()
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'submitted' }) })
+    )
+  })
+
   it('throws "Blocked by blackout" when submitting a non-emergency draft during an active blackout', async () => {
     mockDb.blackoutPeriod.findMany.mockResolvedValueOnce([
       { id: 'bp-1', label: 'Year-end freeze', opcoId: null },
@@ -633,6 +667,27 @@ describe('change writes keep to the form fields', () => {
       expect(data).not.toHaveProperty(key)
     }
     expect(data).toMatchObject({ status: 'draft', opcoId: 'opco-1', requesterId: 'user-1', title: 'Router update' })
+  })
+})
+
+describe('status changes are written with their audit row', () => {
+  it('discardChange uses one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'cancelled' })
+    await discardChange('cr-1')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('updateChangeStatus uses one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+    await updateChangeStatus('cr-1', 'implemented')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'status_changed', toStatus: 'implemented' }) })
+    )
   })
 })
 

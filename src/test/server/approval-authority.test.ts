@@ -149,6 +149,30 @@ describe("listApprovableChanges", () => {
     const out = await listApprovableChanges({ userId: "cto", realmRoles: [] })
     expect(out.map((c) => c.id)).toEqual(["c1"])
   })
+  it("looks up each CAB once and the user's nominations once, however many changes are pending", async () => {
+    mockDb.changeRequest.findMany.mockResolvedValue(
+      Array.from({ length: 8 }, (_, i) => ({ id: `c${i}`, infrastructureType: "Wifi", opcoId: "opco-1" })),
+    )
+    mockDb.cABMembership.findMany.mockResolvedValue([{ userId: "cto", user: { id: "cto", name: null, email: "cto@c.com" } }])
+    const out = await listApprovableChanges({ userId: "cto", realmRoles: [] })
+    expect(out).toHaveLength(8)
+    expect(mockDb.approverAssignment.findMany).toHaveBeenCalledTimes(1)
+    expect(mockDb.cABMembership.findMany).toHaveBeenCalledTimes(1)
+    expect(mockDb.changeAssignee.findMany).toHaveBeenCalledTimes(1)
+  })
+  it("still shows a change the user is named on, while they remain eligible", async () => {
+    mockDb.changeRequest.findMany.mockResolvedValue([
+      { id: "c1", infrastructureType: "Wifi", opcoId: "opco-1" },
+      { id: "c2", infrastructureType: "Wifi", opcoId: "opco-1" },
+    ])
+    mockDb.changeAssignee.findMany.mockResolvedValue([{ changeId: "c2" }])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: u("named1") }]) // still an approver
+    const out = await listApprovableChanges({ userId: "named1", realmRoles: [] })
+    expect(out.map((c) => c.id)).toEqual(["c2"])
+    expect(mockDb.changeAssignee.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "named1", role: "approver", changeId: { in: ["c1", "c2"] } },
+    }))
+  })
   it("excludes the user's own requests from the queue (SoD)", async () => {
     mockDb.changeRequest.findMany.mockResolvedValue([])
     await listApprovableChanges({ userId: "me", realmRoles: ["group_admin"] })

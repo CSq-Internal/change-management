@@ -61,6 +61,21 @@ export async function getNamedApprovers(changeId: string): Promise<ApproverUser[
   return rows.filter((r) => r.user.isActive).map((r) => ({ id: r.user.id, name: r.user.name, email: r.user.email }))
 }
 
+/**
+ * The approval rule for a non-group-admin, given the change's routed approvers and a check
+ * for whether the user is named on it. Shared by the single-change check and the queue.
+ */
+async function approvesWith(
+  userId: string, change: ChangeForAuth, routed: ApproverUser[], isNamed: () => Promise<boolean>,
+): Promise<boolean> {
+  if (routed.some((u) => u.id === userId)) return true
+  // A nomination is not a standing grant. Re-check eligibility rather than trusting the
+  // stored row: the nominee may since have left the CAB or lost their approver role, or
+  // the change's infrastructure type may have moved to Equiano (group-level), which
+  // would otherwise leave an OpCo approver authoritative over group infrastructure.
+  return (await isNamed()) && isEligibleApprover(userId, change.opcoId, change.infrastructureType)
+}
+
 export async function canUserApproveChange(args: {
   userId: string
   realmRoles: string[]
@@ -68,19 +83,10 @@ export async function canUserApproveChange(args: {
   changeId?: string
 }): Promise<boolean> {
   if (isGroupAdmin(args.realmRoles)) return true
-  const approvers = await getRoutedApprovers(args.change)
-  if (approvers.some((u) => u.id === args.userId)) return true
-  if (args.changeId) {
-    const named = await getNamedApprovers(args.changeId)
-    // A nomination is not a standing grant. Re-check eligibility rather than trusting the
-    // stored row: the nominee may since have left the CAB or lost their approver role, or
-    // the change's infrastructure type may have moved to Equiano (group-level), which
-    // would otherwise leave an OpCo approver authoritative over group infrastructure.
-    if (named.some((u) => u.id === args.userId)) {
-      return isEligibleApprover(args.userId, args.change.opcoId, args.change.infrastructureType)
-    }
-  }
-  return false
+  const { changeId } = args
+  return approvesWith(args.userId, args.change, await getRoutedApprovers(args.change), async () =>
+    !!changeId && (await getNamedApprovers(changeId)).some((u) => u.id === args.userId),
+  )
 }
 
 /** Pending changes the user is authorized to approve (group_admin sees all). */
@@ -100,11 +106,24 @@ export async function listApprovableChanges(args: { userId: string; realmRoles: 
   })
   if (isGroupAdmin(args.realmRoles)) return pending
 
+  // The queue backs the nav badge on every page, so look up each routed CAB once (pending
+  // changes share a few OpCo × infra pairs) and the user's nominations in one query.
+  const routed = new Map<string, Promise<ApproverUser[]>>()
+  const routedFor = (c: ChangeForAuth) => {
+    const key = `${c.infrastructureType}|${routedCabOpcoId(c.infrastructureType, c.opcoId)}`
+    if (!routed.has(key)) routed.set(key, getRoutedApprovers(c))
+    return routed.get(key)!
+  }
+  const named = new Set(
+    (await db.changeAssignee.findMany({
+      where: { userId: args.userId, role: "approver", changeId: { in: pending.map((c) => c.id) } },
+      select: { changeId: true },
+    })).map((r) => r.changeId),
+  )
+
   const visible = []
   for (const c of pending) {
-    if (await canUserApproveChange({ userId: args.userId, realmRoles: args.realmRoles, change: c, changeId: c.id })) {
-      visible.push(c)
-    }
+    if (await approvesWith(args.userId, c, await routedFor(c), async () => named.has(c.id))) visible.push(c)
   }
   return visible
 }
