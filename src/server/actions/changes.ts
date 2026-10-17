@@ -35,6 +35,25 @@ type CreateChangeInput = {
   approverIds?: string[]
 }
 
+type ChangeFormFields = Omit<CreateChangeInput, "approverIds">
+
+// A server action receives whatever JSON the browser sends, whatever its TypeScript type
+// says, so create and update copy only these keys. Spreading the input would let a caller
+// set status, opcoId or implementedById, or forge votes through a nested `approvals` write.
+// The Record type makes the compiler flag a form field added to the type but not here.
+const CHANGE_FORM_FIELDS: Record<keyof ChangeFormFields, true> = {
+  title: true, description: true, category: true, riskLevel: true, contactEmail: true,
+  infrastructureType: true, changeReason: true, impactScope: true, implementationPlan: true,
+  testingPlan: true, backoutPlan: true, changeWindow: true, plannedStart: true,
+  plannedEnd: true, isEmergency: true,
+}
+
+function pickFormFields<T extends Partial<ChangeFormFields>>(data: T): T {
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => Object.hasOwn(CHANGE_FORM_FIELDS, key)),
+  ) as T
+}
+
 export async function getChange(id: string) {
   const session = await getAppSession()
   const db = getPrisma()
@@ -112,7 +131,8 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   const slaDeadline = new Date()
   slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
 
-  const { approverIds = [], ...changeData } = data
+  const { approverIds = [] } = data
+  const changeData = pickFormFields<ChangeFormFields>(data)
 
   // Validate before opening the transaction so a bad id leaves nothing behind.
   for (const userId of approverIds) {
@@ -159,7 +179,7 @@ export async function updateChange(id: string, data: UpdateChangeInput) {
     throw new Error("Forbidden: only the requester or an admin can edit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be edited")
 
-  const updateData: UpdateChangeInput & { slaDeadline?: Date } = { ...data }
+  const updateData: UpdateChangeInput & { slaDeadline?: Date } = pickFormFields(data)
   if (data.riskLevel) {
     const slaDeadline = new Date()
     slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])

@@ -98,6 +98,17 @@ describe("updateTeam", () => {
     expect(mockDb.team.update).toHaveBeenCalledTimes(1)
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
   })
+
+  it("writes only name and description, whatever else the caller sends", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    await updateTeam("team-1", {
+      name: "Renamed", description: "d",
+      opcoId: "opco-ng", members: { create: [{ userId: "u9", role: "lead" }] },
+    } as never)
+    expect(mockDb.team.update).toHaveBeenCalledWith({
+      where: { id: "team-1" }, data: { name: "Renamed", description: "d" },
+    })
+  })
 })
 
 describe("deleteTeam", () => {
