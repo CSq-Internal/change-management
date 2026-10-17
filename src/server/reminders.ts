@@ -1,7 +1,7 @@
 // src/server/reminders.ts
 // Recurring notification sweep, run from /api/cron/sla alongside SLA escalation.
 // Idempotency comes from the NotificationDispatch ledger: each reminder type has a
-// minimum interval, so a daily cron cannot re-send the same nudge every morning.
+// minimum interval, so a frequent cron cannot re-send the same nudge every run.
 import { getPrisma } from "@/server/db"
 import { notifyChange } from "@/server/notify"
 import { resolveAudience } from "@/server/audience"
@@ -17,14 +17,22 @@ const RETRO_INTERVAL_MS = 12 * HOUR
 
 type Db = ReturnType<typeof getPrisma>
 
-async function sentWithin(
-  db: Db, userId: string, changeId: string, type: NotifyEventType, withinMs: number,
-): Promise<boolean> {
-  const row = await db.notificationDispatch.findFirst({
-    where: { userId, changeId, type, sentAt: { gte: new Date(Date.now() - withinMs) } },
-    select: { id: true },
+/**
+ * Records the reminder in the ledger unless one went out within `withinMs`; true means
+ * "send it". Check and write share a transaction behind the change's row lock, so two
+ * overlapping sweeps can't both see no row and both send.
+ */
+function claim(db: Db, userId: string, changeId: string, type: NotifyEventType, withinMs: number): Promise<boolean> {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "ChangeRequest" WHERE "id" = ${changeId} FOR UPDATE`
+    const recent = await tx.notificationDispatch.findFirst({
+      where: { userId, changeId, type, sentAt: { gte: new Date(Date.now() - withinMs) } },
+      select: { id: true },
+    })
+    if (recent) return false
+    await tx.notificationDispatch.create({ data: { userId, changeId, type } })
+    return true
   })
-  return !!row
 }
 
 export async function runDueReminders(): Promise<{ nudged: number; retroOverdue: number }> {
@@ -57,8 +65,8 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
       id: c.id, opcoId: c.opcoId, infrastructureType: c.infrastructureType, requesterId: c.requesterId,
     })
     for (const r of recipients) {
-      if (await sentWithin(db, r.userId, c.id, "approver_nudge", NUDGE_INTERVAL_MS)) continue
-      await notifyChange("approver_nudge", c.id, { recipients: [r] })
+      if (!(await claim(db, r.userId, c.id, "approver_nudge", NUDGE_INTERVAL_MS))) continue
+      await notifyChange("approver_nudge", c.id, { recipients: [r], dispatchClaimed: true })
       nudged++
     }
   }
@@ -72,9 +80,10 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
       id: c.id, opcoId: c.opcoId, infrastructureType: c.infrastructureType, requesterId: c.requesterId,
     })
     for (const r of recipients) {
-      if (await sentWithin(db, r.userId, c.id, "retro_overdue", RETRO_INTERVAL_MS)) continue
+      if (!(await claim(db, r.userId, c.id, "retro_overdue", RETRO_INTERVAL_MS))) continue
       await notifyChange("retro_overdue", c.id, {
         recipients: [r],
+        dispatchClaimed: true,
         dueAt: c.retroApprovalDueAt!.toISOString().slice(0, 16).replace("T", " "),
       })
       retroOverdue++

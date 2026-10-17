@@ -76,6 +76,12 @@ describe('notifyEvent', () => {
     warn.mockRestore()
   })
 
+  it('writes no ledger row when the caller already claimed it (reminder sweep)', async () => {
+    await notifyEvent({ type: 'emergency_submitted', recipients: [ada], change, dispatchClaimed: true })
+    expect(mockDb.notificationDispatch.create).not.toHaveBeenCalled()
+    expect(mockDb.notification.create).toHaveBeenCalled()
+  })
+
   it('does NOT query chat webhooks for a non-broadcast event', async () => {
     await notifyEvent({ type: 'approval_requested', recipients: [ada], change })
     expect(mockDb.chatWebhook.findMany).not.toHaveBeenCalled()
