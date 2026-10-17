@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
+import { dayEnd } from "@/lib/dates"
 import { createDelegation } from "@/server/actions/delegations"
 import { listOpCoApprovers } from "@/server/actions/users"
 
@@ -38,7 +39,7 @@ export default function DelegationCreateDialog({ language, manageableSlugs, onCl
     if (!canSubmit) return
     setPending(true)
     try {
-      await createDelegation({ opcoSlug, fromUserId, toUserId, validUntil: new Date(until) })
+      await createDelegation({ opcoSlug, fromUserId, toUserId, validUntil: dayEnd(until) })
       toast({ title: t(language, "delegationsAdmin.created"), variant: "success" })
       onCreated()
     } catch (err) {
