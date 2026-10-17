@@ -63,8 +63,18 @@ function emailFor(
   }
 }
 
-export async function postToChat(url: string, text: string): Promise<void> {
-  await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+// The caller's action waits on this, so a slow webhook gets five seconds. A failure is
+// logged by webhook id: the URL itself carries the webhook's key and token.
+export async function postToChat(hook: { id: string; url: string }, text: string): Promise<void> {
+  try {
+    const res = await fetch(hook.url, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) console.warn(`[chat] webhook ${hook.id} answered ${res.status}`)
+  } catch (err) {
+    console.warn(`[chat] webhook ${hook.id} failed: ${err instanceof Error ? err.name : "error"}`)
+  }
 }
 
 export async function notifyEvent(input: {
@@ -107,7 +117,7 @@ export async function notifyEvent(input: {
   if (CHAT_BROADCAST_TYPES.includes(type)) {
     const hooks = await db.chatWebhook.findMany({ where: { isActive: true, OR: [{ opcoId: change.opcoId }, { opcoId: null }] } })
     const text = chatMessageText(type, change.title, ctx, opcoLocale)
-    for (const h of hooks) tasks.push(postToChat(h.url, text))
+    for (const h of hooks) tasks.push(postToChat(h, text))
   }
 
   await Promise.allSettled(tasks)
