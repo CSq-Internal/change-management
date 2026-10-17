@@ -29,10 +29,9 @@ export type ApprovalChange = {
 
 interface ApprovalsClientProps {
   changes: ApprovalChange[]
-  isCabMember: boolean
 }
 
-export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClientProps) {
+export default function ApprovalsClient({ changes }: ApprovalsClientProps) {
   const { language } = useStore()
   const { toast } = useToast()
   const router = useRouter()
@@ -52,7 +51,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
     setBusyId(changeId)
     setRemoved((prev) => new Set(prev).add(changeId))
     try {
-      await submitApproval(changeId, decision, comment, isCabMember)
+      await submitApproval(changeId, decision, comment)
       toast({
         title: decision === "approve"
           ? t(language, "approvals.toast.approved")

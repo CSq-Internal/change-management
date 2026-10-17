@@ -194,14 +194,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    window.localStorage.setItem("csq-language", language)
     document.documentElement.lang = language
   }, [language])
 
   useEffect(() => {
     if (typeof window === "undefined") return
     const value = Number.isFinite(fontScale) ? fontScale : 1
-    window.localStorage.setItem("csq-font-scale", String(value))
     document.documentElement.style.setProperty("--app-font-scale", String(value))
   }, [fontScale])
 

@@ -6,6 +6,17 @@
 
 export const EQUIANO_INFRA_TYPES = ["Equiano Optics", "Equiano IP"] as const
 
+/** Every infrastructure type a change can target, Equiano (group-level) first. */
+export const INFRA_TYPES = [
+  ...EQUIANO_INFRA_TYPES,
+  "Backbone Transport Network",
+  "Metro Transport Network",
+  "Wifi",
+  "Internal IT Infrastructure",
+  "Backbone IP Network",
+  "Power",
+] as const
+
 export function isGroupLevelInfra(infraType: string): boolean {
   return (EQUIANO_INFRA_TYPES as readonly string[]).includes(infraType)
 }

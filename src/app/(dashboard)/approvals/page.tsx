@@ -30,5 +30,5 @@ export default async function Approvals() {
     approvals: c.approvals.map((a) => ({ isCab: a.isCab, decision: a.decision, approverId: a.approverId })),
   }))
 
-  return <ApprovalsClient changes={serializable} isCabMember={true} />
+  return <ApprovalsClient changes={serializable} />
 }

@@ -15,7 +15,7 @@ export default function ApprovalMatrixClient({
   canManage, infraTypes, scopes, candidates, rows,
 }: {
   canManage: boolean
-  infraTypes: string[]
+  infraTypes: readonly string[]
   scopes: { slug: string; name: string }[]
   candidates: { id: string; label: string }[]
   rows: OverrideRow[]

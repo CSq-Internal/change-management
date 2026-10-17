@@ -13,8 +13,7 @@ import { votesSince, hasVotedSince } from "@/lib/approval-cycle"
 export async function submitApproval(
   changeId: string,
   decision: "approve" | "reject",
-  comment: string | undefined,
-  isCab: boolean
+  comment: string | undefined
 ) {
   const session = await getAppSession()
 

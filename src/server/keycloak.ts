@@ -55,11 +55,6 @@ export async function getAdminToken(): Promise<string> {
   return data.access_token as string
 }
 
-export async function createKeycloakUser(email: string, name: string): Promise<string> {
-  const result = await createOrFindKeycloakUser(email, name)
-  return result.id
-}
-
 export async function createOrFindKeycloakUser(
   email: string,
   name: string
@@ -134,12 +129,6 @@ async function findKeycloakUserByEmailWithToken(
   })
 
   return user?.id ?? null
-}
-
-export async function findKeycloakUserByEmail(email: string): Promise<string | null> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  return findKeycloakUserByEmailWithToken(email, token, adminRealmUrl)
 }
 
 export async function assignToOrganization(

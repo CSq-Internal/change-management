@@ -13,11 +13,12 @@ import type { AuditRow } from "./types"
 
 const ACTIONS = [
   "user.onboard", "user.link", "user.deactivate", "user.reactivate", "role.update",
-  "team.create", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
+  "team.create", "team.update", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
   "cab.add", "cab.remove", "opco.create", "opco.rename", "opco.archive", "opco.unarchive",
-  "delegation.create", "delegation.revoke",
+  "delegation.create", "delegation.revoke", "approver_assignment_added", "approver_assignment_removed",
   "access.join", "access.request", "access.approve", "access.deny",
-  "risk_created", "risk_updated", "risk_closed", "blackout_created", "blackout_removed",
+  "risk_created", "risk_updated", "blackout_created", "blackout_removed",
+  "chat_webhook_set", "chat_webhook_removed", "chat_webhook_enabled", "chat_webhook_disabled",
 ]
 
 interface AuditClientProps {

@@ -1,11 +1,19 @@
 // src/test/server/sla.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const USERS = [
+  { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true },
+  { id: 'cab-1', email: 'cab@group.com', name: 'CAB', isActive: true },
+]
+
 const mockDb = {
   changeRequest: { findMany: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
   userOpCoAssignment: { findMany: vi.fn().mockResolvedValue([]) },
   cABMembership: { findMany: vi.fn().mockResolvedValue([]) },
-  user: { upsert: vi.fn().mockResolvedValue({ id: 'system-user' }) },
+  user: {
+    upsert: vi.fn().mockResolvedValue({ id: 'system-user' }),
+    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => USERS.filter((u) => where.id.in.includes(u.id))),
+  },
   auditLog: { create: vi.fn().mockResolvedValue({}) },
 }
 
@@ -31,9 +39,7 @@ describe('runDueEscalations', () => {
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(deadline), escalationLevel: 0 },
     ])
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
-      { user: { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true } },
-    ])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: 'admin-1' }])
 
     const res = await runDueEscalations()
 
@@ -83,8 +89,8 @@ describe('runDueEscalations', () => {
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(deadline), escalationLevel: 0 },
     ])
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true } }])
-    mockDb.cABMembership.findMany.mockResolvedValue([{ user: { id: 'cab-1', email: 'cab@group.com', name: 'CAB', isActive: true } }])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: 'admin-1' }])
+    mockDb.cABMembership.findMany.mockResolvedValue([{ userId: 'cab-1' }])
 
     const res = await runDueEscalations()
 

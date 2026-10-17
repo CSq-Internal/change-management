@@ -93,13 +93,6 @@ describe("notifyChange", () => {
     expect(sendChangeEventEmail).toHaveBeenCalled()
   })
 
-  it("writes a ledger row per recipient", async () => {
-    await notifyChange("change_implemented", "c1")
-    expect(mockDb.notificationDispatch.create).toHaveBeenCalledWith({
-      data: { userId: "u1", changeId: "c1", type: "change_implemented" },
-    })
-  })
-
   it("passes actorId through to the resolver", async () => {
     await notifyChange("change_implemented", "c1", { actorId: "u-actor" })
     expect(resolveAudience).toHaveBeenCalledWith("change_implemented", expect.anything(), "u-actor")

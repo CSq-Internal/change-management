@@ -23,7 +23,7 @@ const change: SerializedChange = {
 }
 const caps: Caps = {
   isRequester: false, isImplementer: false, isNamedImplementer: false, canApprove: true, isAdmin: false,
-  isCabMember: true, canExportEvidence: false, canManageAssignees: false, soleApproverIsMe: false, hasVotedThisStage: false,
+  canExportEvidence: false, canManageAssignees: false, soleApproverIsMe: false, hasVotedThisStage: false,
 }
 
 describe("ChangeDetailClient actions", () => {

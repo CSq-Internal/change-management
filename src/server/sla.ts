@@ -2,7 +2,8 @@
 // SLA escalation orchestration, run by the cron route (/api/cron/sla).
 import { getPrisma } from "@/server/db"
 import { dueEscalationLevel, SLA_HOURS } from "@/lib/sla"
-import { notifyEvent, type NotifyRecipient } from "@/server/notify"
+import { notifyEvent } from "@/server/notify"
+import { audienceFor } from "@/server/audience"
 import type { RiskLevel } from "@prisma/client"
 
 type Db = ReturnType<typeof getPrisma>
@@ -16,22 +17,6 @@ async function systemActorId(db: Db): Promise<string> {
     select: { id: true },
   })
   return u.id
-}
-
-async function opcoAdminRecipients(db: Db, opcoId: string): Promise<NotifyRecipient[]> {
-  const rows = await db.userOpCoAssignment.findMany({
-    where: { opcoId, role: "admin", isActive: true },
-    select: { user: { select: { id: true, email: true, name: true, isActive: true } } },
-  })
-  return rows.filter((r) => r.user.isActive).map((r) => ({ userId: r.user.id, email: r.user.email, name: r.user.name }))
-}
-
-async function groupCabRecipients(db: Db): Promise<NotifyRecipient[]> {
-  const rows = await db.cABMembership.findMany({
-    where: { opcoId: null, isActive: true },
-    select: { user: { select: { id: true, email: true, name: true, isActive: true } } },
-  })
-  return rows.filter((r) => r.user.isActive).map((r) => ({ userId: r.user.id, email: r.user.email, name: r.user.name }))
 }
 
 /**
@@ -49,7 +34,10 @@ export async function runDueEscalations(): Promise<{ escalated: number }> {
       status: "pending",
       slaDeadline: { not: null },
     },
-    select: { id: true, title: true, riskLevel: true, opcoId: true, slaDeadline: true, escalationLevel: true },
+    select: {
+      id: true, title: true, riskLevel: true, opcoId: true, slaDeadline: true, escalationLevel: true,
+      infrastructureType: true, requesterId: true,
+    },
   })
 
   let escalated = 0
@@ -70,7 +58,7 @@ export async function runDueEscalations(): Promise<{ escalated: number }> {
     actorId ??= await systemActorId(db)
 
     for (let level = c.escalationLevel + 1; level <= target; level++) {
-      const recipients = level === 1 ? await opcoAdminRecipients(db, c.opcoId) : await groupCabRecipients(db)
+      const recipients = await audienceFor([level === 1 ? "opcoAdmins" : "groupCab"], c)
       await notifyEvent({
         type: "sla_escalated",
         recipients,

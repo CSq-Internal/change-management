@@ -15,20 +15,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
-import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { isGroupLevelInfra, INFRA_TYPES as infraTypes } from "@/lib/approver-routing"
 import { toDateTimeLocal } from "@/lib/dates"
 import type { AttachmentKind } from "@prisma/client"
-
-const infraTypes = [
-  "Equiano Optics",
-  "Backbone Transport Network",
-  "Metro Transport Network",
-  "Wifi",
-  "Internal IT Infrastructure",
-  "Equiano IP",
-  "Backbone IP Network",
-  "Power",
-] as const
 
 type Initial = {
   id: string

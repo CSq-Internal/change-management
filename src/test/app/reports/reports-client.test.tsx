@@ -36,3 +36,10 @@ describe("ReportsClient KPIs", () => {
     expect(kpi("Avg approval time")).toBe("5.0h")
   })
 })
+
+describe("ReportsClient SLA targets", () => {
+  it("shows the emergency target from SLA_HOURS", () => {
+    render(<ReportsClient data={{ byStatus: [], byRisk: [], slaCompliance: [], changes: [] }} />)
+    expect(screen.getByText("Emergency approvals").nextElementSibling?.textContent).toBe("Target: 1h")
+  })
+})
