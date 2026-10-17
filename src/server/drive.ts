@@ -15,7 +15,11 @@ export function changeFolderName(reference: number, title: string): string {
   return `CHG-${padded} — ${sanitizeSegment(title)}`
 }
 
+// One client per process, so its cached access token is reused across calls.
+let client: drive_v3.Drive | undefined
+
 function getDrive(): drive_v3.Drive {
+  if (client) return client
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set")
   const credentials = JSON.parse(raw)
@@ -23,7 +27,8 @@ function getDrive(): drive_v3.Drive {
     credentials,
     scopes: ["https://www.googleapis.com/auth/drive"],
   })
-  return driveApi({ version: "v3", auth })
+  client = driveApi({ version: "v3", auth })
+  return client
 }
 
 function driveId(): string {
