@@ -163,7 +163,9 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
     discard: change.status === "draft" && (caps.isRequester || caps.isAdmin),
   }
-  const hasActions = Object.values(a).some(Boolean)
+  // The PIR panel (the form, or the note that someone independent must write it) is an action too.
+  const pirPanel = change.status === "implemented" && (caps.canApprove || caps.isAdmin || caps.isImplementer) && !change.hasPir
+  const hasActions = Object.values(a).some(Boolean) || pirPanel
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -616,7 +618,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
               </Button>
             )}
 
-            {change.status === "implemented" && (caps.canApprove || caps.isAdmin || caps.isImplementer) && !change.hasPir && (
+            {pirPanel && (
               (caps.isRequester || caps.isImplementer) && needsIndependentPir(change) ? (
                 <p className="text-sm text-muted-foreground">{t(language, "pir.needsIndependent")}</p>
               ) : (
