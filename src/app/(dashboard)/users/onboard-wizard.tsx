@@ -94,8 +94,8 @@ export default function OnboardWizard({ language, opcos, onClose, onCreated }: O
         onCreated()
       } catch (err) {
         toast({
-          title: "Failed to create user",
-          description: err instanceof Error ? err.message : "Unknown error",
+          title: t(language, "users.toast.createFailed"),
+          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
           variant: "error",
         })
       }
@@ -160,7 +160,7 @@ export default function OnboardWizard({ language, opcos, onClose, onCreated }: O
                   >
                     {roles.map((r) => (
                       <option key={r} value={r}>
-                        {r}
+                        {t(language, `roles.${r}`)}
                       </option>
                     ))}
                   </select>

@@ -20,7 +20,7 @@ export type CalChipData = {
   blackoutLabels: string[]; canReschedule: boolean
 }
 export type BlackoutScope = { value: string; label: string }
-export type BlackoutRow = { id: string; label: string; scopeName: string; startMs: number; endMs: number }
+export type BlackoutRow = { id: string; label: string; scopeName: string; opcoSlug: string | null; startMs: number; endMs: number }
 
 const SEVERITY_RING: Record<string, string> = {
   low: "ring-emerald-400", medium: "ring-amber-400", high: "ring-orange-500", emergency: "ring-rose-500",
@@ -88,7 +88,7 @@ export default function CalendarClient({
         toast({ title: t(language, "calendar.blackout.created"), variant: "success" })
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : t(language, "common.unknownError"), variant: "error" })
       }
     })
   }
@@ -100,7 +100,7 @@ export default function CalendarClient({
         toast({ title: t(language, "calendar.blackout.removed"), variant: "success" })
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : t(language, "common.unknownError"), variant: "error" })
       }
     })
   }
@@ -145,7 +145,7 @@ export default function CalendarClient({
       } catch (err) {
         toast({
           title: t(language, "calendar.reschedule.failed"),
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
           variant: "error",
         })
       }
@@ -179,7 +179,7 @@ export default function CalendarClient({
       <Card className="hidden border-border/80 bg-card/95 sm:block">
         <CardContent className="p-3">
           <div className="grid grid-cols-7 gap-px text-xs font-medium text-muted-foreground">
-            {WEEKDAYS.map((w) => (<div key={w} className="px-2 py-1">{w}</div>))}
+            {WEEKDAYS.map((w) => (<div key={w} className="px-2 py-1">{t(language, `calendar.weekday.${w}`)}</div>))}
           </div>
           <div className={`grid grid-cols-7 gap-px ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
             {cells.map((cell) => {
@@ -281,7 +281,7 @@ export default function CalendarClient({
                     onChange={(e) => setBoScope(e.target.value)}
                     className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                   >
-                    {blackoutScopes.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+                    {blackoutScopes.map((s) => (<option key={s.value} value={s.value}>{s.value ? s.label : t(language, "calendar.blackout.scopeAll")}</option>))}
                   </select>
                 </label>
               )}
@@ -311,16 +311,17 @@ export default function CalendarClient({
                   <div key={b.id} className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2 text-sm">
                     <span className="min-w-0 truncate">
                       <span className="font-medium">{b.label}</span>
-                      <span className="text-muted-foreground"> · {b.scopeName} · {hydrated && `${formatDayLabel(localDayKey(b.startMs), language)} → ${formatDayLabel(localDayKey(b.endMs), language)}`}</span>
+                      <span className="text-muted-foreground"> · {b.opcoSlug ? b.scopeName : t(language, "calendar.blackout.scopeGroup")} · {hydrated && `${formatDayLabel(localDayKey(b.startMs), language)} → ${formatDayLabel(localDayKey(b.endMs), language)}`}</span>
                     </span>
-                    <button
+                    {/* The scopes the viewer may set are the ones they may remove ("" is group-wide). */}
+                    {blackoutScopes.some((s) => s.value === (b.opcoSlug ?? "")) && <button
                       type="button"
                       onClick={() => removeBlackout(b.id)}
                       disabled={isPending}
                       className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
                     >
                       {t(language, "calendar.blackout.remove")}
-                    </button>
+                    </button>}
                   </div>
                 ))
               )}

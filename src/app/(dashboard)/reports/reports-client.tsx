@@ -34,10 +34,10 @@ const reportCards = [
 ]
 
 const slaTargets = [
-  { label: "Low risk approvals", targetHours: 48 },
-  { label: "Medium risk approvals", targetHours: 24 },
-  { label: "High risk approvals", targetHours: 4 },
-  { label: "Change closure", targetHours: 72 },
+  { labelKey: "reports.sla.lowRisk", targetHours: 48 },
+  { labelKey: "reports.sla.mediumRisk", targetHours: 24 },
+  { labelKey: "reports.sla.highRisk", targetHours: 4 },
+  { labelKey: "reports.sla.closure", targetHours: 72 },
 ]
 
 interface ReportsClientProps {
@@ -135,9 +135,9 @@ export default function ReportsClient({ data }: ReportsClientProps) {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           {slaTargets.map((sla) => (
-            <div key={sla.label} className="rounded-xl border border-border/70 bg-muted/60 px-4 py-3">
-              <div className="text-sm font-medium text-foreground">{sla.label}</div>
-              <div className="text-xs text-muted-foreground">Target: {sla.targetHours}h</div>
+            <div key={sla.labelKey} className="rounded-xl border border-border/70 bg-muted/60 px-4 py-3">
+              <div className="text-sm font-medium text-foreground">{t(language, sla.labelKey)}</div>
+              <div className="text-xs text-muted-foreground">{t(language, "reports.sla.target")}: {sla.targetHours}h</div>
             </div>
           ))}
         </CardContent>

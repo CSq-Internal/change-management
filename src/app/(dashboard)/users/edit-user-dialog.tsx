@@ -69,8 +69,8 @@ export default function EditUserDialog({ user, language, opcos, onClose, onSaved
         onSaved()
       } catch (err) {
         toast({
-          title: "Failed",
-          description: err instanceof Error ? err.message : "Unknown error",
+          title: t(language, "common.failed"),
+          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
           variant: "error",
         })
       }
@@ -110,7 +110,7 @@ export default function EditUserDialog({ user, language, opcos, onClose, onSaved
               >
                 {roles.map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {t(language, `roles.${r}`)}
                   </option>
                 ))}
               </select>

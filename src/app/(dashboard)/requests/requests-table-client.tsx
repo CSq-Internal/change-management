@@ -22,19 +22,24 @@ export type RequestRow = {
 
 const STATUSES = ["draft", "pending", "approved", "implemented", "verified", "rejected", "closed"]
 const RISKS = ["low", "medium", "high", "emergency"]
+// Rows drawn at first; the rest wait for "Show all", so a long list stays quick to render.
+const PAGE = 100
 
 export default function RequestsTableClient({
-  rows, showRequester, initialStatus = "",
+  rows, showRequester, initialStatus = "", olderHidden = false,
 }: {
   rows: RequestRow[]
   showRequester: boolean
   initialStatus?: string
+  /** Finished requests older than 90 days were left out; offer to load them. */
+  olderHidden?: boolean
 }) {
   const { language } = useStore()
   const [status, setStatus] = useState(initialStatus)
   const [risk, setRisk] = useState("")
   const [infra, setInfra] = useState("")
   const [opco, setOpco] = useState("")
+  const [showAll, setShowAll] = useState(false)
 
   const infraOptions = useMemo(() => [...new Set(rows.map((r) => r.infrastructureType))].sort(), [rows])
   const opcoOptions = useMemo(() => [...new Set(rows.map((r) => r.opcoName))].sort(), [rows])
@@ -110,7 +115,7 @@ export default function RequestsTableClient({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {(showAll ? filtered : filtered.slice(0, PAGE)).map((r) => (
               <tr key={r.id} className="border-t border-border/50 hover:bg-muted/40">
                 <td className="px-3 py-2">
                   <Link href={`/changes/${r.id}`} className="text-primary hover:underline">{r.title}</Link>
@@ -127,6 +132,16 @@ export default function RequestsTableClient({
         </table>
         {filtered.length === 0 && (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t(language, "requests.none")}</p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        {!showAll && filtered.length > PAGE && (
+          <Button variant="outline" onClick={() => setShowAll(true)}>
+            {t(language, "requests.showAll")} ({filtered.length})
+          </Button>
+        )}
+        {olderHidden && (
+          <Link href="/requests?all=1" className="text-primary hover:underline">{t(language, "requests.showOlder")}</Link>
         )}
       </div>
     </div>

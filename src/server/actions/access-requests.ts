@@ -3,8 +3,9 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { canAssignRole, manageableOpCoSlugs } from "@/lib/permissions"
+import { canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
+import { decidableAccessRequests } from "@/server/access-queue"
 import { notifyUsers } from "@/server/notify"
 import { sendAccessRequestEmail } from "@/server/email"
 import { assignToOrganization } from "@/server/keycloak"
@@ -200,14 +201,8 @@ export async function listAccessRequests() {
   const session = await getAppSession()
   const db = getPrisma()
 
-  const scope = manageableOpCoSlugs(session.organizations, session.realmRoles)
   const rows = await db.accessRequest.findMany({
-    where: {
-      status: "pending",
-      user: { isActive: true },
-      // Only group admins can grant admin (canAssignRole), so OpCo admins never see those.
-      ...(scope === "all" ? {} : { opco: { slug: { in: scope } }, role: { not: "admin" as const } }),
-    },
+    where: decidableAccessRequests(session),
     orderBy: { createdAt: "asc" },
     select: {
       id: true,

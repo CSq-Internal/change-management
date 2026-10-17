@@ -81,11 +81,13 @@ export default async function CalendarPage({
     ...manageableOpcos.map((o) => ({ value: o.slug, label: o.name })),
   ]
   const opcoNameById = new Map(opcos.map((o) => [o.id, o.name]))
+  const opcoSlugById = new Map(opcos.map((o) => [o.id, o.slug]))
   const blackouts = blackoutRows
     .map((b) => ({
       id: b.id,
       label: b.label,
       scopeName: b.opcoId ? (opcoNameById.get(b.opcoId) ?? "OpCo") : "Group",
+      opcoSlug: b.opcoId ? (opcoSlugById.get(b.opcoId) ?? null) : null,
       startMs: b.startsAt.getTime(),
       endMs: b.endsAt.getTime(),
     }))

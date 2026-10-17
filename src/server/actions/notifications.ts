@@ -4,7 +4,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { listApprovableChanges } from "@/server/approval-authority"
 import { coerceLocale, type Language } from "@/lib/i18n"
-import { manageableOpCoSlugs } from "@/lib/permissions"
+import { decidableAccessRequests } from "@/server/access-queue"
 
 async function meId(): Promise<string> {
   const session = await getAppSession()
@@ -49,17 +49,13 @@ export async function getNavCounts() {
   const db = getPrisma()
   const u = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
   if (!u) return { pendingApprovals: 0, myRequests: 0, unreadNotifications: 0, pendingAccessRequests: 0 }
-  const scope = manageableOpCoSlugs(session.organizations, session.realmRoles)
   const [approvable, myRequests, unreadNotifications, pendingAccessRequests] = await Promise.all([
     listApprovableChanges({ userId: u.id, realmRoles: session.realmRoles }),
     // Only requests that need the requester's action: drafts to finish/submit and
     // rejected ones to rework.
     db.changeRequest.count({ where: { requesterId: u.id, status: { in: ["draft", "rejected"] } } }),
     db.notification.count({ where: { userId: u.id, readAt: null } }),
-    // Pending access requests the caller can act on — scoped exactly like listAccessRequests.
-    db.accessRequest.count({
-      where: { status: "pending", ...(scope === "all" ? {} : { opco: { slug: { in: scope } } }) },
-    }),
+    db.accessRequest.count({ where: decidableAccessRequests(session) }),
   ])
   return { pendingApprovals: approvable.length, myRequests, unreadNotifications, pendingAccessRequests }
 }
