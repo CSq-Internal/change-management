@@ -84,8 +84,6 @@ export async function notifyEvent(input: {
   change: { id: string; title: string; opcoId: string }
   context?: NotifyContext
   emailDetail?: EmailDetail
-  /** The caller already wrote the dispatch rows (the reminder sweep claims before sending). */
-  dispatchClaimed?: boolean
 }): Promise<void> {
   const { type, recipients, change } = input
   const ctx = input.context ?? {}
@@ -111,11 +109,6 @@ export async function notifyEvent(input: {
     }
     if (isChannelEnabled(prefs, r.userId, type, "email")) {
       tasks.push(emailFor(type, r, change, ctx, locale, input.emailDetail))
-    }
-    // Ledger row per recipient regardless of channel — it records that this person was
-    // notified about this event, which is what the reminder sweep needs to know.
-    if (!input.dispatchClaimed) {
-      tasks.push(db.notificationDispatch.create({ data: { userId: r.userId, changeId: change.id, type } }))
     }
   }
 
@@ -182,7 +175,7 @@ function detailRows(
 export async function notifyChange(
   type: NotifyEventType,
   changeId: string,
-  ctx: NotifyContext & { actorId?: string; recipients?: NotifyRecipient[]; dispatchClaimed?: boolean } = {},
+  ctx: NotifyContext & { actorId?: string; recipients?: NotifyRecipient[] } = {},
 ): Promise<void> {
   try {
     const db = getPrisma()
@@ -196,7 +189,7 @@ export async function notifyChange(
     })
     if (!change) return
 
-    const { actorId, recipients: explicit, dispatchClaimed, ...rest } = ctx
+    const { actorId, recipients: explicit, ...rest } = ctx
     const recipients = explicit ?? await resolveAudience(type, {
       id: change.id, opcoId: change.opcoId,
       infrastructureType: change.infrastructureType, requesterId: change.requesterId,
@@ -213,7 +206,6 @@ export async function notifyChange(
       recipients,
       change: { id: change.id, title: change.title, opcoId: change.opcoId },
       context: rest,
-      dispatchClaimed,
       emailDetail: {
         subject: `${title}: ${change.title}`,
         headline: title,

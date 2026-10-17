@@ -71,7 +71,7 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
     })
     for (const r of recipients) {
       if (!(await claim(db, r.userId, c.id, "approver_nudge", NUDGE_INTERVAL_MS))) continue
-      await notifyChange("approver_nudge", c.id, { recipients: [r], dispatchClaimed: true })
+      await notifyChange("approver_nudge", c.id, { recipients: [r] })
       nudged++
     }
   }
@@ -88,7 +88,6 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
       if (!(await claim(db, r.userId, c.id, "retro_overdue", RETRO_INTERVAL_MS))) continue
       await notifyChange("retro_overdue", c.id, {
         recipients: [r],
-        dispatchClaimed: true,
         dueAt: utcStamp(c.retroApprovalDueAt!),
       })
       retroOverdue++

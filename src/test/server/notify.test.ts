@@ -76,8 +76,8 @@ describe('notifyEvent', () => {
     warn.mockRestore()
   })
 
-  it('writes no ledger row when the caller already claimed it (reminder sweep)', async () => {
-    await notifyEvent({ type: 'emergency_submitted', recipients: [ada], change, dispatchClaimed: true })
+  it('writes no dispatch ledger row (only the reminder sweep reads it, and it writes its own)', async () => {
+    await notifyEvent({ type: 'emergency_submitted', recipients: [ada], change })
     expect(mockDb.notificationDispatch.create).not.toHaveBeenCalled()
     expect(mockDb.notification.create).toHaveBeenCalled()
   })
