@@ -236,12 +236,15 @@ export async function submitChange(id: string) {
   // The SLA clock starts here, and restarts on each resubmission, so a draft's age and an
   // earlier round's escalations don't count against this round.
   const slaDeadline = new Date(Date.now() + SLA_HOURS[change.riskLevel] * 3_600_000)
-  const updated = await db.changeRequest.update({
-    where: { id },
-    data: { status: "pending", slaDeadline, escalationLevel: 0, lastEscalatedAt: null },
-  })
-  await db.auditLog.create({
-    data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({
+      where: { id },
+      data: { status: "pending", slaDeadline, escalationLevel: 0, lastEscalatedAt: null },
+    })
+    await tx.auditLog.create({
+      data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
+    })
+    return updated
   })
 
   // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates,
@@ -297,9 +300,12 @@ export async function discardChange(id: string) {
     throw new Error("Forbidden: only the requester or an admin can discard this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be discarded")
 
-  const updated = await db.changeRequest.update({ where: { id }, data: { status: "cancelled" } })
-  await db.auditLog.create({
-    data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({ where: { id }, data: { status: "cancelled" } })
+    await tx.auditLog.create({
+      data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
+    })
+    return updated
   })
 
   await notifyChange("change_cancelled", id, { actorId: user.id }).catch(() => {})
@@ -407,9 +413,12 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
     }
   }
 
-  const updated = await db.changeRequest.update({ where: { id: changeId }, data })
-  await db.auditLog.create({
-    data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({ where: { id: changeId }, data })
+    await tx.auditLog.create({
+      data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
+    })
+    return updated
   })
 
   const lifecycleEvent = LIFECYCLE_EVENT[toStatus]
@@ -455,15 +464,18 @@ export async function rescheduleChange(id: string, newStartIso: string, newEndIs
   const oldWindow = change.plannedStart && change.plannedEnd
     ? `${change.plannedStart.toISOString()} – ${change.plannedEnd.toISOString()}`
     : "unscheduled"
-  const updated = await db.changeRequest.update({
-    where: { id },
-    data: { plannedStart: newStart, plannedEnd: newEnd },
-  })
-  await db.auditLog.create({
-    data: {
-      changeId: id, actorId: user.id, action: "rescheduled",
-      note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
-    },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({
+      where: { id },
+      data: { plannedStart: newStart, plannedEnd: newEnd },
+    })
+    await tx.auditLog.create({
+      data: {
+        changeId: id, actorId: user.id, action: "rescheduled",
+        note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
+      },
+    })
+    return updated
   })
 
   await notifyChange("change_rescheduled", id, {

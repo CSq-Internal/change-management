@@ -516,6 +516,16 @@ describe('submitChange', () => {
     })
   })
 
+  it('writes the status and its audit row in one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    await submitChange('cr-1')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.changeRequest.update).toHaveBeenCalled()
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'submitted' }) })
+    )
+  })
+
   it('throws "Blocked by blackout" when submitting a non-emergency draft during an active blackout', async () => {
     mockDb.blackoutPeriod.findMany.mockResolvedValueOnce([
       { id: 'bp-1', label: 'Year-end freeze', opcoId: null },
@@ -657,6 +667,27 @@ describe('change writes keep to the form fields', () => {
       expect(data).not.toHaveProperty(key)
     }
     expect(data).toMatchObject({ status: 'draft', opcoId: 'opco-1', requesterId: 'user-1', title: 'Router update' })
+  })
+})
+
+describe('status changes are written with their audit row', () => {
+  it('discardChange uses one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'cancelled' })
+    await discardChange('cr-1')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('updateChangeStatus uses one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+    await updateChangeStatus('cr-1', 'implemented')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'status_changed', toStatus: 'implemented' }) })
+    )
   })
 })
 
