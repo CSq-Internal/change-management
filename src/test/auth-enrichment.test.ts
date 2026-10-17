@@ -20,8 +20,10 @@ const account = { provider: 'keycloak', type: 'oidc', providerAccountId: 'x', ac
 // The reconcile block makes two findUnique calls: first by keycloakId (the incoming sub),
 // then — only if that misses — by email. Route the mock by which key the query uses.
 function mockUsers({ bySub = null, byEmail = null }: { bySub?: unknown; byEmail?: unknown }) {
+  // Rows default to active, as the column does; a test passes isActive: false to override.
+  const active = (row: unknown) => (row ? { isActive: true, ...(row as object) } : null)
   userFindUnique.mockImplementation(async ({ where }: { where: { keycloakId?: string; email?: string } }) =>
-    where.keycloakId ? bySub : byEmail
+    where.keycloakId ? active(bySub) : active(byEmail)
   )
 }
 
@@ -291,6 +293,40 @@ describe('auth enrichment', () => {
     expect(token.orphaned).toBe(true)
     expect(token.organizations).toEqual([])
     expect(findMany).not.toHaveBeenCalled() // no point loading orgs for a gone user
+  })
+
+  it('flags a deactivated user orphaned on refresh and drops their roles', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1', isActive: false } })
+    findMany.mockResolvedValue([{ role: 'admin', opco: { id: 'o', name: 'Ghana', slug: 'ghana' } }])
+
+    const token = await enrichedJwt({
+      token: {
+        keycloakId: 'kc-sub-1', realmRoles: ['group_admin'], orgsRefreshedAt: 1,
+        organizations: [{ id: 'o', name: 'Ghana', alias: 'ghana', roles: ['admin'] }],
+      },
+      user: {},
+      account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+
+    expect(token.orphaned).toBe(true)
+    expect(token.organizations).toEqual([])
+    expect(token.realmRoles).toEqual([])
+  })
+
+  it('flags a deactivated user orphaned at sign-in, whatever roles Keycloak sends', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1', isActive: false } })
+    findMany.mockResolvedValue([{ role: 'admin', opco: { id: 'o', name: 'Ghana', slug: 'ghana' } }])
+
+    const token = await enrichedJwt({
+      token: {},
+      user: {},
+      account,
+      profile: { sub: 'kc-sub-1', email: 'gone@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: ['group_admin'] } } },
+    })
+
+    expect(token.orphaned).toBe(true)
+    expect(token.organizations).toEqual([])
+    expect(token.realmRoles).toEqual([])
   })
 
   it('clears the orphaned flag when the stale sub still maps to a DB user', async () => {
