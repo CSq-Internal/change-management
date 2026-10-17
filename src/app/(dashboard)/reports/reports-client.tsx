@@ -20,6 +20,8 @@ export type ReportsData = {
     riskLevel: string
     createdAt: Date
     updatedAt: Date
+    /** Submission to approval in the round that was approved; null if never approved. */
+    approvalMs: number | null
   }[]
   slaCompliance: SlaReportCell[]
 }
@@ -50,7 +52,9 @@ export default function ReportsClient({ data }: ReportsClientProps) {
   const approved = changes.filter((c) =>
     ["approved", "implemented", "verified", "closed"].includes(c.status)
   )
-  const verified = changes.filter((c) => c.status === "verified")
+  // Verified changes move on to closed, so both count as successful.
+  const succeeded = changes.filter((c) => c.status === "verified" || c.status === "closed")
+  const timedApprovals = changes.flatMap((c) => (c.approvalMs == null ? [] : [c.approvalMs]))
 
   const avgLeadTimeHours =
     closed.length === 0
@@ -62,16 +66,12 @@ export default function ReportsClient({ data }: ReportsClientProps) {
         ) / closed.length
 
   const approvalTimeHours =
-    approved.length === 0
+    timedApprovals.length === 0
       ? 0
-      : approved.reduce(
-          (sum, c) =>
-            sum + (new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime()) / 36e5,
-          0
-        ) / approved.length
+      : timedApprovals.reduce((sum, ms) => sum + ms / 36e5, 0) / timedApprovals.length
 
   const successRate =
-    approved.length === 0 ? 0 : Math.round((verified.length / approved.length) * 100)
+    approved.length === 0 ? 0 : Math.round((succeeded.length / approved.length) * 100)
 
   const kpis = [
     { labelKey: "reports.kpi.leadTime", value: `${avgLeadTimeHours.toFixed(1)}h` },
