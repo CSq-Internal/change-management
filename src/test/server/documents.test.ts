@@ -28,6 +28,8 @@ const mockDb = {
   auditLog: { create: vi.fn().mockResolvedValue({}) },
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
+const canUserApproveChange = vi.fn().mockResolvedValue(false)
+vi.mock("@/server/approval-authority", () => ({ canUserApproveChange: (a: unknown) => canUserApproveChange(a) }))
 
 vi.mock("@/server/drive", () => ({
   ensureChangeFolder: vi.fn().mockResolvedValue("folder-1"),
@@ -116,6 +118,13 @@ describe("getDocumentForDownload", () => {
     await expect(
       getDocumentForDownload({ changeId: "cr-1", attachmentId: "att-1" })
     ).rejects.toThrow(/Forbidden|not found/i)
+  })
+
+  it("lets a routed approver outside the OpCo (group CAB) download, as getChange allows", async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
+    canUserApproveChange.mockResolvedValueOnce(true)
+    const result = await getDocumentForDownload({ changeId: "cr-1", attachmentId: "att-1" })
+    expect(result.filename).toBe("impact.pdf")
   })
 })
 

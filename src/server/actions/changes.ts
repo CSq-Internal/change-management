@@ -6,7 +6,8 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { notifyEvent, notifyChange } from "@/server/notify"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
-import { getRoutedApprovers, getNamedApprovers, canUserApproveChange, isEligibleApprover } from "@/server/approval-authority"
+import { getRoutedApprovers, getNamedApprovers, isEligibleApprover } from "@/server/approval-authority"
+import { canViewChange } from "@/server/change-access"
 import { SLA_HOURS } from "@/lib/sla"
 import type { NotifyEventType } from "@/lib/notifications"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
@@ -81,20 +82,7 @@ export async function getChange(id: string) {
     },
   })
   if (!change) return null
-  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
-    const user = await db.user.findUnique({
-      where: { keycloakId: session.keycloakId },
-      select: { id: true },
-    })
-    const canApproveThis = user
-      ? await canUserApproveChange({
-          userId: user.id, realmRoles: session.realmRoles,
-          change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
-        })
-      : false
-    if (!canApproveThis) return null
-  }
-  return change
+  return (await canViewChange(session, change)) ? change : null
 }
 
 export async function listChanges(opcoSlug: string) {

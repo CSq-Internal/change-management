@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockAuth = vi.fn()
 vi.mock('@/auth', () => ({ auth: () => mockAuth() }))
 
-const mockDb = { changeRequest: { findUnique: vi.fn() } }
+const mockDb = { changeRequest: { findUnique: vi.fn() }, user: { findUnique: vi.fn() } }
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
+const canUserApproveChange = vi.fn()
+vi.mock('@/server/approval-authority', () => ({ canUserApproveChange: (a: unknown) => canUserApproveChange(a) }))
 
 vi.mock('@react-pdf/renderer', () => ({
   renderToBuffer: vi.fn().mockResolvedValue(Buffer.from('%PDF-1.7 fake')),
@@ -21,6 +23,8 @@ const ghanaChange = { id: 'c1', reference: 42, opco: { slug: 'ghana' } }
 beforeEach(() => {
   vi.clearAllMocks()
   mockDb.changeRequest.findUnique.mockResolvedValue(ghanaChange)
+  mockDb.user.findUnique.mockResolvedValue({ id: 'u-kenya' })
+  canUserApproveChange.mockResolvedValue(false)
 })
 
 describe('GET /api/changes/[id]/evidence.pdf', () => {
@@ -41,6 +45,13 @@ describe('GET /api/changes/[id]/evidence.pdf', () => {
     mockAuth.mockResolvedValue({ user: { realmRoles: [], organizations: [{ alias: 'kenya', roles: ['approver'] }] } })
     const res = await GET({} as never, ctx)
     expect(res.status).toBe(403)
+  })
+
+  it('streams a PDF for a routed approver outside the OpCo (group CAB), as getChange allows', async () => {
+    mockAuth.mockResolvedValue({ user: { keycloakId: 'kc-k', realmRoles: [], organizations: [{ alias: 'kenya', roles: ['approver'] }] } })
+    canUserApproveChange.mockResolvedValue(true)
+    const res = await GET({} as never, ctx)
+    expect(res.status).toBe(200)
   })
 
   it('streams a PDF for an OpCo member', async () => {
