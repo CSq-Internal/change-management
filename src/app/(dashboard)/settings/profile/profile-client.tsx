@@ -30,7 +30,7 @@ export default function ProfileClient({
   const currentUser = session?.user ?? null
 
   const opcoSummary = (currentUser?.organizations ?? [])
-    .map((o) => (o.roles.length ? `${o.name} · ${o.roles.join(", ")}` : o.name))
+    .map((o) => (o.roles.length ? `${o.name} · ${o.roles.map((r) => t(language, `roles.${r}`)).join(", ")}` : o.name))
     .join("\n")
 
   return (
@@ -56,7 +56,7 @@ export default function ProfileClient({
         </CardContent>
       </Card>
 
-      {(currentUser?.organizations?.length ?? 0) > 0 && <RoleRequestCard opcos={opcos} requests={requests} />}
+      {(currentUser?.organizations?.length ?? 0) > 0 && <RoleRequestCard opcos={opcos} requests={requests} defaultOpco={currentUser?.organizations[0]?.alias} />}
 
       <Card>
         <CardHeader>

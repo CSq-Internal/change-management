@@ -24,6 +24,12 @@ describe("RoleRequestCard", () => {
     expect(refresh).toHaveBeenCalled()
   })
 
+  it("starts on the user's own OpCo, not the first one alphabetically", () => {
+    const all = [{ name: "CSquared DRC", slug: "drc" }, { name: "CSquared Ghana", slug: "ghana" }]
+    render(<RoleRequestCard opcos={all} requests={[]} defaultOpco="ghana" />)
+    expect(screen.getByLabelText("OpCo")).toHaveValue("ghana")
+  })
+
   it("keeps the button disabled until a reason is typed", () => {
     render(<RoleRequestCard opcos={opcos} requests={[]} />)
     expect(screen.getByRole("button", { name: "Request role" })).toBeDisabled()
