@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { viewerTier, requestScopedSlugs } from "@/lib/permissions"
-import { requestScope } from "@/server/request-scope"
+import { requestScope, openOrRecent } from "@/server/request-scope"
 import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
 import { durLabel, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
@@ -45,7 +45,8 @@ export default async function Home() {
 
   const [rows, blackoutRows, auditRows] = await Promise.all([
     db.changeRequest.findMany({
-      where: opcoFilter,
+      // Operational view: open changes plus the last 90 days of finished ones.
+      where: { AND: [opcoFilter, openOrRecent(now)] },
       select: {
         id: true, title: true, status: true, riskLevel: true, isEmergency: true,
         slaDeadline: true, plannedStart: true, infrastructureType: true, createdAt: true, expedited: true, retroApprovalDueAt: true, retroApprovedAt: true,

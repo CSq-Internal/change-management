@@ -20,3 +20,19 @@ export function requestScope(user: {
   if (tier === "opco") return { OR: [{ opco: { slug: { in: requestScopedSlugs(user.organizations) } } }, own] }
   return own
 }
+
+const RECENT_DAYS = 90
+
+/**
+ * Open changes, plus finished ones (closed, rejected, cancelled) touched in the last 90 days.
+ * shortcut: lists stop growing with history, but open changes still load in full; move to
+ * server-side paging if open changes alone reach the thousands.
+ */
+export function openOrRecent(nowMs: number): Prisma.ChangeRequestWhereInput {
+  return {
+    OR: [
+      { status: { notIn: ["closed", "rejected", "cancelled"] } },
+      { updatedAt: { gte: new Date(nowMs - RECENT_DAYS * 24 * 60 * 60 * 1000) } },
+    ],
+  }
+}

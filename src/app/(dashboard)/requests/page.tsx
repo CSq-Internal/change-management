@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { viewerTier } from "@/lib/permissions"
-import { requestScope } from "@/server/request-scope"
+import { requestScope, openOrRecent } from "@/server/request-scope"
 import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
 import { votesSince } from "@/lib/approval-cycle"
 import RequestsTableClient, { type RequestRow } from "./requests-table-client"
@@ -10,14 +10,18 @@ import RequestsTableClient, { type RequestRow } from "./requests-table-client"
 export default async function RequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>
+  searchParams: Promise<{ status?: string; all?: string }>
 }) {
   const session = await auth()
   if (!session) redirect("/login")
   const db = getPrisma()
 
   const tier = viewerTier(session.user.organizations, session.user.realmRoles)
-  const where = withActiveOpCo(requestScope(session.user), await activeOpCoSlug(session.user))
+  const { status, all } = await searchParams
+  const scoped = withActiveOpCo(requestScope(session.user), await activeOpCoSlug(session.user))
+  // Finished changes older than 90 days load only on request (?all=1).
+  // eslint-disable-next-line react-hooks/purity -- async server component, not a hook; Date.now() is safe here
+  const where = all ? scoped : { AND: [scoped, openOrRecent(Date.now())] }
 
   const changes = await db.changeRequest.findMany({
     where,
@@ -43,10 +47,9 @@ export default async function RequestsPage({
     requesterName: c.requester?.name ?? c.requester?.email ?? "—",
   }))
 
-  const { status } = await searchParams
   // The /changes redirect passes a comma list; the table filters by a single value,
   // so use the first as the initial selection (sufficient for the retired-list case).
   const initialStatus = status?.split(",")[0] ?? ""
 
-  return <RequestsTableClient rows={rows} showRequester={tier !== "member"} initialStatus={initialStatus} />
+  return <RequestsTableClient rows={rows} showRequester={tier !== "member"} initialStatus={initialStatus} olderHidden={!all} />
 }
