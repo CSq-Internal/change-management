@@ -81,3 +81,19 @@ export function computeConflicts(changes: CalChange[], blackouts: CalBlackout[])
 
   return result
 }
+
+/** "YYYY-MM-DD" of an instant in the running zone: the viewer's, when called in the browser. */
+export function localDayKey(ms: number): string {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+/**
+ * The month cell a change's chip goes on: its local start day, or the month's first day
+ * when it began earlier and runs into this month. Null when it starts after the month.
+ */
+export function chipDay(startMs: number, firstKey: string, lastKey: string): string | null {
+  const day = localDayKey(startMs)
+  if (day > lastKey) return null
+  return day < firstKey ? firstKey : day
+}

@@ -9,12 +9,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
 import { rescheduleChange } from "@/server/actions/changes"
 import { createBlackoutPeriod, deleteBlackoutPeriod } from "@/server/actions/blackout"
-import type { RiskLevel } from "@/lib/calendar"
+import { chipDay, localDayKey, type RiskLevel } from "@/lib/calendar"
+import { useClientValue } from "@/lib/use-hydrated"
 
-export type CalDay = { key: string; inMonth: boolean; dayNum: number | null; isToday: boolean }
+export type CalDay = { key: string; inMonth: boolean; dayNum: number | null }
 export type CalChipData = {
   id: string; title: string; opcoName: string; riskLevel: string; status: string
-  startMs: number; endMs: number; timeLabel: string; day: string
+  startMs: number; endMs: number
   overlap: boolean; blackout: boolean; severity: RiskLevel | null
   blackoutLabels: string[]; canReschedule: boolean
 }
@@ -104,8 +105,22 @@ export default function CalendarClient({
     })
   }
 
-  const chipsByDay = new Map<string, CalChipData[]>()
-  for (const c of chips) {
+  // Days and times are the viewer's, so chips are placed in the browser, after hydration.
+  const todayKey = useClientValue(() => localDayKey(Date.now()), null)
+  const hydrated = todayKey !== null
+  const monthDays = cells.filter((c) => c.inMonth)
+  const firstKey = monthDays[0]?.key ?? ""
+  const lastKey = monthDays.at(-1)?.key ?? ""
+  const placed = hydrated
+    ? chips.flatMap((c) => {
+        const day = chipDay(c.startMs, firstKey, lastKey)
+        const timeLabel = new Date(c.startMs).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+        return day ? [{ ...c, day, timeLabel }] : []
+      })
+    : []
+
+  const chipsByDay = new Map<string, typeof placed>()
+  for (const c of placed) {
     const arr = chipsByDay.get(c.day) ?? []
     arr.push(c)
     chipsByDay.set(c.day, arr)
@@ -114,7 +129,7 @@ export default function CalendarClient({
   const agenda = [...chipsByDay.entries()].sort(([a], [b]) => a.localeCompare(b))
 
   const onDrop = (dayKey: string) => {
-    const chip = chips.find((c) => c.id === dragId)
+    const chip = placed.find((c) => c.id === dragId)
     setDragId(null)
     if (!chip || chip.day === dayKey) return
     const [y, m, d] = dayKey.split("-").map(Number)
@@ -174,10 +189,10 @@ export default function CalendarClient({
                   key={cell.key}
                   onDragOver={(e) => { if (cell.inMonth) e.preventDefault() }}
                   onDrop={() => { if (cell.inMonth) onDrop(cell.key) }}
-                  className={`min-h-24 rounded-md border p-1 ${cell.inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30"} ${cell.isToday ? "ring-2 ring-primary/60" : ""}`}
+                  className={`min-h-24 rounded-md border p-1 ${cell.inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30"} ${cell.key === todayKey ? "ring-2 ring-primary/60" : ""}`}
                 >
                   {cell.dayNum != null && (
-                    <div className={`mb-1 text-xs ${cell.isToday ? "font-bold text-primary" : "text-muted-foreground"}`}>{cell.dayNum}</div>
+                    <div className={`mb-1 text-xs ${cell.key === todayKey ? "font-bold text-primary" : "text-muted-foreground"}`}>{cell.dayNum}</div>
                   )}
                   <div className="space-y-1">
                     {dayChips.map((chip) => (
@@ -296,7 +311,7 @@ export default function CalendarClient({
                   <div key={b.id} className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2 text-sm">
                     <span className="min-w-0 truncate">
                       <span className="font-medium">{b.label}</span>
-                      <span className="text-muted-foreground"> · {b.scopeName} · {formatDayLabel(new Date(b.startMs).toISOString().slice(0, 10), language)} → {formatDayLabel(new Date(b.endMs).toISOString().slice(0, 10), language)}</span>
+                      <span className="text-muted-foreground"> · {b.scopeName} · {hydrated && `${formatDayLabel(localDayKey(b.startMs), language)} → ${formatDayLabel(localDayKey(b.endMs), language)}`}</span>
                     </span>
                     <button
                       type="button"
