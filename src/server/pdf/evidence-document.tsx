@@ -2,6 +2,7 @@
 // Server-only @react-pdf document. Rendered to a buffer in the evidence.pdf route.
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { Prisma } from "@prisma/client"
+import { utcStamp } from "@/lib/dates"
 
 export type EvidenceChange = Prisma.ChangeRequestGetPayload<{
   include: {
@@ -35,7 +36,7 @@ const styles = StyleSheet.create({
 })
 
 function fmt(d: Date | null | undefined): string {
-  return d ? new Date(d).toLocaleString() : "—"
+  return d ? utcStamp(d) : "—"
 }
 
 function Field({ label, value }: { label: string; value: string }) {

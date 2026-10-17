@@ -6,6 +6,7 @@ import { getPrisma } from "@/server/db"
 import { notifyChange } from "@/server/notify"
 import { resolveAudience } from "@/server/audience"
 import { SLA_HOURS } from "@/lib/sla"
+import { utcStamp } from "@/lib/dates"
 import type { NotifyEventType } from "@/lib/notifications"
 import type { RiskLevel } from "@prisma/client"
 
@@ -88,7 +89,7 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
       await notifyChange("retro_overdue", c.id, {
         recipients: [r],
         dispatchClaimed: true,
-        dueAt: c.retroApprovalDueAt!.toISOString().slice(0, 16).replace("T", " "),
+        dueAt: utcStamp(c.retroApprovalDueAt!),
       })
       retroOverdue++
     }

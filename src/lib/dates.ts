@@ -36,3 +36,6 @@ export function toDateTimeLocal(value: string | Date | null | undefined): string
 /** A date input's "YYYY-MM-DD" as the first or last instant of that day in the viewer's zone. */
 export const dayStart = (ymd: string) => new Date(`${ymd}T00:00:00`)
 export const dayEnd = (ymd: string) => new Date(`${ymd}T23:59:59.999`)
+
+/** "YYYY-MM-DD HH:mm UTC" for server-rendered text (emails, Chat, PDF) read in many zones. */
+export const utcStamp = (d: Date | string) => `${new Date(d).toISOString().slice(0, 16).replace("T", " ")} UTC`

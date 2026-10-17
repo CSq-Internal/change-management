@@ -10,6 +10,7 @@ import {
 } from "@/server/email"
 import { resolveAudience } from "@/server/audience"
 import { coerceLocale, type Language } from "@/lib/i18n"
+import { utcStamp } from "@/lib/dates"
 
 type Db = ReturnType<typeof getPrisma>
 export type NotifyRecipient = { userId: string; email: string; name: string | null }
@@ -157,14 +158,13 @@ function detailRows(
   locale: Language,
 ): [string, string][] {
   const fr = locale === "fr"
-  const stamp = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ")
   const rows: [string, string][] = [
     [fr ? "Changement" : "Change", change.title],
     ["OpCo", change.opco.name],
     [fr ? "Risque" : "Risk", change.riskLevel],
   ]
   if (change.plannedStart && change.plannedEnd) {
-    rows.push([fr ? "Fenêtre" : "Window", `${stamp(change.plannedStart)} – ${stamp(change.plannedEnd)}`])
+    rows.push([fr ? "Fenêtre" : "Window", `${utcStamp(change.plannedStart)} – ${utcStamp(change.plannedEnd)}`])
   }
   return rows
 }
