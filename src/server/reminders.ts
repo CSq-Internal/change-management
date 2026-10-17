@@ -47,7 +47,11 @@ export async function runDueReminders(): Promise<{ nudged: number; retroOverdue:
     },
   })
   const expedited = await db.changeRequest.findMany({
-    where: { expedited: true, retroApprovedAt: null, retroApprovalDueAt: { not: null } },
+    // A retrospective rejection is final (only approval sets retroApprovedAt), so it ends the reminders too.
+    where: {
+      expedited: true, retroApprovedAt: null, retroApprovalDueAt: { not: null },
+      auditTrail: { none: { action: "retro_rejected" } },
+    },
     select: {
       id: true, opcoId: true, infrastructureType: true, requesterId: true, retroApprovalDueAt: true,
     },

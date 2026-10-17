@@ -11,6 +11,8 @@ const { notifyChange } = vi.hoisted(() => ({
 }))
 vi.mock('@/server/notify', () => ({ notifyChange }))
 let approverId = ''
+let requesterId = ''
+let opcoId = ''
 vi.mock('@/server/audience', () => ({
   resolveAudience: async () => [{ userId: approverId, email: 'b@csquared.com', name: 'B' }],
 }))
@@ -22,6 +24,8 @@ beforeAll(async () => {
   const db = getTestDb()
   const opco = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
   const requester = await db.user.create({ data: { keycloakId: 'kc-1', email: 'a@csquared.com' } })
+  requesterId = requester.id
+  opcoId = opco.id
   approverId = (await db.user.create({ data: { keycloakId: 'kc-2', email: 'b@csquared.com' } })).id
   await db.changeRequest.create({
     data: {
@@ -39,5 +43,21 @@ describe('runDueReminders', () => {
     const [a, b] = await Promise.all([runDueReminders(), runDueReminders()])
     expect(a.nudged + b.nudged).toBe(1)
     expect(notifyChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops reminding about a retrospective approval once it has been rejected', async () => {
+    const db = getTestDb()
+    const change = await db.changeRequest.create({
+      data: {
+        opcoId, requesterId, title: 'y', description: 'y', category: 'config', riskLevel: 'emergency',
+        contactEmail: 'a@csquared.com', infrastructureType: 'Wifi', status: 'implemented', expedited: true,
+        retroApprovalDueAt: new Date(Date.now() - 60 * 60 * 1000), // overdue: would remind
+      },
+    })
+    await db.auditLog.create({ data: { changeId: change.id, actorId: approverId, action: 'retro_rejected' } })
+    notifyChange.mockClear()
+    const out = await runDueReminders()
+    expect(out.retroOverdue).toBe(0)
+    expect(notifyChange).not.toHaveBeenCalled()
   })
 })
