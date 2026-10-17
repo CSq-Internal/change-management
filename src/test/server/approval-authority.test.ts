@@ -131,6 +131,18 @@ describe("canUserApproveChange", () => {
   })
 })
 
+describe("getRoutedApprovers — delegates", () => {
+  it("leaves out a delegate who has been deactivated", async () => {
+    mockDb.cABMembership.findMany.mockResolvedValue([{ userId: "cto", user: u("cto") }])
+    mockDb.approverDelegation.findMany.mockResolvedValue([
+      { toUser: { id: "gone", name: "Gone", email: "g@c.com", isActive: false } },
+      { toUser: { id: "deputy", name: "Deputy", email: "d@c.com", isActive: true } },
+    ])
+    const out = await getRoutedApprovers(wifiChange)
+    expect(out.map((x) => x.id).sort()).toEqual(["cto", "deputy"])
+  })
+})
+
 describe("listApprovableChanges", () => {
   it("group_admin sees all pending", async () => {
     mockDb.changeRequest.findMany.mockResolvedValue([{ id: "c1", infrastructureType: "Wifi", opcoId: "opco-1", approvals: [], auditTrail: [] }])

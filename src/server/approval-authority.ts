@@ -41,12 +41,16 @@ export async function getRoutedApprovers(change: ChangeForAuth): Promise<Approve
       fromUserId: { in: routedIds },
       validFrom: { lte: now }, validUntil: { gte: now },
     },
-    include: { toUser: { select: { id: true, name: true, email: true } } },
+    include: { toUser: { select: { id: true, name: true, email: true, isActive: true } } },
   })
+  // Deactivating a user leaves delegations to them in place; they must not count.
+  const delegates = delegations
+    .filter((d) => d.toUser.isActive)
+    .map((d) => ({ id: d.toUser.id, name: d.toUser.name, email: d.toUser.email }))
 
   const seen = new Set<string>()
   const out: ApproverUser[] = []
-  for (const u of [...routedUsers, ...delegations.map((d) => d.toUser)]) {
+  for (const u of [...routedUsers, ...delegates]) {
     if (!seen.has(u.id)) { seen.add(u.id); out.push(u) }
   }
   return out
