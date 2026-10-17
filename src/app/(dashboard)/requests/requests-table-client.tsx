@@ -8,6 +8,7 @@ import { t } from "@/lib/i18n"
 import { csvRow } from "@/lib/csv"
 import { Button } from "@/components/ui/button"
 import { StatusPill, RiskPill } from "@/components/change-badges"
+import { infraTypeOptions } from "@/lib/approver-routing"
 
 export type RequestRow = {
   id: string
@@ -41,7 +42,7 @@ export default function RequestsTableClient({
   const [opco, setOpco] = useState("")
   const [showAll, setShowAll] = useState(false)
 
-  const infraOptions = useMemo(() => [...new Set(rows.map((r) => r.infrastructureType))].sort(), [rows])
+  const infraOptions = useMemo(() => infraTypeOptions(rows.map((r) => r.infrastructureType)), [rows])
   const opcoOptions = useMemo(() => [...new Set(rows.map((r) => r.opcoName))].sort(), [rows])
 
   const filtered = useMemo(

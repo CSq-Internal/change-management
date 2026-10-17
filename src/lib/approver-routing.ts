@@ -17,6 +17,11 @@ export const INFRA_TYPES = [
   "Power",
 ] as const
 
+/** Filter options: every infra type, then any older stored value no longer on the list. */
+export function infraTypeOptions(present: string[]): string[] {
+  return [...new Set<string>([...INFRA_TYPES, ...present])]
+}
+
 export function isGroupLevelInfra(infraType: string): boolean {
   return (EQUIANO_INFRA_TYPES as readonly string[]).includes(infraType)
 }
