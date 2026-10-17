@@ -70,6 +70,11 @@ export async function submitApproval(
   if (change.requesterId === user.id) {
     throw new Error("Approvers cannot approve their own requests (SoD violation — ISO 27001 A.5.3)")
   }
+  // Expediting an emergency stands in for its approval; the retrospective vote is the check
+  // on whoever did it, so they cannot cast it themselves.
+  if (isRetrospective && change.implementedById === user.id) {
+    throw new Error("You implemented this change, so someone else must give the retrospective decision (SoD — ISO 27001 A.5.3)")
+  }
 
   // A CAB vote comes from the routed CAB (members, infra overrides, active delegates) or a
   // group admin. Nominated approvers outside it still vote, but cannot form quorum alone.
