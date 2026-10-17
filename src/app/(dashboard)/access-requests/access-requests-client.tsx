@@ -6,6 +6,7 @@ import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { approveAccessRequest, denyAccessRequest } from "@/server/actions/access-requests"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/toaster"
 
 export type QueueRow = {
   id: string
@@ -23,19 +24,21 @@ export default function AccessRequestsClient({ requests }: { requests: QueueRow[
   const tr = (k: string) => t(language, k)
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const { toast } = useToast()
   const [reasons, setReasons] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
 
-  function refresh() {
-    startTransition(() => router.refresh())
-  }
-
-  async function approve(id: string) {
-    await approveAccessRequest(id)
-    refresh()
-  }
-  async function deny(id: string) {
-    await denyAccessRequest(id, reasons[id] || undefined)
-    refresh()
+  // One decision at a time: a second click (approve, then deny) waits for the first.
+  async function decide(action: () => Promise<unknown>) {
+    setBusy(true)
+    try {
+      await action()
+    } catch (err) {
+      toast({ title: tr("access.queue.failed"), description: err instanceof Error ? err.message : String(err), variant: "error" })
+    } finally {
+      setBusy(false)
+      startTransition(() => router.refresh())
+    }
   }
 
   return (
@@ -71,8 +74,8 @@ export default function AccessRequestsClient({ requests }: { requests: QueueRow[
                 onChange={(e) => setReasons((m) => ({ ...m, [r.id]: e.target.value }))}
               />
               <div className="flex gap-2">
-                <Button onClick={() => approve(r.id)} disabled={pending}>{tr("access.queue.approve")}</Button>
-                <Button variant="outline" onClick={() => deny(r.id)} disabled={pending}>{tr("access.queue.deny")}</Button>
+                <Button onClick={() => decide(() => approveAccessRequest(r.id))} disabled={busy || pending}>{tr("access.queue.approve")}</Button>
+                <Button variant="outline" onClick={() => decide(() => denyAccessRequest(r.id, reasons[r.id] || undefined))} disabled={busy || pending}>{tr("access.queue.deny")}</Button>
               </div>
             </li>
           ))}

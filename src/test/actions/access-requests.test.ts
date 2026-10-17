@@ -12,7 +12,7 @@ const mockDb = {
   user: { findUnique: vi.fn(), findMany: vi.fn() },
   opCo: { findUnique: vi.fn() },
   userOpCoAssignment: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), upsert: vi.fn().mockResolvedValue({}), create: vi.fn().mockResolvedValue({}) },
-  accessRequest: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue({}) },
+  accessRequest: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue({}), updateMany: vi.fn() },
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
@@ -36,6 +36,7 @@ beforeEach(() => {
   mockDb.userOpCoAssignment.count.mockResolvedValue(1)
   mockDb.accessRequest.findFirst.mockResolvedValue(null)
   mockDb.accessRequest.create.mockResolvedValue({ id: "ar-1" })
+  mockDb.accessRequest.updateMany.mockResolvedValue({ count: 1 })
   mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
   mockDb.user.findMany.mockResolvedValue([])
 })
@@ -100,8 +101,8 @@ describe("approveAccessRequest", () => {
       update: { role: "requester", isActive: true, endedAt: null },
       create: { userId: "bob-db", opcoId: "opco-ghana", role: "requester" },
     })
-    expect(mockDb.accessRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "ar-1" }, data: expect.objectContaining({ status: "approved", decidedById: "ga-db" }) })
+    expect(mockDb.accessRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "ar-1", status: "pending" }, data: expect.objectContaining({ status: "approved", decidedById: "ga-db" }) })
     )
     expect(assignToOrganization).toHaveBeenCalledWith("kc-bob", "ghana")
     expect(notifyUsers).toHaveBeenCalledWith([{ userId: "bob-db" }], expect.objectContaining({ type: "access.approved" }))
@@ -159,8 +160,8 @@ describe("denyAccessRequest", () => {
 
     const res = await denyAccessRequest("ar-1", "Not needed")
     expect(res).toEqual({ ok: true })
-    expect(mockDb.accessRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "denied", decisionReason: "Not needed", decidedById: "ga-db" }) })
+    expect(mockDb.accessRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "ar-1", status: "pending" }, data: expect.objectContaining({ status: "denied", decisionReason: "Not needed", decidedById: "ga-db" }) })
     )
     expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
     expect(notifyUsers).toHaveBeenCalledWith([{ userId: "bob-db" }], expect.objectContaining({ type: "access.denied" }))
@@ -170,6 +171,29 @@ describe("denyAccessRequest", () => {
     vi.mocked(getAppSession).mockResolvedValue(member)
     mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
     await expect(denyAccessRequest("ar-1")).rejects.toThrow(/Forbidden/i)
+  })
+})
+
+describe("deciding a request another admin decided first", () => {
+  // Both admins pass the pending check; only the first write may land.
+  beforeEach(() => {
+    vi.mocked(getAppSession).mockResolvedValue(groupAdmin)
+    mockDb.accessRequest.findUnique.mockResolvedValue(pendingReq)
+    mockDb.user.findUnique.mockResolvedValue({ id: "ga-db" })
+    mockDb.accessRequest.updateMany.mockResolvedValue({ count: 0 })
+  })
+
+  it("approve grants nothing and notifies nobody", async () => {
+    await expect(approveAccessRequest("ar-1")).rejects.toThrow(/already decided/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+    expect(recordAdminAction).not.toHaveBeenCalled()
+    expect(notifyUsers).not.toHaveBeenCalled()
+  })
+
+  it("deny records nothing and notifies nobody", async () => {
+    await expect(denyAccessRequest("ar-1")).rejects.toThrow(/already decided/i)
+    expect(recordAdminAction).not.toHaveBeenCalled()
+    expect(notifyUsers).not.toHaveBeenCalled()
   })
 })
 
