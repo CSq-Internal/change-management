@@ -11,9 +11,7 @@ vi.mock('@/lib/session', () => ({
 vi.mock('@/server/keycloak', () => ({
   createOrFindKeycloakUser: vi.fn().mockResolvedValue({ id: 'kc-new', created: true }),
   assignToOrganization: vi.fn().mockResolvedValue(undefined),
-  deactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
-  reactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
-  ensureKeycloakUserEnabledVerified: vi.fn().mockResolvedValue(undefined),
+  verifyAdoptedKeycloakUser: vi.fn().mockResolvedValue('verified'),
 }))
 
 vi.mock('@/server/email', () => ({
@@ -55,7 +53,7 @@ vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
 import { onboardUser } from '@/server/actions/users'
 import {
   createOrFindKeycloakUser,
-  ensureKeycloakUserEnabledVerified,
+  verifyAdoptedKeycloakUser,
 } from '@/server/keycloak'
 import { sendUserInvitationEmail } from '@/server/email'
 
@@ -68,7 +66,7 @@ describe('onboardUser — adopt-path reconcile (Task B3)', () => {
     mockDb.opCo.findUnique.mockResolvedValue({ id: 'opco-gh', slug: 'ghana', locale: 'en' })
   })
 
-  it('adopted Keycloak account: enabled + verified, no password touched', async () => {
+  it('adopted Keycloak account: verified, never enabled, no password touched', async () => {
     vi.mocked(createOrFindKeycloakUser).mockResolvedValueOnce({ id: 'kc-1', created: false })
 
     await onboardUser({
@@ -76,7 +74,7 @@ describe('onboardUser — adopt-path reconcile (Task B3)', () => {
       assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
     })
 
-    expect(ensureKeycloakUserEnabledVerified).toHaveBeenCalledWith('kc-1')
+    expect(verifyAdoptedKeycloakUser).toHaveBeenCalledWith('kc-1')
     expect(sendUserInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'adopted@csquared.com' }))
   })
 
@@ -88,7 +86,7 @@ describe('onboardUser — adopt-path reconcile (Task B3)', () => {
       assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
     })
 
-    expect(ensureKeycloakUserEnabledVerified).not.toHaveBeenCalled()
+    expect(verifyAdoptedKeycloakUser).not.toHaveBeenCalled()
     expect(sendUserInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'new@csquared.com' }))
   })
 })
