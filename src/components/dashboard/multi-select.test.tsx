@@ -26,4 +26,25 @@ describe("MultiSelect", () => {
     fireEvent.click(screen.getByLabelText("Alpha"))
     expect(onChange).toHaveBeenCalledWith(["b"])
   })
+  it("closes when you click outside it", () => {
+    render(<MultiSelect label="Things" options={options} selected={[]} onChange={() => {}} />)
+    const details = screen.getByText("Things").closest("details")!
+    details.open = true
+    fireEvent.pointerDown(document.body)
+    expect(details.open).toBe(false)
+  })
+  it("stays open while you tick options inside it", () => {
+    render(<MultiSelect label="Things" options={options} selected={[]} onChange={() => {}} />)
+    const details = screen.getByText("Things").closest("details")!
+    details.open = true
+    fireEvent.pointerDown(screen.getByLabelText("Alpha"))
+    expect(details.open).toBe(true)
+  })
+  it("closes on Escape", () => {
+    render(<MultiSelect label="Things" options={options} selected={[]} onChange={() => {}} />)
+    const details = screen.getByText("Things").closest("details")!
+    details.open = true
+    fireEvent.keyDown(document, { key: "Escape" })
+    expect(details.open).toBe(false)
+  })
 })
