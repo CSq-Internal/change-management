@@ -79,7 +79,6 @@ export type Caps = {
   isNamedImplementer: boolean
   canApprove: boolean
   isAdmin: boolean
-  isCabMember: boolean
   canExportEvidence: boolean
   canManageAssignees: boolean
   soleApproverIsMe: boolean
@@ -227,7 +226,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
 
   function handleApprove() {
     handleAction(
-      () => submitApproval(change.id, "approve", comment || undefined, caps.isCabMember),
+      () => submitApproval(change.id, "approve", comment || undefined),
       t(language, "detail.toast.approved"),
       t(language, "detail.toast.approvedDesc")
     )
@@ -243,7 +242,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
       return
     }
     handleAction(
-      () => submitApproval(change.id, "reject", comment, caps.isCabMember),
+      () => submitApproval(change.id, "reject", comment),
       t(language, "detail.toast.rejected"),
       t(language, "detail.toast.rejectedDesc")
     )

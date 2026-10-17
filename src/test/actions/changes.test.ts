@@ -62,7 +62,7 @@ vi.mock('@/server/approval-authority', async (importOriginal) => {
   return { ...actual, isEligibleApprover: vi.fn(async () => true) }
 })
 
-import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
+import { createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
 import { notifyEvent, notifyChange } from '@/server/notify'
 import { isEligibleApprover } from '@/server/approval-authority'
@@ -114,17 +114,6 @@ const ugandaSession = {
   organizations: [{ id: 'org-ug', name: 'Uganda', alias: 'uganda', roles: ['requester'] }],
   realmRoles: [],
 }
-
-describe('listChanges', () => {
-  it('returns empty array when no changes exist', async () => {
-    expect(await listChanges('ghana')).toEqual([])
-  })
-
-  it('rejects a non-member, non-group caller listing another OpCo', async () => {
-    vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
-    await expect(listChanges('ghana')).rejects.toThrow(/Forbidden/)
-  })
-})
 
 describe('createChange', () => {
   it('does not check blackouts for a draft (submission does)', async () => {

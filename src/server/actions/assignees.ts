@@ -59,14 +59,6 @@ async function assertApproversEligible(
   }
 }
 
-export async function listChangeAssignees(changeId: string) {
-  const db = getPrisma()
-  return db.changeAssignee.findMany({
-    where: { changeId },
-    include: { user: { select: { id: true, name: true, email: true } } },
-  })
-}
-
 export async function setChangeAssignees(changeId: string, assignees: AssigneeInput[]) {
   const { db, me, change } = await loadChangeForAssigneeWrite(changeId)
 

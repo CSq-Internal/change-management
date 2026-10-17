@@ -21,7 +21,6 @@ export function buildTourSteps({ language, isAdmin, isGroupAdmin }: TourContext)
     step(language, '[data-tour="nav-dashboard"]', "tour.dashboard.title", "tour.dashboard.desc"),
     step(language, '[data-tour="nav-requests"]', "tour.requests.title", "tour.requests.desc"),
     step(language, '[data-tour="nav-approvals"]', "tour.approvals.title", "tour.approvals.desc"),
-    step(language, '[data-tour="nav-changes"]', "tour.changes.title", "tour.changes.desc"),
     step(language, '[data-tour="nav-calendar"]', "tour.calendar.title", "tour.calendar.desc"),
     step(language, '[data-tour="tour-notifications"]', "tour.notifications.title", "tour.notifications.desc"),
   ]

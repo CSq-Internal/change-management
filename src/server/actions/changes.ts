@@ -3,7 +3,7 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
+import { isGroupAdmin, hasRoleInOpCo, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { notifyEvent, notifyChange } from "@/server/notify"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { getRoutedApprovers, getNamedApprovers, isEligibleApprover } from "@/server/approval-authority"
@@ -83,19 +83,6 @@ export async function getChange(id: string) {
   })
   if (!change) return null
   return (await canViewChange(session, change)) ? change : null
-}
-
-export async function listChanges(opcoSlug: string) {
-  const session = await getAppSession()
-  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
-    throw new Error("Forbidden: not a member of this OpCo")
-  }
-  const db = getPrisma()
-  return db.changeRequest.findMany({
-    where: { opco: { slug: opcoSlug } },
-    include: { requester: true, approvals: true, opco: true },
-    orderBy: { createdAt: "desc" },
-  })
 }
 
 // A draft may leave either date empty, but once both are set the end must come after the start.

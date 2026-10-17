@@ -110,18 +110,3 @@ export async function updateRisk(id: string, input: RiskInput) {
     return risk
   })
 }
-
-export async function setRiskStatus(id: string, status: RiskStatus) {
-  const db = getPrisma()
-  const existing = await db.riskRegister.findUnique({ where: { id }, include: { opco: { select: { slug: true } } } })
-  if (!existing) throw new Error("Risk not found")
-  const session = await assertCanManage(existing.opco?.slug ?? null)
-  return db.$transaction(async (tx) => {
-    const risk = await tx.riskRegister.update({ where: { id }, data: { status } })
-    await recordAdminAction(tx, {
-      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name, action: status === "closed" ? "risk_closed" : "risk_updated",
-      opcoId: existing.opcoId, summary: `Set risk "${existing.title}" to ${status}`,
-    })
-    return risk
-  })
-}
