@@ -431,6 +431,29 @@ describe('setUserAssignments — authorization & diff', () => {
     expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
   })
 
+  it('mirrors to Keycloak only after the transaction commits, and not at all if it fails', async () => {
+    // A slow Keycloak inside the transaction ran it past Prisma's 5 s limit, so the role
+    // change failed; and a rolled-back change must not leave a Keycloak org membership.
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin).mockResolvedValueOnce(groupAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    let inTx = false
+    let calledInTx = false
+    mockDb.$transaction.mockImplementationOnce(async (fn: (tx: typeof mockDb) => unknown) => {
+      inTx = true
+      try { return await fn(mockDb) } finally { inTx = false }
+    })
+    vi.mocked(kc.assignToOrganization).mockImplementation(async () => { calledInTx = inTx })
+    await setUserAssignments('target', [{ opcoSlug: 'ghana', role: 'approver' }])
+    expect(kc.assignToOrganization).toHaveBeenCalledWith('kc-target', 'ghana')
+    expect(calledInTx).toBe(false)
+
+    vi.mocked(kc.assignToOrganization).mockClear()
+    mockDb.$transaction.mockRejectedValueOnce(new Error('rolled back'))
+    await expect(setUserAssignments('target', [{ opcoSlug: 'ghana', role: 'approver' }])).rejects.toThrow('rolled back')
+    expect(kc.assignToOrganization).not.toHaveBeenCalled()
+    vi.mocked(kc.assignToOrganization).mockResolvedValue(undefined)
+  })
+
   it('does not require rights for unchanged out-of-scope assignments', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
     mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([

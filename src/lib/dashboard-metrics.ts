@@ -49,18 +49,25 @@ export function durLabel(ms: number): string {
   return h >= 1 ? `${h}h` : `${m}m`
 }
 
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const pad = (n: number) => String(n).padStart(2, "0")
-const startOfDayMs = (ms: number) => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime() }
+// `utc` reads days and hours in UTC instead of the running zone. The server only has UTC,
+// so the dashboard renders with utc until hydration and the two passes agree.
+const startOfDayMs = (ms: number, utc = false) => {
+  const x = new Date(ms)
+  if (utc) x.setUTCHours(0, 0, 0, 0)
+  else x.setHours(0, 0, 0, 0)
+  return x.getTime()
+}
 
 /** "Tonight 21:00" / "Tomorrow 08:00" / "Wed 14:00", relative to nowMs. */
-export function whenLabel(whenMs: number, nowMs: number): string {
+export function whenLabel(whenMs: number, nowMs: number, utc = false): string {
   const d = new Date(whenMs)
-  const dayDelta = Math.round((startOfDayMs(whenMs) - startOfDayMs(nowMs)) / 86_400_000)
-  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  if (dayDelta <= 0) return `${d.getHours() >= 18 ? "Tonight" : "Today"} ${hm}`
+  const [hours, minutes] = utc ? [d.getUTCHours(), d.getUTCMinutes()] : [d.getHours(), d.getMinutes()]
+  const dayDelta = Math.round((startOfDayMs(whenMs, utc) - startOfDayMs(nowMs, utc)) / 86_400_000)
+  const hm = `${pad(hours)}:${pad(minutes)}`
+  if (dayDelta <= 0) return `${hours >= 18 ? "Tonight" : "Today"} ${hm}`
   if (dayDelta === 1) return `Tomorrow ${hm}`
-  return `${DOW[d.getDay()]} ${hm}`
+  return `${d.toLocaleDateString("en-US", { weekday: "short", timeZone: utc ? "UTC" : undefined })} ${hm}`
 }
 
 export type WorklistAction = "review" | "start" | "advance" | "verify"
@@ -98,7 +105,7 @@ export interface DashboardData {
 
 const ONE_DAY_MS = 24 * 3600_000
 
-export function buildDashboardData(changes: DashboardChange[], nowMs: number): DashboardData {
+export function buildDashboardData(changes: DashboardChange[], nowMs: number, utc = false): DashboardData {
   const open = changes.filter((c) => isOpen(c.status))
   const breachedOf = (c: DashboardChange) => slaState(c.slaDeadline, nowMs) === "breached"
   const bySla = (a: DashboardChange, b: DashboardChange) =>
@@ -107,7 +114,7 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
   // "start" if the planned window is today or already past — deliberately broader than
   // counts.scheduledToday (which is future-only, next 24h); they answer different questions.
   const scheduledTodayOrPast = (planned: string | null) =>
-    planned != null && Math.round((startOfDayMs(Date.parse(planned)) - startOfDayMs(nowMs)) / 86_400_000) <= 0
+    planned != null && Math.round((startOfDayMs(Date.parse(planned), utc) - startOfDayMs(nowMs, utc)) / 86_400_000) <= 0
 
   // most-overdue first = earliest deadline first (matches the mock's worklist order)
   const overdueChanges = open.filter((c) => c.status === "pending" && breachedOf(c)).sort(bySla)
@@ -142,7 +149,7 @@ export function buildDashboardData(changes: DashboardChange[], nowMs: number): D
     return {
       ...base(c), severity: "go", action,
       why: c.status === "approved"
-        ? (c.plannedStart ? `Approved · ${whenLabel(Date.parse(c.plannedStart), nowMs)}` : "Approved · ready to implement")
+        ? (c.plannedStart ? `Approved · ${whenLabel(Date.parse(c.plannedStart), nowMs, utc)}` : "Approved · ready to implement")
         : "Implemented · ready to verify",
     }
   })

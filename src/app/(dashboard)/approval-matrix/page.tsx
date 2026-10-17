@@ -50,10 +50,13 @@ export default async function ApprovalMatrixPage() {
     opcoSlug: a.opco?.slug ?? null, opcoName: a.opco?.name ?? null,
     userLabel: a.user.name ?? a.user.email,
   }))
-  const candidates = (await db.cABMembership.findMany({
-    where: { isActive: true },
-    include: { user: { select: { id: true, name: true, email: true } } },
-  })).map((m) => ({ id: m.user.id, label: m.user.name ?? m.user.email }))
+  // The override picker, and so the CAB list behind it, is only for those who can manage.
+  const candidates = canManage
+    ? (await db.cABMembership.findMany({
+        where: { isActive: true },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      })).map((m) => ({ id: m.user.id, label: m.user.name ?? m.user.email }))
+    : []
   const candidateUsers = Array.from(new Map(candidates.map((c) => [c.id, c])).values())
   const opcos = await activeOpCos("all")
   // A group admin may set overrides for any OpCo (assertCanManage), not just ones they hold admin in.

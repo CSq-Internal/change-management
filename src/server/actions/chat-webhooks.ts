@@ -52,8 +52,15 @@ export async function setChatWebhookActive(id: string, isActive: boolean) {
   const db = getPrisma()
   const hook = await db.chatWebhook.findUnique({ where: { id }, include: { opco: { select: { slug: true } } } })
   if (!hook) throw new Error("Webhook not found")
-  await assertCanManage(hook.opco?.slug ?? null)
-  await db.chatWebhook.update({ where: { id }, data: { isActive } })
+  const session = await assertCanManage(hook.opco?.slug ?? null)
+  await db.$transaction(async (tx) => {
+    await tx.chatWebhook.update({ where: { id }, data: { isActive } })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId, actorEmail: session.email, actorName: session.name,
+      action: isActive ? "chat_webhook_enabled" : "chat_webhook_disabled",
+      opcoId: hook.opcoId, summary: `${isActive ? "Enabled" : "Disabled"} Google Chat webhook for ${hook.opco?.slug ?? "group"}`,
+    })
+  })
 }
 
 export async function deleteChatWebhook(id: string) {

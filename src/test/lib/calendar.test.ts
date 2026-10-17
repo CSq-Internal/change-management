@@ -83,3 +83,18 @@ describe('computeConflicts — blackout', () => {
     expect(m.get('a')!.blackout).toBe(false)
   })
 })
+
+describe('computeConflicts — dead changes', () => {
+  it('a cancelled, rejected or closed change does not clash with a live one, nor get flagged', () => {
+    for (const status of ['cancelled', 'rejected', 'closed']) {
+      const live = chg({ id: 'live', status: 'pending' })
+      const dead = chg({ id: 'dead', start: base + H, status })
+      const blackout: CalBlackout = { id: 'b', opcoId: 'o1', label: 'Freeze', start: base, end: base + 3 * H }
+      const m = computeConflicts([live, dead], [blackout])
+      expect(m.get('live')!.overlap).toBe(false)
+      expect(m.get('dead')!.overlap).toBe(false)
+      expect(m.get('dead')!.blackout).toBe(false)
+      expect(m.get('live')!.blackout).toBe(true)
+    }
+  })
+})

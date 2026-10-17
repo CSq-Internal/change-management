@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { toDateTimeLocal, dayStart, dayEnd } from '@/lib/dates'
+import { toDateTimeLocal, dayStart, dayEnd, utcStamp } from '@/lib/dates'
 
 // datetime-local inputs hold local wall-clock time, and the form reads them back with
 // new Date(value), which is local too. Run in a non-UTC zone so a UTC slice would show.
@@ -36,5 +36,13 @@ describe('dayStart / dayEnd', () => {
   it('a From = To = today search covers the whole local day', () => {
     expect(dayStart('2026-10-17').toISOString()).toBe('2026-10-16T21:00:00.000Z')
     expect(dayEnd('2026-10-17').getTime() - dayStart('2026-10-17').getTime()).toBe(86_400_000 - 1)
+  })
+})
+
+describe('utcStamp', () => {
+  // Emails, Chat and the evidence PDF are rendered on the server for readers in several
+  // zones, so a bare time is ambiguous. Nairobi is set above: the stamp must not follow it.
+  it('labels the time as UTC, whatever the server zone', () => {
+    expect(utcStamp(new Date('2026-10-20T07:05:00Z'))).toBe('2026-10-20 07:05 UTC')
   })
 })
