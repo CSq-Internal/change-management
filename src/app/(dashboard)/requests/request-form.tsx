@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { OPCO_NAMES } from "@/lib/opco"
-import type { OpCoSlug } from "@/lib/opco"
 import { createChange, updateChange, submitChange } from "@/server/actions/changes"
 import { listEligibleApproversAction } from "@/server/actions/eligible-approvers"
 import { setChangeApprovers } from "@/server/actions/assignees"
@@ -52,7 +50,7 @@ type Initial = {
 type AttachmentSlot = { id: string; kind: string; filename: string; externalUrl?: string | null }
 
 interface Props {
-  opcoOptions: string[]
+  opcoOptions: { slug: string; name: string }[]
   mode?: "create" | "edit"
   initial?: Initial
   defaultEmail?: string
@@ -67,7 +65,7 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   const { toast } = useToast()
 
   const [email, setEmail] = useState(initial?.contactEmail ?? defaultEmail ?? "")
-  const [opcoSlug, setOpcoSlug] = useState(initial?.opcoSlug ?? opcoOptions[0] ?? "")
+  const [opcoSlug, setOpcoSlug] = useState(initial?.opcoSlug ?? opcoOptions[0]?.slug ?? "")
   const [infrastructureType, setInfrastructureType] = useState<(typeof infraTypes)[number] | "">(
     (initial?.infrastructureType as (typeof infraTypes)[number]) ?? ""
   )
@@ -330,9 +328,9 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
               onChange={(e) => setOpcoSlug(e.target.value)}
               disabled={mode === "edit"}
             >
-              {opcoOptions.map((slug) => (
-                <option key={slug} value={slug}>
-                  {OPCO_NAMES[slug as OpCoSlug] ?? slug}
+              {opcoOptions.map((o) => (
+                <option key={o.slug} value={o.slug}>
+                  {o.name}
                 </option>
               ))}
             </select>

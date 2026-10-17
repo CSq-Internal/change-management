@@ -49,7 +49,7 @@ export default async function EditChangePage({
     <RequestForm
       mode="edit"
       initial={initial}
-      opcoOptions={[change.opco.slug]}
+      opcoOptions={[{ slug: change.opco.slug, name: change.opco.name }]}
       defaultEmail={change.contactEmail}
       attachments={change.attachments.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename, externalUrl: a.externalUrl }))}
       initialApproverIds={change.assignees.filter((a) => a.role === "approver").map((a) => a.userId)}

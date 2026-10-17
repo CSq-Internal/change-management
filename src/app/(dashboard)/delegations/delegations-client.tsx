@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo, manageableOpCoSlugs } from "@/lib/permissions"
+import { canManageAnyOpCo } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
@@ -16,18 +16,16 @@ import type { DbDelegation } from "./types"
 
 interface DelegationsClientProps {
   delegations: DbDelegation[]
+  manageableSlugs: string[]
 }
 
-export default function DelegationsClient({ delegations }: DelegationsClientProps) {
+export default function DelegationsClient({ delegations, manageableSlugs }: DelegationsClientProps) {
   const { language } = useStore()
   const { data: session } = useSession()
   const router = useRouter()
   const { toast } = useToast()
 
   const isAdmin = session ? canManageAnyOpCo(session.user.organizations, session.user.realmRoles) : false
-  const scope = session ? manageableOpCoSlugs(session.user.organizations, session.user.realmRoles) : []
-  const manageableSlugs =
-    scope === "all" ? Array.from(new Set(delegations.map((d) => d.opco.slug).filter(Boolean))) : scope
 
   const [createOpen, setCreateOpen] = useState(false)
   const [confirm, setConfirm] = useState<DbDelegation | null>(null)
