@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { formatDateTime } from "@/lib/dates"
+import { DateTime } from "@/components/date-time"
 
 export type AuditEntry = {
   id: string
@@ -93,7 +93,7 @@ export default function AuditsClient({ entries }: AuditsClientProps) {
                 {entries.map((entry) => (
                   <tr key={entry.id} className="border-b border-border/40 last:border-0">
                     <td className="py-2 pr-4 whitespace-nowrap" data-label="Timestamp">
-                      {formatDateTime(entry.at)}
+                      <DateTime value={entry.at} />
                     </td>
                     <td className="py-2 pr-4 whitespace-nowrap" data-label="Actor">
                       {entry.actor.name ?? entry.actor.email}

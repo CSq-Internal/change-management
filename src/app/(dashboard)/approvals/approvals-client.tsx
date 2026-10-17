@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { formatDateTime } from "@/lib/dates"
+import { DateTime } from "@/components/date-time"
 import { submitApproval } from "@/server/actions/approvals"
 import { QuorumProgress } from "@/components/quorum-progress"
 
@@ -108,7 +108,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
               <p className="text-sm text-muted-foreground">{c.description}</p>
               <div className="mt-2 text-xs text-muted-foreground">
                 {t(language, "approvals.requestedBy")} {requesterLabel} •{" "}
-                {formatDateTime(c.createdAt)}
+                <DateTime value={c.createdAt} />
               </div>
               {isHigh && (
                 <div className="mt-2 text-xs text-muted-foreground">

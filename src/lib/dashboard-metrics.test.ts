@@ -136,3 +136,18 @@ it("labels a pending change with no SLA deadline instead of rendering NaN", () =
   expect(item.why).toBe("No SLA deadline")
   expect(item.why).not.toMatch(/NaN/)
 })
+
+test("whenLabel with utc gives the same text on a UTC server and in a Nairobi browser", () => {
+  // Hydration needs the server pass and the first browser pass to agree.
+  const when = Date.parse("2026-06-02T20:30:00Z") // 20:30 UTC, 23:30 in Nairobi
+  const saved = process.env.TZ
+  process.env.TZ = "UTC"
+  const server = whenLabel(when, now, true)
+  process.env.TZ = "Africa/Nairobi"
+  const browser = whenLabel(when, now, true)
+  const local = whenLabel(when, now)
+  process.env.TZ = saved
+  expect(browser).toBe(server)
+  expect(server).toBe("Tonight 20:30")
+  expect(local).toBe("Tonight 23:30")
+})

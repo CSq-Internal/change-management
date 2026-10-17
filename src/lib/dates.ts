@@ -2,23 +2,27 @@
 // change-detail "Jul 20, 2026, 02:00 AM" style) instead of a mix of that and the
 // locale-default numeric "7/9/2026, 9:27:27 AM" that bare toLocaleString() gives.
 
-export function formatDateTime(value: string | Date | null | undefined): string {
+// `utc` renders a fixed "en-US, UTC" form that the server and the browser agree on, for
+// the pass before hydration (see components/date-time.tsx).
+export function formatDateTime(value: string | Date | null | undefined, utc = false): string {
   if (!value) return "—"
-  return new Date(value).toLocaleString(undefined, {
+  return new Date(value).toLocaleString(utc ? "en-US" : undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    ...(utc ? { timeZone: "UTC", timeZoneName: "short" } : {}),
   })
 }
 
-export function formatDate(value: string | Date | null | undefined): string {
+export function formatDate(value: string | Date | null | undefined, utc = false): string {
   if (!value) return "—"
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString(utc ? "en-US" : undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
+    ...(utc ? { timeZone: "UTC" } : {}),
   })
 }
 
