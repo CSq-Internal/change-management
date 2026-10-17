@@ -14,6 +14,8 @@ vi.mock('@/lib/session', () => ({
 }))
 
 const mockDb = {
+  $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
+  $queryRaw: vi.fn().mockResolvedValue([]),
   user: {
     findUnique: vi.fn().mockResolvedValue({ id: 'user-requester', keycloakId: 'kc-requester', email: 'requester@csquared.com', name: 'Requester' }),
   },
@@ -206,6 +208,24 @@ describe('submitApproval — CAB authority + quorum', () => {
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
+  })
+})
+
+describe('submitApproval — one vote at a time per change', () => {
+  // Two approvers voting together each counted only their own vote from a stale read, so
+  // quorum was never met, or an approve overwrote a reject. Votes now run one at a time.
+  it('locks the change row before reading the change and its votes', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', riskLevel: 'low', infrastructureType: 'Wifi',
+      opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined, true)
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    const [sql] = mockDb.$queryRaw.mock.calls[0] as [TemplateStringsArray]
+    expect(sql.join('?')).toMatch(/FROM "ChangeRequest" WHERE "id" = \? FOR UPDATE/)
+    const lock = mockDb.$queryRaw.mock.invocationCallOrder[0]
+    expect(lock).toBeLessThan(mockDb.changeRequest.findUnique.mock.invocationCallOrder[0])
+    expect(lock).toBeLessThan(mockDb.auditLog.findFirst.mock.invocationCallOrder[0])
   })
 })
 

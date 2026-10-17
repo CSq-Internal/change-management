@@ -26,95 +26,112 @@ export async function submitApproval(
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
   if (!user) throw new Error("User not found")
 
-  const change = await db.changeRequest.findUnique({
-    where: { id: changeId },
-    include: { approvals: true, opco: true },
-  })
-  if (!change) throw new Error("Change not found")
-  const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
-  if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
+  const { approval, change, outcome } = await db.$transaction(async (tx) => {
+    // Lock the change so votes on it run one at a time. Each vote then reads the ones before
+    // it: two approvals together reach quorum, and no vote lands after the change is decided.
+    await tx.$queryRaw`SELECT "id" FROM "ChangeRequest" WHERE "id" = ${changeId} FOR UPDATE`
 
-  // Votes are scoped to the stage they were cast in — see @/lib/approval-cycle. A change
-  // can go rejected → draft → pending again, and approvals from before the last
-  // submission were cast against a previous version of the plan: they must neither block
-  // a fresh vote nor count toward quorum.
-  const lastSubmission = await db.auditLog.findFirst({
-    where: { changeId, action: "submitted" },
-    orderBy: { at: "desc" },
-    select: { at: true },
-  })
-  const cycleApprovals = votesSince(change.approvals, lastSubmission?.at ?? null)
+    const change = await tx.changeRequest.findUnique({
+      where: { id: changeId },
+      include: { approvals: true, opco: true },
+    })
+    if (!change) throw new Error("Change not found")
+    const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
+    if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
 
-  // One vote per approver per stage. Deliberately application-level rather than a DB
-  // unique constraint: an emergency can legitimately collect a normal approval, be
-  // expedited-implemented, then receive a retrospective approval from the same person.
-  // The retrospective stage opens at `implementedAt`, so that later vote is admitted
-  // while a *second* retrospective vote from the same person is not — without this the
-  // retrospective path had no cap at all and each repeat rewrote `retroApprovedAt`.
-  const stageStart = isRetrospective ? change.implementedAt : (lastSubmission?.at ?? null)
-  if (hasVotedSince(change.approvals, stageStart, user.id)) {
-    throw new Error("You have already voted on this change")
-  }
+    // Votes are scoped to the stage they were cast in — see @/lib/approval-cycle. A change
+    // can go rejected → draft → pending again, and approvals from before the last
+    // submission were cast against a previous version of the plan: they must neither block
+    // a fresh vote nor count toward quorum.
+    const lastSubmission = await tx.auditLog.findFirst({
+      where: { changeId, action: "submitted" },
+      orderBy: { at: "desc" },
+      select: { at: true },
+    })
+    const cycleApprovals = votesSince(change.approvals, lastSubmission?.at ?? null)
 
-  const allowed = await canUserApproveChange({
-    userId: user.id,
-    realmRoles: session.realmRoles,
-    change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
-    changeId,
-  })
-  if (!allowed) {
-    throw new Error("Forbidden: not authorized to approve this change")
-  }
-
-  // ISO 27001 A.5.3 — Segregation of Duties: requesters cannot approve their own changes
-  if (change.requesterId === user.id) {
-    throw new Error("Approvers cannot approve their own requests (SoD violation — ISO 27001 A.5.3)")
-  }
-  // Expediting an emergency stands in for its approval; the retrospective vote is the check
-  // on whoever did it, so they cannot cast it themselves.
-  if (isRetrospective && change.implementedById === user.id) {
-    throw new Error("You implemented this change, so someone else must give the retrospective decision (SoD — ISO 27001 A.5.3)")
-  }
-
-  // A CAB vote comes from the routed CAB (members, infra overrides, active delegates) or a
-  // group admin. Nominated approvers outside it still vote, but cannot form quorum alone.
-  const routed = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
-  const isCabVote = isGroupAdmin(session.realmRoles) || routed.some((u) => u.id === user.id)
-
-  const approval = await db.approval.create({
-    data: { changeId, approverId: user.id, decision, comment, isCab: isCabVote },
-  })
-
-  if (isRetrospective) {
-    if (decision === "approve") {
-      await db.changeRequest.update({ where: { id: changeId }, data: { retroApprovedAt: new Date() } })
+    // One vote per approver per stage. Deliberately application-level rather than a DB
+    // unique constraint: an emergency can legitimately collect a normal approval, be
+    // expedited-implemented, then receive a retrospective approval from the same person.
+    // The retrospective stage opens at `implementedAt`, so that later vote is admitted
+    // while a *second* retrospective vote from the same person is not — without this the
+    // retrospective path had no cap at all and each repeat rewrote `retroApprovedAt`.
+    const stageStart = isRetrospective ? change.implementedAt : (lastSubmission?.at ?? null)
+    if (hasVotedSince(change.approvals, stageStart, user.id)) {
+      throw new Error("You have already voted on this change")
     }
-    await db.auditLog.create({
-      data: {
-        changeId, actorId: user.id,
-        action: decision === "approve" ? "retro_approved" : "retro_rejected",
-        note: comment,
-      },
+
+    const allowed = await canUserApproveChange({
+      userId: user.id,
+      realmRoles: session.realmRoles,
+      change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
+      changeId,
+    })
+    if (!allowed) {
+      throw new Error("Forbidden: not authorized to approve this change")
+    }
+
+    // ISO 27001 A.5.3 — Segregation of Duties: requesters cannot approve their own changes
+    if (change.requesterId === user.id) {
+      throw new Error("Approvers cannot approve their own requests (SoD violation — ISO 27001 A.5.3)")
+    }
+    // Expediting an emergency stands in for its approval; the retrospective vote is the check
+    // on whoever did it, so they cannot cast it themselves.
+    if (isRetrospective && change.implementedById === user.id) {
+      throw new Error("You implemented this change, so someone else must give the retrospective decision (SoD — ISO 27001 A.5.3)")
+    }
+
+    // A CAB vote comes from the routed CAB (members, infra overrides, active delegates) or a
+    // group admin. Nominated approvers outside it still vote, but cannot form quorum alone.
+    const routed = await getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId })
+    const isCabVote = isGroupAdmin(session.realmRoles) || routed.some((u) => u.id === user.id)
+
+    const approval = await tx.approval.create({
+      data: { changeId, approverId: user.id, decision, comment, isCab: isCabVote },
     })
 
-    await notifyChange(decision === "approve" ? "retro_approved" : "retro_rejected", changeId, {
+    if (isRetrospective) {
+      const action = decision === "approve" ? "retro_approved" : "retro_rejected"
+      if (decision === "approve") {
+        await tx.changeRequest.update({ where: { id: changeId }, data: { retroApprovedAt: new Date() } })
+      }
+      await tx.auditLog.create({ data: { changeId, actorId: user.id, action, note: comment } })
+      return { approval, change, outcome: action }
+    }
+
+    const allApprovals = [...cycleApprovals, { isCab: isCabVote, decision, approverId: user.id }]
+    const needsCab =
+      !isGroupLevelInfra(change.infrastructureType) &&
+      (change.riskLevel === "high" || change.riskLevel === "emergency")
+    const quorumMet = needsCab ? checkCabQuorum(allApprovals) : decision === "approve"
+
+    if (decision === "approve" && quorumMet) {
+      await tx.changeRequest.update({ where: { id: changeId }, data: { status: "approved" } })
+      await tx.auditLog.create({
+        data: { changeId, actorId: user.id, action: "approved", fromStatus: "pending", toStatus: "approved" },
+      })
+      return { approval, change, outcome: "approved" as const }
+    }
+
+    if (decision === "reject") {
+      await tx.changeRequest.update({ where: { id: changeId }, data: { status: "rejected" } })
+      await tx.auditLog.create({
+        data: { changeId, actorId: user.id, action: "rejected", fromStatus: "pending", toStatus: "rejected", note: comment },
+      })
+      return { approval, change, outcome: "rejected" as const }
+    }
+
+    return { approval, change, outcome: null }
+  })
+
+  // Notify after the commit, so nobody hears about a vote that rolled back.
+  if (outcome === "retro_approved" || outcome === "retro_rejected") {
+    await notifyChange(outcome, changeId, {
       actorId: user.id, actorName: user.name ?? user.email, note: comment,
     }).catch(() => {})
-
-    return approval
   }
 
-  const allApprovals = [...cycleApprovals, { isCab: isCabVote, decision, approverId: user.id }]
-  const needsCab =
-    !isGroupLevelInfra(change.infrastructureType) &&
-    (change.riskLevel === "high" || change.riskLevel === "emergency")
-  const quorumMet = needsCab ? checkCabQuorum(allApprovals) : decision === "approve"
-
-  if (decision === "approve" && quorumMet) {
-    await db.changeRequest.update({ where: { id: changeId }, data: { status: "approved" } })
-    await db.auditLog.create({
-      data: { changeId, actorId: user.id, action: "approved", fromStatus: "pending", toStatus: "approved" },
-    })
+  if (outcome === "approved") {
     const requester = await db.user.findUnique({ where: { id: change.requesterId }, select: { id: true, email: true, name: true } })
     if (requester) {
       await notifyEvent({
@@ -126,11 +143,7 @@ export async function submitApproval(
     }
   }
 
-  if (decision === "reject") {
-    await db.changeRequest.update({ where: { id: changeId }, data: { status: "rejected" } })
-    await db.auditLog.create({
-      data: { changeId, actorId: user.id, action: "rejected", fromStatus: "pending", toStatus: "rejected", note: comment },
-    })
+  if (outcome === "rejected") {
     const requester = await db.user.findUnique({ where: { id: change.requesterId }, select: { id: true, email: true, name: true } })
     if (requester) {
       await notifyEvent({
