@@ -12,7 +12,7 @@ import AuditList from "./audit-list"
 import type { AuditRow } from "./types"
 
 const ACTIONS = [
-  "user.onboard", "user.link", "user.deactivate", "user.reactivate", "role.update",
+  "user.onboard", "user.link", "user.deactivate", "user.reactivate", "role.update", "user.group_role",
   "team.create", "team.update", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
   "cab.add", "cab.remove", "opco.create", "opco.rename", "opco.archive", "opco.unarchive",
   "delegation.create", "delegation.revoke", "approver_assignment_added", "approver_assignment_removed",
