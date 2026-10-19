@@ -5,7 +5,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, canManageUsers, canAssignRole } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
-import { createOrFindKeycloakUser, assignToOrganization, verifyAdoptedKeycloakUser } from "@/server/keycloak"
+import { createOrFindKeycloakUser, verifyAdoptedKeycloakUser } from "@/server/keycloak"
 import { approverPendingFootprint, notifyRemainingAndDetectOrphans } from "@/server/approver-reassign"
 import { sendUserInvitationEmail } from "@/server/email"
 import { coerceLocale } from "@/lib/i18n"
@@ -73,14 +73,6 @@ export async function onboardUser(input: {
     }
     if (state === "disabled") {
       throw new Error("This account is disabled in Keycloak, which other CSquared apps share. Ask IT before inviting.")
-    }
-  }
-
-  for (const { opcoSlug } of input.assignments) {
-    try {
-      await assignToOrganization(keycloakId, opcoSlug)
-    } catch (err) {
-      console.warn(`[keycloak] org assignment skipped for ${opcoSlug}:`, err)
     }
   }
 
@@ -307,9 +299,6 @@ export async function setUserAssignments(
     }
   }
 
-  // Keycloak calls wait until the transaction commits: a slow Keycloak inside it ran past
-  // Prisma's 5 s limit and failed the role change, and a rollback can't undo a Keycloak call.
-  const kcAssign: string[] = []
   await db.$transaction(async (tx) => {
     for (const slug of changed) {
       const currentOpcoId = current.find((a: { opco: { slug: string; id: string } }) => a.opco.slug === slug)?.opco.id
@@ -335,7 +324,6 @@ export async function setUserAssignments(
           update: { role: desiredRole, isActive: true, endedAt: null },
           create: { userId, opcoId: opco.id, role: desiredRole },
         })
-        kcAssign.push(slug)
       }
     }
 
@@ -349,14 +337,6 @@ export async function setUserAssignments(
       metadata: { changed: [...changed], desired },
     })
   })
-
-  for (const slug of kcAssign) {
-    try {
-      await assignToOrganization(user.keycloakId, slug)
-    } catch (err) {
-      console.warn(`[keycloak] org assignment skipped for ${slug}:`, err)
-    }
-  }
 }
 
 export async function listOpCoApprovers(opcoSlug: string | null) {

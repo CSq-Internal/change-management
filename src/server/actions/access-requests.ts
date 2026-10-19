@@ -8,7 +8,6 @@ import { recordAdminAction } from "@/server/audit"
 import { decidableAccessRequests } from "@/server/access-queue"
 import { notifyUsers } from "@/server/notify"
 import { sendAccessRequestEmail } from "@/server/email"
-import { assignToOrganization } from "@/server/keycloak"
 import { coerceLocale, t } from "@/lib/i18n"
 
 export type RequestableRole = "approver" | "auditor" | "admin"
@@ -177,12 +176,6 @@ export async function joinOpCo(opcoSlug: string) {
     })
   })
 
-  try {
-    await assignToOrganization(session.keycloakId, opco.slug)
-  } catch (err) {
-    console.warn(`[keycloak] org assignment skipped for ${opco.slug}:`, err)
-  }
-
   const admins = await db.userOpCoAssignment.findMany({
     where: { opcoId: opco.id, role: "admin", isActive: true, user: { isActive: true } },
     select: { userId: true },
@@ -297,12 +290,6 @@ export async function approveAccessRequest(id: string) {
       metadata: { accessRequestId: req.id },
     })
   })
-
-  try {
-    await assignToOrganization(req.user.keycloakId, req.opco.slug)
-  } catch (err) {
-    console.warn(`[keycloak] org assignment skipped for ${req.opco.slug}:`, err)
-  }
 
   const locale = coerceLocale(req.user.locale)
   await notifyUsers([{ userId: req.userId }], {
