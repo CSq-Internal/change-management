@@ -39,7 +39,7 @@ describe('auth enrichment', () => {
   })
 
   it('maps DB OpCo assignments into session.user.organizations on sign-in', async () => {
-    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1', isGroupAdmin: true } })
     findMany.mockResolvedValue([
       { role: 'admin', opco: { id: 'opco-ghana', name: 'CSquared Ghana', slug: 'ghana' } },
     ])
@@ -198,45 +198,65 @@ describe('auth enrichment', () => {
     expect(userUpdate).not.toHaveBeenCalled()
   })
 
-  it('reads group roles from the csquared-cms client roles and ignores realm roles', async () => {
-    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+  it('takes group roles from the DB flags, not the token', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1', isGroupAuditor: true } })
     findMany.mockResolvedValue([])
-
     const token = await enrichedJwt({
-      token: {},
-      user: {},
-      account,
-      profile: {
-        sub: 'kc-sub-1',
-        email: 'devops@csquared.com',
-        email_verified: true,
-        // realm_access MUST be ignored; only the client's resource_access counts
-        realm_access: { roles: ['group_admin'] },
-        resource_access: { 'csquared-cms': { roles: ['group_auditor'] } },
-      },
+      token: {}, user: {}, account,
+      profile: { sub: 'kc-sub-1', email: 'devops@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: ['group_admin'] } } },
     })
-
     expect(token.realmRoles).toEqual(['group_auditor'])
   })
 
-  it('marks isGroupAdmin true when the token carries the group_admin client role', async () => {
+  it('gives no group role to a row without a flag, whatever Keycloak sends', async () => {
     mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
     findMany.mockResolvedValue([])
-    await enrichedJwt({
+    const token = await enrichedJwt({
       token: {}, user: {}, account,
-      profile: { sub: 'kc-sub-1', email: 'ga@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: ['group_admin'] } } },
+      profile: { sub: 'kc-sub-1', email: 'x@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: ['group_admin'] } } },
     })
-    expect(userUpdateMany).toHaveBeenCalledWith({ where: { keycloakId: 'kc-sub-1' }, data: { isGroupAdmin: true } })
+    expect(token.realmRoles).toEqual([])
   })
 
-  it('clears isGroupAdmin (false) when the token has no group_admin role', async () => {
-    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-2' } })
+  it('carries the flags of a row relinked by verified email', async () => {
+    mockUsers({ bySub: null, byEmail: { id: 'u1', isGroupAdmin: true } })
+    findMany.mockResolvedValue([])
+    const token = await enrichedJwt({
+      token: {}, user: {}, account,
+      profile: { sub: 'kc-new', email: 'devops@csquared.com', email_verified: true },
+    })
+    expect(userUpdate).toHaveBeenCalledWith({ where: { email: 'devops@csquared.com' }, data: { keycloakId: 'kc-new' } })
+    expect(token.realmRoles).toEqual(['group_admin'])
+  })
+
+  it('no longer writes isGroupAdmin at sign-in, only the IdP name', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1', isGroupAdmin: true } })
     findMany.mockResolvedValue([])
     await enrichedJwt({
       token: {}, user: {}, account,
-      profile: { sub: 'kc-sub-2', email: 'member@csquared.com', email_verified: true, resource_access: { 'csquared-cms': { roles: [] } } },
+      profile: { sub: 'kc-sub-1', email: 'ga@csquared.com', email_verified: true, name: 'Ama Mensah' },
     })
-    expect(userUpdateMany).toHaveBeenCalledWith({ where: { keycloakId: 'kc-sub-2' }, data: { isGroupAdmin: false } })
+    expect(userUpdateMany).toHaveBeenCalledWith({ where: { keycloakId: 'kc-sub-1' }, data: { name: 'Ama Mensah' } })
+  })
+
+  it('picks up a group-role grant on the refresh', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1', isGroupAdmin: true } })
+    findMany.mockResolvedValue([])
+    const token = await enrichedJwt({
+      token: { keycloakId: 'kc-sub-1', organizations: [], realmRoles: [], orgsRefreshedAt: 0 },
+      user: {}, account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+    expect(token.realmRoles).toEqual(['group_admin'])
+  })
+
+  it('drops a revoked group role on the refresh', async () => {
+    mockUsers({ bySub: { id: 'u1', keycloakId: 'kc-sub-1' } })
+    findMany.mockResolvedValue([])
+    const token = await enrichedJwt({
+      token: { keycloakId: 'kc-sub-1', organizations: [], realmRoles: ['group_admin'], orgsRefreshedAt: 0 },
+      user: {}, account: null,
+    } as unknown as Parameters<typeof enrichedJwt>[0])
+    expect(token.realmRoles).toEqual([])
   })
 
   it('does not query the DB when account is absent (token refresh)', async () => {
