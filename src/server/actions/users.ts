@@ -17,11 +17,11 @@ import type { Role, Prisma } from "@prisma/client"
 // group admin. With nothing to check, only a group_admin may act.
 function assertCanActOnEveryRole(
   session: { realmRoles: string[] },
-  target: { isGroupAdmin: boolean },
+  target: { isGroupAdmin: boolean; isGroupAuditor: boolean },
   rights: boolean[]
 ) {
   if (isGroupAdmin(session.realmRoles)) return
-  if (target.isGroupAdmin || rights.length === 0 || rights.includes(false)) {
+  if (target.isGroupAdmin || target.isGroupAuditor || rights.length === 0 || rights.includes(false)) {
     throw new Error("Forbidden: this user has roles you cannot manage. Ask a group admin.")
   }
 }
@@ -148,6 +148,14 @@ async function assertNotLastAdmin(
   if (others === 0) throw new Error("Forbidden: cannot remove the last admin of an OpCo")
 }
 
+// Throws if `excludingUserId` losing group admin would leave no active group admin.
+async function assertNotLastGroupAdmin(client: Pick<Prisma.TransactionClient, "user">, excludingUserId: string) {
+  const others = await client.user.count({
+    where: { isGroupAdmin: true, isActive: true, id: { not: excludingUserId } },
+  })
+  if (others === 0) throw new Error("Forbidden: cannot remove the last active group admin")
+}
+
 export async function deactivateUser(userId: string) {
   const session = await getAppSession()
 
@@ -172,6 +180,7 @@ export async function deactivateUser(userId: string) {
       await assertNotLastAdmin(db, a.opco.id, userId)
     }
   }
+  if (user.isGroupAdmin) await assertNotLastGroupAdmin(db, userId)
 
   // The Keycloak account stays enabled: the realm is shared with other apps, and the CMS
   // session check (enrichedJwt) refuses an inactive user on its own.
@@ -389,4 +398,40 @@ export async function listCabEligible(opcoSlug: string | null) {
     distinct: ["userId"],
   })
   return rows.map((r) => r.user)
+}
+
+export type GroupRole = "group_admin" | "group_auditor"
+
+/** Grant, change or remove a user's group role. Only a group admin may call it. */
+export async function setGroupRole(userId: string, role: GroupRole | null) {
+  const session = await getAppSession()
+  if (role !== null && role !== "group_admin" && role !== "group_auditor") throw new Error("Invalid group role")
+  if (!isGroupAdmin(session.realmRoles)) throw new Error("Forbidden: only a group admin can change group roles")
+
+  const db = getPrisma()
+  // Serializable: two admins demoting each other at once can't both pass the last-admin check.
+  await db.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: userId } })
+    if (!user) throw new Error("User not found")
+    if (user.keycloakId === session.keycloakId) throw new Error("Forbidden: cannot change your own group role")
+    if (!user.isActive) throw new Error("This user is deactivated. Reactivate them first.")
+
+    const from: GroupRole | null = user.isGroupAdmin ? "group_admin" : user.isGroupAuditor ? "group_auditor" : null
+    if (from === role) return
+    if (from === "group_admin") await assertNotLastGroupAdmin(tx, userId)
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { isGroupAdmin: role === "group_admin", isGroupAuditor: role === "group_auditor" },
+    })
+    await recordAdminAction(tx, {
+      actorKeycloakId: session.keycloakId,
+      actorEmail: session.email,
+      actorName: session.name,
+      action: "user.group_role",
+      targetUserId: userId,
+      summary: `Group role: ${from ?? "none"} → ${role ?? "none"}`,
+      metadata: { from, to: role },
+    })
+  }, { isolationLevel: "Serializable" })
 }
