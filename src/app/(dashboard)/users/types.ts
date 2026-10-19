@@ -4,6 +4,7 @@ export type DbUser = {
   email: string
   isActive: boolean
   isGroupAdmin: boolean
+  isGroupAuditor: boolean
   accessStatus: "pending" | "approved" | "denied" | null
   opcoAssignments: {
     role: string

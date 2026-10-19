@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo } from "@/lib/permissions"
+import { canManageAnyOpCo, isGroupAdmin } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
@@ -129,6 +129,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
           user={editUser}
           language={language}
           opcos={opcos}
+          canSetGroupRole={session ? isGroupAdmin(session.user.realmRoles) : false}
           onClose={() => setEditUser(null)}
           onSaved={() => {
             setEditUser(null)

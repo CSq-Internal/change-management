@@ -75,6 +75,11 @@ function UserRow({ user, isAdmin, language, onEdit, onDeactivate, onReactivate, 
               {t(language, "users.groupAdmin")}
             </span>
           )}
+          {user.isGroupAuditor && (
+            <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+              {t(language, "users.groupAuditor")}
+            </span>
+          )}
           {user.opcoAssignments.map((a) => (
             <span key={a.opco.slug} className={a.isActive ? "" : "line-through opacity-50"}>
               {a.opco.slug} ({a.role})
@@ -114,10 +119,8 @@ export default function UserList({
   const filtered = users.filter((u) =>
     filter === "all" ? true : filter === "active" ? u.isActive : !u.isActive
   )
-  // Group admins have authority via the Keycloak group_admin role, not OpCo
-  // assignments, so a zero-assignment group admin still has access — keep them
-  // out of the "No access" section.
-  const hasAccess = (u: DbUser) => u.opcoAssignments.length > 0 || u.isGroupAdmin
+  // Group roles give access without an OpCo assignment, so keep those users out of "No access".
+  const hasAccess = (u: DbUser) => u.opcoAssignments.length > 0 || u.isGroupAdmin || u.isGroupAuditor
   const withAccess = filtered.filter(hasAccess)
   const noAccess = filtered.filter((u) => !hasAccess(u))
 
