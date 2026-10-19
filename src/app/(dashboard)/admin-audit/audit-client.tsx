@@ -6,16 +6,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 import { t } from "@/lib/i18n"
+import { dayStart, dayEnd } from "@/lib/dates"
 import { listAdminAudit } from "@/server/actions/audit-log"
 import AuditList from "./audit-list"
 import type { AuditRow } from "./types"
 
 const ACTIONS = [
   "user.onboard", "user.link", "user.deactivate", "user.reactivate", "role.update",
-  "team.create", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
+  "team.create", "team.update", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
   "cab.add", "cab.remove", "opco.create", "opco.rename", "opco.archive", "opco.unarchive",
-  "delegation.create", "delegation.revoke",
-  "risk_created", "risk_updated", "risk_closed", "blackout_created", "blackout_removed",
+  "delegation.create", "delegation.revoke", "approver_assignment_added", "approver_assignment_removed",
+  "access.join", "access.request", "access.approve", "access.deny",
+  "risk_created", "risk_updated", "blackout_created", "blackout_removed",
+  "chat_webhook_set", "chat_webhook_removed", "chat_webhook_enabled", "chat_webhook_disabled",
 ]
 
 interface AuditClientProps {
@@ -36,8 +39,8 @@ export default function AuditClient({ initialRows }: AuditClientProps) {
     try {
       const next = await listAdminAudit({
         action: action || undefined,
-        from: from ? new Date(from) : undefined,
-        to: to ? new Date(to) : undefined,
+        from: from ? dayStart(from) : undefined,
+        to: to ? dayEnd(to) : undefined,
       })
       setRows(next)
     } catch (err) {

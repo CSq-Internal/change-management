@@ -9,7 +9,7 @@ leadership decision; Vercel ignores the Dockerfile and builds Next.js natively.
 Drive you can't move a change past `draft`. **Vercel caveat:** the upload route is a
 Serverless Function with a **~4.5 MB request-body cap** (app allows 25 MB) — keep demo
 files under ~4.5 MB; larger uploads 413 on Vercel (they'd work on Cloud Run).
-**Skipped in the demo:** the SLA cron (escalation still runs lazily on page load).
+**SLA escalation in the demo:** only the daily Vercel cron in `vercel.json` (08:00 UTC) runs it, so a breach can wait up to a day to escalate. Prod runs it every 15 minutes.
 
 ---
 

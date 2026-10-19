@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { OPCO_NAMES } from "@/lib/opco"
-import type { OpCoSlug } from "@/lib/opco"
 import { createChange, updateChange, submitChange } from "@/server/actions/changes"
 import { listEligibleApproversAction } from "@/server/actions/eligible-approvers"
 import { setChangeApprovers } from "@/server/actions/assignees"
@@ -17,19 +15,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import DocumentSection from "@/components/document-section"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
-import { isGroupLevelInfra } from "@/lib/approver-routing"
+import { isGroupLevelInfra, INFRA_TYPES as infraTypes } from "@/lib/approver-routing"
+import { toDateTimeLocal } from "@/lib/dates"
 import type { AttachmentKind } from "@prisma/client"
-
-const infraTypes = [
-  "Equiano Optics",
-  "Backbone Transport Network",
-  "Metro Transport Network",
-  "Wifi",
-  "Internal IT Infrastructure",
-  "Equiano IP",
-  "Backbone IP Network",
-  "Power",
-] as const
 
 type Initial = {
   id: string
@@ -51,7 +39,7 @@ type Initial = {
 type AttachmentSlot = { id: string; kind: string; filename: string; externalUrl?: string | null }
 
 interface Props {
-  opcoOptions: string[]
+  opcoOptions: { slug: string; name: string }[]
   mode?: "create" | "edit"
   initial?: Initial
   defaultEmail?: string
@@ -66,7 +54,7 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   const { toast } = useToast()
 
   const [email, setEmail] = useState(initial?.contactEmail ?? defaultEmail ?? "")
-  const [opcoSlug, setOpcoSlug] = useState(initial?.opcoSlug ?? opcoOptions[0] ?? "")
+  const [opcoSlug, setOpcoSlug] = useState(initial?.opcoSlug ?? opcoOptions[0]?.slug ?? "")
   const [infrastructureType, setInfrastructureType] = useState<(typeof infraTypes)[number] | "">(
     (initial?.infrastructureType as (typeof infraTypes)[number]) ?? ""
   )
@@ -78,8 +66,8 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
   const [category, setCategory] = useState<"config" | "infrastructure" | "software" | "process">(
     (initial?.category as "config" | "infrastructure" | "software" | "process") ?? "software"
   )
-  const [plannedStart, setPlannedStart] = useState(initial?.plannedStart ?? "")
-  const [plannedEnd, setPlannedEnd] = useState(initial?.plannedEnd ?? "")
+  const [plannedStart, setPlannedStart] = useState(() => toDateTimeLocal(initial?.plannedStart))
+  const [plannedEnd, setPlannedEnd] = useState(() => toDateTimeLocal(initial?.plannedEnd))
   const [impactScope, setImpactScope] = useState(initial?.impactScope ?? "")
   const [implementationPlan, setImplementationPlan] = useState(initial?.implementationPlan ?? "")
   const [testingPlan, setTestingPlan] = useState(initial?.testingPlan ?? "")
@@ -329,9 +317,9 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
               onChange={(e) => setOpcoSlug(e.target.value)}
               disabled={mode === "edit"}
             >
-              {opcoOptions.map((slug) => (
-                <option key={slug} value={slug}>
-                  {OPCO_NAMES[slug as OpCoSlug] ?? slug}
+              {opcoOptions.map((o) => (
+                <option key={o.slug} value={o.slug}>
+                  {o.name}
                 </option>
               ))}
             </select>

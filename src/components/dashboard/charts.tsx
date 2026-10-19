@@ -24,7 +24,7 @@ export function RiskDonut({ riskOpen }: { riskOpen: Record<RiskLevelName, number
             transform={`rotate(-90 ${cx} ${cx})`} />
         ))}
         <text x={cx} y={cx - 2} textAnchor="middle" className="fill-foreground text-xl font-semibold tabular-nums">{total}</text>
-        <text x={cx} y={cx + 14} textAnchor="middle" className="fill-muted-foreground text-[11px]">open</text>
+        <text x={cx} y={cx + 14} textAnchor="middle" className="fill-muted-foreground text-[11px]">{t(language, "dashboard.chart.open")}</text>
       </svg>
       <ul className="flex-1 space-y-1">
         {segs.map((s) => (
@@ -59,7 +59,7 @@ export function OpcoBars({ data }: { data: NamedCount[] }) {
 
 export function StatusDistribution({ counts }: { counts: Record<ChangeStatusName, number> }) {
   const language = useStore((s) => s.language)
-  const order: ChangeStatusName[] = ["pending", "approved", "implemented", "verified", "draft", "rejected", "closed"]
+  const order: ChangeStatusName[] = ["pending", "approved", "implemented", "verified", "draft", "rejected", "closed", "cancelled"]
   const segs = order.map((s) => ({ s, n: counts[s] })).filter((x) => x.n > 0)
   const total = segs.reduce((a, x) => a + x.n, 0)
   return (
@@ -75,7 +75,7 @@ export function StatusDistribution({ counts }: { counts: Record<ChangeStatusName
           </span>
         ))}
       </div>
-      <span className="sr-only">{total} total</span>
+      <span className="sr-only">{total} {t(language, "dashboard.chart.total")}</span>
     </div>
   )
 }

@@ -17,7 +17,7 @@ declare module "next-auth" {
       keycloakId: string
       organizations: SessionOrganization[]
       realmRoles: string[]  // CMS client roles on csquared-cms: "group_admin" | "group_auditor"
-      orphaned?: boolean    // token's keycloakId maps to no DB user → client guard signs out
+      orphaned?: boolean    // keycloakId maps to no DB user, or a deactivated one → client guard signs out
     }
   }
 }
@@ -28,7 +28,8 @@ declare module "next-auth/jwt" {
     organizations?: SessionOrganization[]
     realmRoles?: string[]
     accessToken?: string
+    idToken?: string // sign-in ID token, the hint for Keycloak end-session on Log out
     orgsRefreshedAt?: number // epoch ms of the last DB org load (Part A TTL re-enrichment)
-    orphaned?: boolean // set when this token's keycloakId no longer maps to a DB user
+    orphaned?: boolean // set when keycloakId maps to no DB user, or a deactivated one
   }
 }

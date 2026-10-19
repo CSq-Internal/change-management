@@ -6,6 +6,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin } from "@/lib/permissions"
 import { createKeycloakOrg } from "@/server/keycloak"
 import { recordAdminAction } from "@/server/audit"
+import { activeOpCos } from "@/server/opco-scope"
 
 function assertGroupAdmin(session: { realmRoles: string[] }) {
   if (!isGroupAdmin(session.realmRoles)) {
@@ -28,6 +29,12 @@ async function authorizeOpCoAction(opcoId: string) {
   const db = getPrisma()
   const opco = await loadOpCo(db, opcoId)
   return { session, db, opco }
+}
+
+/** Every OpCo that is not archived, for the group admin's header switcher. */
+export async function listActiveOpCos() {
+  assertGroupAdmin(await getAppSession())
+  return activeOpCos("all")
 }
 
 export async function createOpCo(input: { slug: string; name: string; locale?: string }) {

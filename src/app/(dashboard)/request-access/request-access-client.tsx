@@ -1,59 +1,49 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { requestAccess } from "@/server/actions/access-requests"
+import { joinOpCo } from "@/server/actions/access-requests"
 import { Button } from "@/components/ui/button"
 
 export type OpCoOption = { name: string; slug: string }
-export type MyRequest = {
-  id: string
-  opcoName: string
-  status: "pending" | "approved" | "denied"
-  decisionReason: string | null
-  createdAt: string
-}
 
-export default function RequestAccessClient({
-  opcos,
-  requests,
-}: {
-  opcos: OpCoOption[]
-  requests: MyRequest[]
-}) {
+export default function RequestAccessClient({ opcos }: { opcos: OpCoOption[] }) {
   const { language } = useStore()
   const tr = (k: string) => t(language, k)
+  const { update } = useSession()
+  const router = useRouter()
   const [opcoSlug, setOpcoSlug] = useState(opcos[0]?.slug ?? "")
-  const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
 
   async function submit() {
     setBusy(true)
     setError(null)
     try {
-      await requestAccess({ opcoSlug, note: note || undefined })
-      setDone(true)
+      await joinOpCo(opcoSlug)
+      // Reload the session's OpCo roles now; otherwise the gate holds the user
+      // until the 60s refresh. update() rewrites the session cookie the proxy reads;
+      // it needs an argument, or next-auth sends a GET that skips trigger "update".
+      await update({})
+      router.replace("/")
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-    } finally {
       setBusy(false)
     }
   }
 
-  const statusLabel = (s: MyRequest["status"]) => tr(`access.request.status.${s}`)
-
   return (
-    <div className="mx-auto max-w-xl space-y-8 p-6">
+    <div className="mx-auto max-w-xl space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-semibold">{tr("access.request.title")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{tr("access.request.intro")}</p>
+        <h1 className="text-xl font-semibold">{tr("access.join.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{tr("access.join.intro")}</p>
       </div>
 
       {opcos.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{tr("access.request.empty")}</p>
+        <p className="text-sm text-muted-foreground">{tr("access.join.empty")}</p>
       ) : (
         <div className="space-y-4">
           <label className="block text-sm font-medium">
@@ -68,41 +58,15 @@ export default function RequestAccessClient({
               ))}
             </select>
           </label>
-          <label className="block text-sm font-medium">
-            {tr("access.request.note")}
-            <textarea
-              className="mt-1 block w-full rounded-md border bg-background p-2"
-              rows={3}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </label>
+          <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            {tr("access.join.notice")}
+          </p>
           {error && <p className="text-sm text-rose-600">{error}</p>}
-          {done && <p className="text-sm text-emerald-600">{tr("access.request.success")}</p>}
           <Button onClick={submit} disabled={busy || !opcoSlug}>
-            {busy ? tr("access.request.submitting") : tr("access.request.submit")}
+            {busy ? tr("access.join.continuing") : tr("access.join.continue")}
           </Button>
         </div>
       )}
-
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold">{tr("access.request.myRequests")}</h2>
-        {requests.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{tr("access.request.none")}</p>
-        ) : (
-          <ul className="divide-y rounded-md border">
-            {requests.map((r) => (
-              <li key={r.id} className="flex items-center justify-between p-3 text-sm">
-                <span>{r.opcoName}</span>
-                <span className="text-muted-foreground">
-                  {statusLabel(r.status)}
-                  {r.decisionReason ? ` — ${r.decisionReason}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { formatDateTime } from "@/lib/dates"
+import { DateTime } from "@/components/date-time"
 import { FEEDBACK_OUTCOMES, isFeedbackOutcome, requiresNote } from "@/lib/feedback-outcome"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -120,7 +120,7 @@ export default function FeedbackClient({ rows: initialRows }: { rows: FeedbackRo
                     return (
                       <tr key={r.id} className="border-b border-border/40 align-top">
                         <td className="px-4 py-2 whitespace-nowrap text-xs text-muted-foreground" data-label={label("when")}>
-                          {formatDateTime(r.createdAt)}
+                          <DateTime value={r.createdAt} />
                         </td>
                         <td className="px-4 py-2 font-medium" data-label={label("filterCategory")}>
                           {tr(`feedback.categoryShort.${r.category}`)}

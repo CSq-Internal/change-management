@@ -14,6 +14,8 @@ vi.mock('@/lib/session', () => ({
 }))
 
 const mockDb = {
+  $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
+  $queryRaw: vi.fn().mockResolvedValue([]),
   user: {
     findUnique: vi.fn().mockResolvedValue({ id: 'user-requester', keycloakId: 'kc-requester', email: 'requester@csquared.com', name: 'Requester' }),
   },
@@ -140,7 +142,7 @@ describe('TC-CONTRACT-SOD-001: submitApproval — self-approval rejected (SoD)',
     // db.changeRequest.findUnique resolves with requesterId = 'user-requester'
     // → change.requesterId === user.id → SoD check fires
     await expect(
-      submitApproval('cr-1', 'approve', undefined, false)
+      submitApproval('cr-1', 'approve', undefined)
     ).rejects.toThrow(/SoD violation/)
   })
 })
@@ -151,7 +153,7 @@ describe('submitApproval — CAB authority + quorum', () => {
   it('forbids when the authority predicate denies', async () => {
     vi.mocked(canUserApproveChange).mockResolvedValueOnce(false)
     await expect(
-      submitApproval('cr-1', 'approve', undefined, false)
+      submitApproval('cr-1', 'approve', undefined)
     ).rejects.toThrow(/Forbidden/)
   })
 
@@ -161,7 +163,7 @@ describe('submitApproval — CAB authority + quorum', () => {
       opco: { slug: 'ghana' }, infrastructureType: 'Wifi',
       riskLevel: 'low', title: 'x', approvals: [],
     })
-    await submitApproval('cr-1', 'approve', undefined, false)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
@@ -173,7 +175,7 @@ describe('submitApproval — CAB authority + quorum', () => {
       opco: { slug: 'ghana' }, infrastructureType: 'Equiano Optics',
       riskLevel: 'high', title: 'x', approvals: [],
     })
-    await submitApproval('cr-1', 'approve', undefined, false)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
@@ -186,7 +188,7 @@ describe('submitApproval — CAB authority + quorum', () => {
       riskLevel: 'high', title: 'x',
       approvals: [], // first vote → no quorum yet
     })
-    await submitApproval('cr-1', 'approve', undefined, false)
+    await submitApproval('cr-1', 'approve', undefined)
     // only one CAB approve → not advanced to approved
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
@@ -199,13 +201,31 @@ describe('submitApproval — CAB authority + quorum', () => {
       opco: { slug: 'ghana' }, infrastructureType: 'Wifi', riskLevel: 'emergency',
       isEmergency: true, expedited: true, title: 'x', approvals: [],
     })
-    await submitApproval('cr-1', 'approve', undefined, false)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ retroApprovedAt: expect.any(Date) }) })
     )
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
+  })
+})
+
+describe('submitApproval — one vote at a time per change', () => {
+  // Two approvers voting together each counted only their own vote from a stale read, so
+  // quorum was never met, or an approve overwrote a reject. Votes now run one at a time.
+  it('locks the change row before reading the change and its votes', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', riskLevel: 'low', infrastructureType: 'Wifi',
+      opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' }, approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', undefined)
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    const [sql] = mockDb.$queryRaw.mock.calls[0] as [TemplateStringsArray]
+    expect(sql.join('?')).toMatch(/FROM "ChangeRequest" WHERE "id" = \? FOR UPDATE/)
+    const lock = mockDb.$queryRaw.mock.invocationCallOrder[0]
+    expect(lock).toBeLessThan(mockDb.changeRequest.findUnique.mock.invocationCallOrder[0])
+    expect(lock).toBeLessThan(mockDb.auditLog.findFirst.mock.invocationCallOrder[0])
   })
 })
 
@@ -220,7 +240,7 @@ describe('submitApproval — duplicate vote guard', () => {
       ...PENDING,
       approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true }],
     })
-    await expect(submitApproval('cr-1', 'approve', undefined, true))
+    await expect(submitApproval('cr-1', 'approve', undefined))
       .rejects.toThrow(/already voted/i)
     expect(mockDb.approval.create).not.toHaveBeenCalled()
   })
@@ -230,7 +250,7 @@ describe('submitApproval — duplicate vote guard', () => {
       ...PENDING,
       approvals: [{ approverId: 'someone-else-entirely', decision: 'approve', isCab: true }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalled()
   })
 
@@ -244,7 +264,7 @@ describe('submitApproval — duplicate vote guard', () => {
         decidedAt: new Date('2026-07-20T09:00:00Z'),
       }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalled()
   })
 })
@@ -266,7 +286,7 @@ describe('submitApproval — retrospective stage scoping', () => {
         approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
       }],
     })
-    await expect(submitApproval('cr-1', 'approve', undefined, true))
+    await expect(submitApproval('cr-1', 'approve', undefined))
       .rejects.toThrow(/already voted/i)
     expect(mockDb.approval.create).not.toHaveBeenCalled()
   })
@@ -278,7 +298,7 @@ describe('submitApproval — retrospective stage scoping', () => {
         approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
       }],
     })
-    await expect(submitApproval('cr-1', 'approve', undefined, true)).rejects.toThrow()
+    await expect(submitApproval('cr-1', 'approve', undefined)).rejects.toThrow()
     expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
   })
 
@@ -289,8 +309,21 @@ describe('submitApproval — retrospective stage scoping', () => {
         approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: BEFORE_IMPL,
       }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalled()
+  })
+
+  it('refuses a retrospective vote from the person who expedited the change', async () => {
+    // Implementing an emergency without approval stands in for that approval; the
+    // retrospective vote is the check on it, so the implementer cannot cast it.
+    mockDb.changeRequest.findUnique.mockResolvedValue({
+      ...EXPEDITED, implementedById: 'user-requester', approvals: [],
+    })
+    for (const decision of ['approve', 'reject'] as const) {
+      await expect(submitApproval('cr-1', decision, 'ok')).rejects.toThrow(/implemented this change/i)
+    }
+    expect(mockDb.approval.create).not.toHaveBeenCalled()
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
   })
 
   it('allows a retrospective vote from an approver who has not voted in this stage', async () => {
@@ -300,7 +333,7 @@ describe('submitApproval — retrospective stage scoping', () => {
         approverId: 'someone-else-entirely', decision: 'approve', isCab: true, decidedAt: AFTER_IMPL,
       }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalled()
   })
 })
@@ -321,7 +354,7 @@ describe('submitApproval — submission-cycle scoping', () => {
       ...PENDING,
       approvals: [{ approverId: 'user-requester', decision: 'reject', isCab: true, decidedAt: BEFORE }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalled()
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
@@ -334,7 +367,7 @@ describe('submitApproval — submission-cycle scoping', () => {
       ...PENDING,
       approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: AFTER }],
     })
-    await expect(submitApproval('cr-1', 'approve', undefined, true))
+    await expect(submitApproval('cr-1', 'approve', undefined))
       .rejects.toThrow(/already voted/i)
     expect(mockDb.approval.create).not.toHaveBeenCalled()
   })
@@ -345,7 +378,7 @@ describe('submitApproval — submission-cycle scoping', () => {
       ...PENDING, riskLevel: 'high',
       approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true, decidedAt: BEFORE }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     // The old vote was cast against a previous version of the plan — quorum is not met.
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
@@ -358,7 +391,7 @@ describe('submitApproval — submission-cycle scoping', () => {
       ...PENDING, riskLevel: 'high',
       approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true, decidedAt: AFTER }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
@@ -370,7 +403,7 @@ describe('submitApproval — submission-cycle scoping', () => {
       ...PENDING,
       approvals: [{ approverId: 'user-requester', decision: 'approve', isCab: true, decidedAt: BEFORE }],
     })
-    await expect(submitApproval('cr-1', 'approve', undefined, true))
+    await expect(submitApproval('cr-1', 'approve', undefined))
       .rejects.toThrow(/already voted/i)
   })
 })
@@ -382,7 +415,7 @@ describe('submitApproval — named approvers count toward quorum', () => {
       opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
       approvals: [{ approverId: 'first-approver', decision: 'approve', isCab: true }],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'approved' } })
     )
@@ -394,7 +427,7 @@ describe('submitApproval — named approvers count toward quorum', () => {
       opcoId: 'opco-1', requesterId: 'someone-else', opco: { slug: 'ghana' },
       approvals: [],
     })
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
@@ -409,7 +442,7 @@ describe('submitApproval — high-risk quorum needs a routed CAB vote', () => {
 
   it('records a nominated approver outside the routed CAB as a non-CAB vote', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValue(highRisk([]))
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isCab: false }) })
     )
@@ -420,7 +453,7 @@ describe('submitApproval — high-risk quorum needs a routed CAB vote', () => {
       { id: 'user-requester', name: 'Requester', email: 'requester@csquared.com' },
     ])
     mockDb.changeRequest.findUnique.mockResolvedValue(highRisk([]))
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isCab: true }) })
     )
@@ -432,7 +465,7 @@ describe('submitApproval — high-risk quorum needs a routed CAB vote', () => {
       organizations: [], realmRoles: ['group_admin'],
     } as never)
     mockDb.changeRequest.findUnique.mockResolvedValue(highRisk([]))
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.approval.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isCab: true }) })
     )
@@ -442,7 +475,7 @@ describe('submitApproval — high-risk quorum needs a routed CAB vote', () => {
     mockDb.changeRequest.findUnique.mockResolvedValue(
       highRisk([{ approverId: 'first-nominee', decision: 'approve', isCab: false }])
     )
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'approved' } })
     )
@@ -455,7 +488,7 @@ describe('submitApproval — high-risk quorum needs a routed CAB vote', () => {
     mockDb.changeRequest.findUnique.mockResolvedValue(
       highRisk([{ approverId: 'first-nominee', decision: 'approve', isCab: false }])
     )
-    await submitApproval('cr-1', 'approve', undefined, true)
+    await submitApproval('cr-1', 'approve', undefined)
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'approved' } })
     )

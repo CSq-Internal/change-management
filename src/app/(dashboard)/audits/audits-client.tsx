@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { formatDateTime } from "@/lib/dates"
+import { DateTime } from "@/components/date-time"
 
 export type AuditEntry = {
   id: string
@@ -44,25 +44,25 @@ export default function AuditsClient({ entries }: AuditsClientProps) {
     <div className="space-y-6">
     <Card className="border-border/80 bg-card/95">
       <CardHeader>
-        <CardTitle className="text-base">CSV Export</CardTitle>
-        <CardDescription>Filter by OpCo and date range, then download the audit log.</CardDescription>
+        <CardTitle className="text-base">{t(language, "audits.export.title")}</CardTitle>
+        <CardDescription>{t(language, "audits.export.desc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-1.5">
-            <label htmlFor="opco" className="text-sm font-medium">OpCo (leave blank for all)</label>
-            <Input id="opco" placeholder="e.g. ghana" value={opco} onChange={(e) => setOpco(e.target.value)} />
+            <label htmlFor="opco" className="text-sm font-medium">{t(language, "audits.export.opco")}</label>
+            <Input id="opco" placeholder={t(language, "audits.export.opcoPlaceholder")} value={opco} onChange={(e) => setOpco(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="from" className="text-sm font-medium">From</label>
+            <label htmlFor="from" className="text-sm font-medium">{t(language, "auditAdmin.filterFrom")}</label>
             <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="to" className="text-sm font-medium">To</label>
+            <label htmlFor="to" className="text-sm font-medium">{t(language, "auditAdmin.filterTo")}</label>
             <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
         </div>
-        <Button onClick={handleDownload}>Download CSV</Button>
+        <Button onClick={handleDownload}>{t(language, "audits.export.download")}</Button>
       </CardContent>
     </Card>
 
@@ -73,37 +73,37 @@ export default function AuditsClient({ entries }: AuditsClientProps) {
       <CardContent>
         <p className="text-muted-foreground text-sm">{t(language, "audits.desc")}</p>
         {entries.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No audit entries found.</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t(language, "audits.empty")}</p>
         ) : (
           <div className="mt-4 overflow-auto max-h-[60vh] sm:max-h-[50vh]">
             <table className="responsive-table w-full text-xs text-foreground/80">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="pb-2 pr-4">Timestamp</th>
-                  <th className="pb-2 pr-4">Actor</th>
-                  <th className="pb-2 pr-4">Change</th>
-                  <th className="pb-2 pr-4">Action</th>
-                  <th className="pb-2 pr-4">OpCo</th>
-                  <th className="pb-2 pr-4">From</th>
-                  <th className="pb-2 pr-4">To</th>
-                  <th className="pb-2">Note</th>
+                  <th className="pb-2 pr-4">{t(language, "audits.col.timestamp")}</th>
+                  <th className="pb-2 pr-4">{t(language, "auditAdmin.colActor")}</th>
+                  <th className="pb-2 pr-4">{t(language, "audits.col.change")}</th>
+                  <th className="pb-2 pr-4">{t(language, "auditAdmin.colAction")}</th>
+                  <th className="pb-2 pr-4">{t(language, "auditAdmin.colOpco")}</th>
+                  <th className="pb-2 pr-4">{t(language, "audits.col.from")}</th>
+                  <th className="pb-2 pr-4">{t(language, "audits.col.to")}</th>
+                  <th className="pb-2">{t(language, "audits.col.note")}</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((entry) => (
                   <tr key={entry.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-2 pr-4 whitespace-nowrap" data-label="Timestamp">
-                      {formatDateTime(entry.at)}
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label={t(language, "audits.col.timestamp")}>
+                      <DateTime value={entry.at} />
                     </td>
-                    <td className="py-2 pr-4 whitespace-nowrap" data-label="Actor">
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label={t(language, "auditAdmin.colActor")}>
                       {entry.actor.name ?? entry.actor.email}
                     </td>
-                    <td className="py-2 pr-4 max-w-[180px] truncate" data-label="Change">{entry.change.title}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap" data-label="Action">{entry.action}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap" data-label="OpCo">{entry.change.opco.slug}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap" data-label="From">{entry.fromStatus ?? "—"}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap" data-label="To">{entry.toStatus ?? "—"}</td>
-                    <td className="py-2 max-w-[160px] truncate" data-label="Note">{entry.note ?? "—"}</td>
+                    <td className="py-2 pr-4 max-w-[180px] truncate" data-label={t(language, "audits.col.change")}>{entry.change.title}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label={t(language, "auditAdmin.colAction")}>{entry.action}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label={t(language, "auditAdmin.colOpco")}>{entry.change.opco.slug}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label={t(language, "audits.col.from")}>{entry.fromStatus ?? "—"}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap" data-label={t(language, "audits.col.to")}>{entry.toStatus ?? "—"}</td>
+                    <td className="py-2 max-w-[160px] truncate" data-label={t(language, "audits.col.note")}>{entry.note ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

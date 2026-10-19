@@ -4,22 +4,24 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useStore } from "@/lib/store"
+import { dateLocale } from "@/lib/dates"
 import { t } from "@/lib/i18n"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
 import { rescheduleChange } from "@/server/actions/changes"
 import { createBlackoutPeriod, deleteBlackoutPeriod } from "@/server/actions/blackout"
-import type { RiskLevel } from "@/lib/calendar"
+import { chipDay, localDayKey, type RiskLevel } from "@/lib/calendar"
+import { useClientValue } from "@/lib/use-hydrated"
 
-export type CalDay = { key: string; inMonth: boolean; dayNum: number | null; isToday: boolean }
+export type CalDay = { key: string; inMonth: boolean; dayNum: number | null }
 export type CalChipData = {
   id: string; title: string; opcoName: string; riskLevel: string; status: string
-  startMs: number; endMs: number; timeLabel: string; day: string
+  startMs: number; endMs: number
   overlap: boolean; blackout: boolean; severity: RiskLevel | null
   blackoutLabels: string[]; canReschedule: boolean
 }
 export type BlackoutScope = { value: string; label: string }
-export type BlackoutRow = { id: string; label: string; scopeName: string; startMs: number; endMs: number }
+export type BlackoutRow = { id: string; label: string; scopeName: string; opcoSlug: string | null; startMs: number; endMs: number }
 
 const SEVERITY_RING: Record<string, string> = {
   low: "ring-emerald-400", medium: "ring-amber-400", high: "ring-orange-500", emergency: "ring-rose-500",
@@ -87,7 +89,7 @@ export default function CalendarClient({
         toast({ title: t(language, "calendar.blackout.created"), variant: "success" })
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : t(language, "common.unknownError"), variant: "error" })
       }
     })
   }
@@ -99,13 +101,27 @@ export default function CalendarClient({
         toast({ title: t(language, "calendar.blackout.removed"), variant: "success" })
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : t(language, "common.unknownError"), variant: "error" })
       }
     })
   }
 
-  const chipsByDay = new Map<string, CalChipData[]>()
-  for (const c of chips) {
+  // Days and times are the viewer's, so chips are placed in the browser, after hydration.
+  const todayKey = useClientValue(() => localDayKey(Date.now()), null)
+  const hydrated = todayKey !== null
+  const monthDays = cells.filter((c) => c.inMonth)
+  const firstKey = monthDays[0]?.key ?? ""
+  const lastKey = monthDays.at(-1)?.key ?? ""
+  const placed = hydrated
+    ? chips.flatMap((c) => {
+        const day = chipDay(c.startMs, firstKey, lastKey)
+        const timeLabel = new Date(c.startMs).toLocaleTimeString(dateLocale(language), { hour: "2-digit", minute: "2-digit" })
+        return day ? [{ ...c, day, timeLabel }] : []
+      })
+    : []
+
+  const chipsByDay = new Map<string, typeof placed>()
+  for (const c of placed) {
     const arr = chipsByDay.get(c.day) ?? []
     arr.push(c)
     chipsByDay.set(c.day, arr)
@@ -114,7 +130,7 @@ export default function CalendarClient({
   const agenda = [...chipsByDay.entries()].sort(([a], [b]) => a.localeCompare(b))
 
   const onDrop = (dayKey: string) => {
-    const chip = chips.find((c) => c.id === dragId)
+    const chip = placed.find((c) => c.id === dragId)
     setDragId(null)
     if (!chip || chip.day === dayKey) return
     const [y, m, d] = dayKey.split("-").map(Number)
@@ -130,7 +146,7 @@ export default function CalendarClient({
       } catch (err) {
         toast({
           title: t(language, "calendar.reschedule.failed"),
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
           variant: "error",
         })
       }
@@ -164,7 +180,7 @@ export default function CalendarClient({
       <Card className="hidden border-border/80 bg-card/95 sm:block">
         <CardContent className="p-3">
           <div className="grid grid-cols-7 gap-px text-xs font-medium text-muted-foreground">
-            {WEEKDAYS.map((w) => (<div key={w} className="px-2 py-1">{w}</div>))}
+            {WEEKDAYS.map((w) => (<div key={w} className="px-2 py-1">{t(language, `calendar.weekday.${w}`)}</div>))}
           </div>
           <div className={`grid grid-cols-7 gap-px ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
             {cells.map((cell) => {
@@ -174,10 +190,10 @@ export default function CalendarClient({
                   key={cell.key}
                   onDragOver={(e) => { if (cell.inMonth) e.preventDefault() }}
                   onDrop={() => { if (cell.inMonth) onDrop(cell.key) }}
-                  className={`min-h-24 rounded-md border p-1 ${cell.inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30"} ${cell.isToday ? "ring-2 ring-primary/60" : ""}`}
+                  className={`min-h-24 rounded-md border p-1 ${cell.inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30"} ${cell.key === todayKey ? "ring-2 ring-primary/60" : ""}`}
                 >
                   {cell.dayNum != null && (
-                    <div className={`mb-1 text-xs ${cell.isToday ? "font-bold text-primary" : "text-muted-foreground"}`}>{cell.dayNum}</div>
+                    <div className={`mb-1 text-xs ${cell.key === todayKey ? "font-bold text-primary" : "text-muted-foreground"}`}>{cell.dayNum}</div>
                   )}
                   <div className="space-y-1">
                     {dayChips.map((chip) => (
@@ -266,7 +282,7 @@ export default function CalendarClient({
                     onChange={(e) => setBoScope(e.target.value)}
                     className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                   >
-                    {blackoutScopes.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+                    {blackoutScopes.map((s) => (<option key={s.value} value={s.value}>{s.value ? s.label : t(language, "calendar.blackout.scopeAll")}</option>))}
                   </select>
                 </label>
               )}
@@ -296,16 +312,17 @@ export default function CalendarClient({
                   <div key={b.id} className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2 text-sm">
                     <span className="min-w-0 truncate">
                       <span className="font-medium">{b.label}</span>
-                      <span className="text-muted-foreground"> · {b.scopeName} · {formatDayLabel(new Date(b.startMs).toISOString().slice(0, 10), language)} → {formatDayLabel(new Date(b.endMs).toISOString().slice(0, 10), language)}</span>
+                      <span className="text-muted-foreground"> · {b.opcoSlug ? b.scopeName : t(language, "calendar.blackout.scopeGroup")} · {hydrated && `${formatDayLabel(localDayKey(b.startMs), language)} → ${formatDayLabel(localDayKey(b.endMs), language)}`}</span>
                     </span>
-                    <button
+                    {/* The scopes the viewer may set are the ones they may remove ("" is group-wide). */}
+                    {blackoutScopes.some((s) => s.value === (b.opcoSlug ?? "")) && <button
                       type="button"
                       onClick={() => removeBlackout(b.id)}
                       disabled={isPending}
                       className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
                     >
                       {t(language, "calendar.blackout.remove")}
-                    </button>
+                    </button>}
                   </div>
                 ))
               )}

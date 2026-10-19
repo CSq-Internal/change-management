@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
-import { isGroupLevel, isMemberOfOpCo } from "@/lib/permissions"
+import { canViewChange } from "@/server/change-access"
 import { EvidenceDocument } from "@/server/pdf/evidence-document"
 
 export const runtime = "nodejs"
@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   })
   if (!change) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  if (!isGroupLevel(session.user.realmRoles) && !isMemberOfOpCo(session.user.organizations, change.opco.slug)) {
+  if (!(await canViewChange(session.user, change))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

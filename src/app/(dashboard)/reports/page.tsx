@@ -3,7 +3,19 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { isGroupLevel } from "@/lib/permissions"
 import { computeSlaReport, type SlaReportRow } from "@/lib/sla-report"
+import { currentDecisionAt } from "@/lib/approval-cycle"
 import ReportsClient from "./reports-client"
+
+/** Time from the last submission to the approval that followed it; null if never approved. */
+function approvalMs(trail: { action: string; at: Date }[]): number | null {
+  let submittedAt: Date | null = null
+  let ms: number | null = null
+  for (const e of trail) {
+    if (e.action === "submitted") submittedAt = e.at
+    else if (e.action === "approved" && submittedAt) ms = e.at.getTime() - submittedAt.getTime()
+  }
+  return ms
+}
 
 export default async function ReportsPage() {
   const session = await auth()
@@ -32,10 +44,9 @@ export default async function ReportsPage() {
         slaDeadline: true,
         opco: { select: { slug: true, name: true } },
         auditTrail: {
-          where: { action: { in: ["approved", "rejected"] } },
+          where: { action: { in: ["submitted", "approved", "rejected"] } },
           orderBy: { at: "asc" },
-          take: 1,
-          select: { at: true },
+          select: { action: true, at: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -52,6 +63,7 @@ export default async function ReportsPage() {
       riskLevel: c.riskLevel,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
+      approvalMs: approvalMs(c.auditTrail),
     })),
   }
 
@@ -62,7 +74,7 @@ export default async function ReportsPage() {
     opcoName: c.opco.name,
     riskLevel: c.riskLevel,
     slaDeadline: c.slaDeadline ? c.slaDeadline.getTime() : null,
-    decidedAt: c.auditTrail[0] ? c.auditTrail[0].at.getTime() : null,
+    decidedAt: currentDecisionAt(c.auditTrail)?.getTime() ?? null,
   }))
   const slaCompliance = computeSlaReport(slaRows, now)
 

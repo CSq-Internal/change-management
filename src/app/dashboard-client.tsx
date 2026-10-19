@@ -5,6 +5,7 @@ import { LayoutGrid, ListChecks, ChartBar } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { buildDashboardData, type DashboardChange } from "@/lib/dashboard-metrics"
+import { useHydrated } from "@/lib/use-hydrated"
 import { applyFilters, EMPTY_FILTERS, filterToQuery, isActive, queryToFilter, type FilterState } from "@/lib/dashboard-filters"
 import { StatusBar } from "@/components/dashboard/status-bar"
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
@@ -66,7 +67,9 @@ export default function DashboardClient({ changes, now, infraOptions, opcoOption
   }
 
   const filtered = useMemo(() => applyFilters(changes, filters), [changes, filters])
-  const data = useMemo(() => buildDashboardData(filtered, now), [filtered, now])
+  // Day buckets and times are the viewer's; until hydration they are UTC, as on the server.
+  const local = useHydrated()
+  const data = useMemo(() => buildDashboardData(filtered, now, !local), [filtered, now, local])
 
   const triageCount = data.triage.overdue.length + data.triage.awaiting.length + data.triage.advance.length
 

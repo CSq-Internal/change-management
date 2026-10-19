@@ -10,6 +10,7 @@ vi.mock('@/lib/session', () => ({
 }))
 
 const mockDb = {
+  $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   user: { findUnique: vi.fn().mockResolvedValue({ id: 'user-req', keycloakId: 'kc-req' }) },
   changeRequest: {
     findUnique: vi.fn(),
@@ -56,6 +57,15 @@ describe('rescheduleChange', () => {
   it('rejects an implemented change (status guard)', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValue({ ...pendingChange, status: 'implemented' })
     await expect(rescheduleChange('c1', NEW_START, NEW_END)).rejects.toThrow(/unimplemented/i)
+  })
+
+  it('writes the new window and its audit row in one transaction', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValue(pendingChange)
+    await rescheduleChange('c1', NEW_START, NEW_END)
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'rescheduled' }) })
+    )
   })
 
   it('rejects an invalid window (end <= start)', async () => {

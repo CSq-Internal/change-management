@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react"
+import { keycloakLogoutUrl } from "@/server/actions/logout"
 import { useStore } from "@/lib/store"
 import { getNavCounts, setMyLocale } from "@/server/actions/notifications"
 import { canManageAnyOpCo, isGroupAdmin, isGroupLevel } from "@/lib/permissions"
@@ -94,6 +95,15 @@ const navGroups = [
   },
 ]
 
+// Clear the app session, then end the Keycloak one too; otherwise "Sign in" goes
+// straight back in as the same person. Falls back to an app-only logout.
+async function logOut() {
+  const keycloakUrl = await keycloakLogoutUrl().catch(() => null)
+  if (!keycloakUrl) return nextAuthSignOut({ callbackUrl: "/login" })
+  await nextAuthSignOut({ redirect: false })
+  window.location.href = keycloakUrl
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -129,8 +139,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     getNavCounts().then(setNavCounts).catch(() => {})
   }, [currentUser, pathname])
   // Broken-link guard: the server flags a session whose keycloakId no longer maps to a
-  // DB user (row deleted / DB reset). Sign out so the cookie is cleared via the route
-  // handler and the user re-authenticates, rather than being served a silent no-access
+  // DB user (row deleted / DB reset) or to a deactivated one. Sign out so the cookie is
+  // cleared via the route handler and the user re-authenticates, rather than being served a silent no-access
   // session. Done client-side because returning null from the jwt callback can't clear
   // the cookie during an RSC render and loops against the edge proxy's /login redirect.
   useEffect(() => {
@@ -194,14 +204,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    window.localStorage.setItem("csq-language", language)
     document.documentElement.lang = language
   }, [language])
 
   useEffect(() => {
     if (typeof window === "undefined") return
     const value = Number.isFinite(fontScale) ? fontScale : 1
-    window.localStorage.setItem("csq-font-scale", String(value))
     document.documentElement.style.setProperty("--app-font-scale", String(value))
   }, [fontScale])
 
@@ -451,7 +459,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {currentUser && (
                   <button
                     className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground transition hover:bg-muted"
-                    onClick={() => nextAuthSignOut({ callbackUrl: "/login" })}
+                    onClick={logOut}
                     aria-label="Log out"
                   >
                     <LogOut className="h-4 w-4" />

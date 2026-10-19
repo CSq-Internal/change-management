@@ -10,6 +10,7 @@ import {
 } from "@/server/email"
 import { resolveAudience } from "@/server/audience"
 import { coerceLocale, type Language } from "@/lib/i18n"
+import { utcStamp } from "@/lib/dates"
 
 type Db = ReturnType<typeof getPrisma>
 export type NotifyRecipient = { userId: string; email: string; name: string | null }
@@ -63,8 +64,18 @@ function emailFor(
   }
 }
 
-export async function postToChat(url: string, text: string): Promise<void> {
-  await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+// The caller's action waits on this, so a slow webhook gets five seconds. A failure is
+// logged by webhook id: the URL itself carries the webhook's key and token.
+export async function postToChat(hook: { id: string; url: string }, text: string): Promise<void> {
+  try {
+    const res = await fetch(hook.url, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) console.warn(`[chat] webhook ${hook.id} answered ${res.status}`)
+  } catch (err) {
+    console.warn(`[chat] webhook ${hook.id} failed: ${err instanceof Error ? err.name : "error"}`)
+  }
 }
 
 export async function notifyEvent(input: {
@@ -99,15 +110,12 @@ export async function notifyEvent(input: {
     if (isChannelEnabled(prefs, r.userId, type, "email")) {
       tasks.push(emailFor(type, r, change, ctx, locale, input.emailDetail))
     }
-    // Ledger row per recipient regardless of channel — it records that this person was
-    // notified about this event, which is what the reminder sweep needs to know.
-    tasks.push(db.notificationDispatch.create({ data: { userId: r.userId, changeId: change.id, type } }))
   }
 
   if (CHAT_BROADCAST_TYPES.includes(type)) {
     const hooks = await db.chatWebhook.findMany({ where: { isActive: true, OR: [{ opcoId: change.opcoId }, { opcoId: null }] } })
     const text = chatMessageText(type, change.title, ctx, opcoLocale)
-    for (const h of hooks) tasks.push(postToChat(h.url, text))
+    for (const h of hooks) tasks.push(postToChat(h, text))
   }
 
   await Promise.allSettled(tasks)
@@ -143,14 +151,13 @@ function detailRows(
   locale: Language,
 ): [string, string][] {
   const fr = locale === "fr"
-  const stamp = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ")
   const rows: [string, string][] = [
     [fr ? "Changement" : "Change", change.title],
     ["OpCo", change.opco.name],
     [fr ? "Risque" : "Risk", change.riskLevel],
   ]
   if (change.plannedStart && change.plannedEnd) {
-    rows.push([fr ? "Fenêtre" : "Window", `${stamp(change.plannedStart)} – ${stamp(change.plannedEnd)}`])
+    rows.push([fr ? "Fenêtre" : "Window", `${utcStamp(change.plannedStart)} – ${utcStamp(change.plannedEnd)}`])
   }
   return rows
 }

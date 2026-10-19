@@ -15,7 +15,7 @@ export default function ApprovalMatrixClient({
   canManage, infraTypes, scopes, candidates, rows,
 }: {
   canManage: boolean
-  infraTypes: string[]
+  infraTypes: readonly string[]
   scopes: { slug: string; name: string }[]
   candidates: { id: string; label: string }[]
   rows: OverrideRow[]
@@ -23,7 +23,7 @@ export default function ApprovalMatrixClient({
   const { language } = useStore()
   const router = useRouter()
   const { toast } = useToast()
-  const [, startTransition] = useTransition()
+  const [pending, startTransition] = useTransition()
   const [infra, setInfra] = useState(infraTypes[0] ?? "")
   const [scope, setScope] = useState(scopes[0]?.slug ?? "")
   const [userId, setUserId] = useState(candidates[0]?.id ?? "")
@@ -59,7 +59,7 @@ export default function ApprovalMatrixClient({
               {candidates.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
             </select>
           </label>
-          <Button disabled={!infra || !userId} onClick={() => run(() => addApproverAssignment({ infrastructureType: infra, opcoSlug: scope || null, userId }), "matrix.added")}>
+          <Button disabled={pending || !infra || !userId} onClick={() => run(() => addApproverAssignment({ infrastructureType: infra, opcoSlug: scope || null, userId }), "matrix.added")}>
             {t(language, "matrix.add")}
           </Button>
         </div>
@@ -71,7 +71,7 @@ export default function ApprovalMatrixClient({
             {rows.map((r) => (
               <li key={r.id} className="flex items-center justify-between py-2">
                 <span>{r.infrastructureType} · {r.opcoName ?? t(language, "matrix.group")} · <span className="font-medium">{r.userLabel}</span></span>
-                <button className="text-xs text-rose-600 hover:underline" onClick={() => run(() => removeApproverAssignment(r.id), "matrix.removed")}>{t(language, "matrix.remove")}</button>
+                <button className="text-xs text-rose-600 hover:underline disabled:opacity-50" disabled={pending} onClick={() => run(() => removeApproverAssignment(r.id), "matrix.removed")}>{t(language, "matrix.remove")}</button>
               </li>
             ))}
           </ul>

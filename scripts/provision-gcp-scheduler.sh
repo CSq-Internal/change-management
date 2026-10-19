@@ -14,10 +14,9 @@
 # the schedule is tight enough for the 1-hour emergency SLA.
 #
 # Usage:
-#   PROJECT_ID=my-gcp-project ./scripts/provision-gcp-scheduler.sh <staging|prod>
+#   PROJECT_ID=my-gcp-project REGION=europe-west1 ./scripts/provision-gcp-scheduler.sh <staging|prod>
 #
 # Optional overrides (defaults shown):
-#   REGION=us-central1              Cloud Run + Scheduler region
 #   SERVICE_NAME=cms-<env>          Cloud Run service
 #   SCHEDULE='*/15 * * * *'         cron schedule (UTC)
 
@@ -26,7 +25,7 @@ set -euo pipefail
 # ---- args / config ----
 ENV_NAME="${1:-}"
 PROJECT_ID="${PROJECT_ID:-}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:?REGION is required (prod is europe-west1)}"
 SCHEDULE="${SCHEDULE:-*/15 * * * *}"
 
 if [[ "$ENV_NAME" != "staging" && "$ENV_NAME" != "prod" ]]; then

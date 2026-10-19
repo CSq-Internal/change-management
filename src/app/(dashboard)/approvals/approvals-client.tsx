@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { formatDateTime } from "@/lib/dates"
+import { DateTime } from "@/components/date-time"
 import { submitApproval } from "@/server/actions/approvals"
 import { QuorumProgress } from "@/components/quorum-progress"
 
@@ -29,10 +29,9 @@ export type ApprovalChange = {
 
 interface ApprovalsClientProps {
   changes: ApprovalChange[]
-  isCabMember: boolean
 }
 
-export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClientProps) {
+export default function ApprovalsClient({ changes }: ApprovalsClientProps) {
   const { language } = useStore()
   const { toast } = useToast()
   const router = useRouter()
@@ -52,7 +51,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
     setBusyId(changeId)
     setRemoved((prev) => new Set(prev).add(changeId))
     try {
-      await submitApproval(changeId, decision, comment, isCabMember)
+      await submitApproval(changeId, decision, comment)
       toast({
         title: decision === "approve"
           ? t(language, "approvals.toast.approved")
@@ -64,14 +63,14 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
       })
       startTransition(() => router.refresh())
     } catch (err) {
-      const message = err instanceof Error ? err.message : "An error occurred"
+      const message = err instanceof Error ? err.message : t(language, "common.errorOccurred")
       setRemoved((prev) => {
         const next = new Set(prev)
         next.delete(changeId)
         return next
       })
       setError(message)
-      toast({ title: "Error", description: message, variant: "error" })
+      toast({ title: t(language, "common.error"), description: message, variant: "error" })
     } finally {
       setBusyId(null)
     }
@@ -108,7 +107,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
               <p className="text-sm text-muted-foreground">{c.description}</p>
               <div className="mt-2 text-xs text-muted-foreground">
                 {t(language, "approvals.requestedBy")} {requesterLabel} •{" "}
-                {formatDateTime(c.createdAt)}
+                <DateTime value={c.createdAt} />
               </div>
               {isHigh && (
                 <div className="mt-2 text-xs text-muted-foreground">
@@ -119,7 +118,7 @@ export default function ApprovalsClient({ changes, isCabMember }: ApprovalsClien
                 <textarea
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   rows={2}
-                  placeholder="Comment (required for rejection)"
+                  placeholder={t(language, "approvals.commentPlaceholder")}
                   value={comments[c.id] ?? ""}
                   onChange={(e) =>
                     setComments((prev) => ({ ...prev, [c.id]: e.target.value }))

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import type { Role } from "@/lib/types"
-import { OPCO_SLUGS, OPCO_NAMES, type OpCoSlug } from "@/lib/opco"
 import { onboardUser } from "@/server/actions/users"
 
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
@@ -15,14 +14,15 @@ type Assignment = { opcoSlug: string; role: Role }
 
 interface OnboardWizardProps {
   language: Language
-  manageable: string[] | "all"
+  opcos: { slug: string; name: string }[]
   onClose: () => void
   onCreated: () => void
 }
 
-export default function OnboardWizard({ language, manageable, onClose, onCreated }: OnboardWizardProps) {
+export default function OnboardWizard({ language, opcos, onClose, onCreated }: OnboardWizardProps) {
   const { toast } = useToast()
-  const availableSlugs = (manageable === "all" ? [...OPCO_SLUGS] : manageable) as string[]
+  const availableSlugs = opcos.map((o) => o.slug)
+  const opcoName = (slug: string) => opcos.find((o) => o.slug === slug)?.name ?? slug
   const [step, setStep] = useState(0)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -94,8 +94,8 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
         onCreated()
       } catch (err) {
         toast({
-          title: "Failed to create user",
-          description: err instanceof Error ? err.message : "Unknown error",
+          title: t(language, "users.toast.createFailed"),
+          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
           variant: "error",
         })
       }
@@ -149,7 +149,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
                   >
                     {availableSlugs.map((slug) => (
                       <option key={slug} value={slug} disabled={slug !== a.opcoSlug && usedSlugs.has(slug)}>
-                        {OPCO_NAMES[slug as OpCoSlug] ?? slug}
+                        {opcoName(slug)}
                       </option>
                     ))}
                   </select>
@@ -160,7 +160,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
                   >
                     {roles.map((r) => (
                       <option key={r} value={r}>
-                        {r}
+                        {t(language, `roles.${r}`)}
                       </option>
                     ))}
                   </select>
@@ -187,7 +187,7 @@ export default function OnboardWizard({ language, manageable, onClose, onCreated
               <ul className="list-disc pl-5">
                 {assignments.map((a) => (
                   <li key={a.opcoSlug}>
-                    {OPCO_NAMES[a.opcoSlug as OpCoSlug] ?? a.opcoSlug} — {a.role}
+                    {opcoName(a.opcoSlug)} — {a.role}
                   </li>
                 ))}
               </ul>

@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest"
+import { readFileSync } from "node:fs"
 import { buildTourSteps } from "@/lib/tour/steps"
 
 const base = { language: "en" as const, isAdmin: false, isGroupAdmin: false }
 
 describe("buildTourSteps", () => {
-  it("returns the 8 universal steps for a plain user, welcome first and help last", () => {
+  it("returns the 7 universal steps for a plain user, welcome first and help last", () => {
     const steps = buildTourSteps(base)
-    expect(steps).toHaveLength(8)
+    expect(steps).toHaveLength(7)
     expect(steps[0].element).toBeUndefined() // welcome is a centered popover
     expect(steps[1].element).toBe('[data-tour="nav-dashboard"]')
     expect(steps.at(-1)!.element).toBe('[data-tour="tour-help"]')
@@ -33,5 +34,12 @@ describe("buildTourSteps", () => {
         expect(s.popover!.description).not.toMatch(/^tour\./)
       }
     }
+  })
+
+  it("only points at elements AppShell actually renders", () => {
+    const shell = readFileSync("src/components/app-shell.tsx", "utf8")
+    const ids = buildTourSteps({ ...base, isAdmin: true, isGroupAdmin: true })
+      .flatMap((s) => String(s.element ?? "").match(/data-tour="([^"]+)"/)?.[1] ?? [])
+    for (const id of ids) expect(shell, id).toContain(`"${id}"`)
   })
 })

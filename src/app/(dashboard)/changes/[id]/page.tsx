@@ -35,7 +35,6 @@ function serialize(
     updatedAt: change.updatedAt.toISOString(),
     opco: { slug: change.opco.slug, name: change.opco.name },
     requester: {
-      keycloakId: change.requester.keycloakId,
       name: change.requester.name ?? null,
       email: change.requester.email,
     },
@@ -123,7 +122,6 @@ export default async function ChangeDetailPage({
       change.assignees.some((a) => a.role === "implementer" && a.userId === meUser.id),
     canApprove: canApproveThis,
     isAdmin: isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
-    isCabMember: isGroupAdmin(me.realmRoles),
     canExportEvidence: isGroupLevel(me.realmRoles) || canAudit(me.organizations, me.realmRoles, slug),
     canManageAssignees: (change.requester.keycloakId === me.keycloakId) || isGroupAdmin(me.realmRoles) || hasRoleInOpCo(me.organizations, slug, "admin"),
     soleApproverIsMe,

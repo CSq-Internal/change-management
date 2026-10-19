@@ -22,7 +22,7 @@ async function handle(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const escalations = await runDueEscalations({})
+  const escalations = await runDueEscalations()
   // Reminders ride the same daily sweep — no second endpoint, secret, vercel.json entry,
   // or Cloud Scheduler job to keep in step.
   const reminders = await runDueReminders()

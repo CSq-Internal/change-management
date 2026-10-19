@@ -11,22 +11,22 @@
   "resetPasswordAllowed": false,
   "editUsernameAllowed": false,
   "roles": {
-    "realm": [
-      {
-        "name": "group_admin",
-        "description": "CSquared realm administrator",
-        "composite": false,
-        "clientRole": false,
-        "containerId": "csquared"
-      },
-      {
-        "name": "group_auditor",
-        "description": "CSquared realm auditor",
-        "composite": false,
-        "clientRole": false,
-        "containerId": "csquared"
-      }
-    ]
+    "client": {
+      "csquared-cms": [
+        {
+          "name": "group_admin",
+          "description": "CSquared CMS administrator",
+          "composite": false,
+          "clientRole": true
+        },
+        {
+          "name": "group_auditor",
+          "description": "CSquared CMS auditor",
+          "composite": false,
+          "clientRole": true
+        }
+      ]
+    }
   },
   "clients": [
     {
@@ -47,16 +47,17 @@
         "http://localhost:3000"
       ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:3000"
+        "post.logout.redirect.uris": "http://localhost:3000/*"
       },
       "protocolMappers": [
         {
-          "name": "realm-roles",
+          "name": "client-roles",
           "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
           "consentRequired": false,
           "config": {
-            "claim.name": "realm_access.roles",
+            "usermodel.clientRoleMapping.clientId": "csquared-cms",
+            "claim.name": "resource_access.${client_id}.roles",
             "jsonType.label": "String",
             "multivalued": "true",
             "id.token.claim": "true",
@@ -94,9 +95,11 @@
           "temporary": false
         }
       ],
-      "realmRoles": [
-        "group_admin"
-      ]
+      "clientRoles": {
+        "csquared-cms": [
+          "group_admin"
+        ]
+      }
     },
     {
       "username": "service-account-csquared-cms-admin",

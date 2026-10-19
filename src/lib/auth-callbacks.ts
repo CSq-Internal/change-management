@@ -30,6 +30,19 @@ async function loadOrganizations(db: Db, keycloakId: string) {
 }
 
 /**
+ * Strip a token's access and flag it so the client guard signs the user out. Used when
+ * the identity maps to no DB user, or to a deactivated one: the DB, not Keycloak, decides
+ * whether a CSquared person may use the CMS (the realm is shared with other apps).
+ */
+function orphan(token: JWT): JWT {
+  token.orphaned = true
+  token.organizations = []
+  token.realmRoles = []
+  token.orgsRefreshedAt = Date.now()
+  return token
+}
+
+/**
  * Node-only enriched jwt callback. Runs the edge-safe base extraction first,
  * then — only on sign-in (account present) — sources OpCo memberships+roles
  * from the DB and stores them on the token.
@@ -60,9 +73,10 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     const profileName = p.name ?? p.preferred_username ?? null
 
     const existing = await db.user.findUnique({ where: { keycloakId: sub } })
+    let isActive = existing?.isActive ?? true
     if (!existing) {
       if (p.email) {
-        const byEmail = await db.user.findUnique({ where: { email: p.email }, select: { id: true } })
+        const byEmail = await db.user.findUnique({ where: { email: p.email }, select: { id: true, isActive: true } })
         if (!byEmail) {
           // Brand-new identity (e.g. first brokered Google sign-in). A fresh row carries
           // zero OpCo assignments — no standing access — so creating it needs no verified
@@ -75,9 +89,12 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
           // email_verified so an UNVERIFIED email can never repoint an existing (possibly
           // privileged) row to a different sub — closing the account-takeover vector.
           await db.user.update({ where: { email: p.email }, data: { keycloakId: sub } })
+          isActive = byEmail.isActive
         }
       }
     }
+
+    if (!isActive) return orphan(token)
 
     token.organizations = await loadOrganizations(db, sub)
     token.orgsRefreshedAt = Date.now()
@@ -97,9 +114,10 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     })
   } else if (
     token.keycloakId &&
-    Date.now() - (token.orgsRefreshedAt ?? 0) > ORGS_TTL_MS
+    (params.trigger === "update" || Date.now() - (token.orgsRefreshedAt ?? 0) > ORGS_TTL_MS)
   ) {
-    // No fresh sign-in, but the cached orgs are stale: reload OpCo assignments so an
+    // No fresh sign-in, but the cached orgs are stale (or the client called update(),
+    // as it does right after joining an OpCo): reload OpCo assignments so an
     // access grant / role edit reaches the live session without re-login. Group roles
     // (realmRoles) are Keycloak-sourced and intentionally not refreshed here.
     const db = getPrisma()
@@ -113,13 +131,10 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // /login → / redirect fights the page's / → /login redirect (infinite loop). Client
     // signOut goes through the route handler, which DOES clear the cookie. Checks row
     // EXISTENCE, not org count — an access-less user (self-registered) still has a row.
-    const stillLinked = await db.user.findUnique({ where: { keycloakId: sub }, select: { id: true } })
-    if (!stillLinked) {
-      token.orphaned = true
-      token.organizations = []
-      token.orgsRefreshedAt = Date.now()
-      return token
-    }
+    // A deactivated row is treated the same, so deactivation ends a live session within
+    // the TTL, group roles included.
+    const stillLinked = await db.user.findUnique({ where: { keycloakId: sub }, select: { isActive: true } })
+    if (!stillLinked?.isActive) return orphan(token)
 
     token.orphaned = false
     token.organizations = await loadOrganizations(db, sub)

@@ -1,6 +1,7 @@
 // src/server/opco-scope.ts
 import { cookies } from "next/headers"
 import { manageableOpCoSlugs } from "@/lib/permissions"
+import { getPrisma } from "@/server/db"
 import type { SessionOrganization } from "@/types/next-auth"
 
 // Resolves the OpCo slug filter for an admin page: the caller's manageable OpCos,
@@ -20,4 +21,13 @@ export async function activeOpCoSlugFilter(user: {
     slugFilter = { in: [active] }
   }
   return slugFilter
+}
+
+/** OpCos a picker may offer, by name: the given slugs (or every one), never archived ones. */
+export function activeOpCos(slugs: string[] | "all"): Promise<{ slug: string; name: string }[]> {
+  return getPrisma().opCo.findMany({
+    where: { archivedAt: null, ...(slugs === "all" ? {} : { slug: { in: slugs } }) },
+    orderBy: { name: "asc" },
+    select: { slug: true, name: true },
+  })
 }

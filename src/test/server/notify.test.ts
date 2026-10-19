@@ -57,6 +57,31 @@ describe('notifyEvent', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith('https://chat.googleapis.com/x', expect.objectContaining({ method: 'POST' }))
   })
 
+  it('gives a Chat post a deadline, so a slow webhook cannot stall the action', async () => {
+    mockDb.chatWebhook.findMany.mockResolvedValue([{ id: 'wh-1', url: 'https://chat.googleapis.com/x?key=secret', opcoId: 'opco-1' }])
+    await notifyEvent({ type: 'emergency_submitted', recipients: [], change })
+    expect(vi.mocked(globalThis.fetch).mock.calls[0][1]!.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('logs a webhook that answers non-2xx, by id and never by its secret URL', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockDb.chatWebhook.findMany.mockResolvedValue([{ id: 'wh-1', url: 'https://chat.googleapis.com/x?key=secret', opcoId: 'opco-1' }])
+    vi.mocked(globalThis.fetch).mockResolvedValue({ ok: false, status: 404 } as Response)
+    await notifyEvent({ type: 'emergency_submitted', recipients: [], change })
+    expect(warn).toHaveBeenCalledTimes(1)
+    const logged = warn.mock.calls[0].join(' ')
+    expect(logged).toMatch(/wh-1/)
+    expect(logged).toMatch(/404/)
+    expect(logged).not.toMatch(/secret/)
+    warn.mockRestore()
+  })
+
+  it('writes no dispatch ledger row (only the reminder sweep reads it, and it writes its own)', async () => {
+    await notifyEvent({ type: 'emergency_submitted', recipients: [ada], change })
+    expect(mockDb.notificationDispatch.create).not.toHaveBeenCalled()
+    expect(mockDb.notification.create).toHaveBeenCalled()
+  })
+
   it('does NOT query chat webhooks for a non-broadcast event', async () => {
     await notifyEvent({ type: 'approval_requested', recipients: [ada], change })
     expect(mockDb.chatWebhook.findMany).not.toHaveBeenCalled()

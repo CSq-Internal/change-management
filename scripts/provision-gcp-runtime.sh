@@ -12,10 +12,9 @@
 # never live in the repo). Idempotent; safe to re-run.
 #
 # Usage:
-#   PROJECT_ID=my-gcp-project ./scripts/provision-gcp-runtime.sh <staging|prod>
+#   PROJECT_ID=my-gcp-project REGION=europe-west1 ./scripts/provision-gcp-runtime.sh <staging|prod>
 #
 # Optional overrides (defaults shown):
-#   REGION=us-central1           Cloud Run region
 #   DEPLOY_SA_NAME=github-ci      CI deploy service account (from provision-gcp-cicd.sh)
 #   RUNTIME_SA_NAME=cms-run-<env> runtime service account id
 
@@ -24,7 +23,7 @@ set -euo pipefail
 # ---- args / config ----
 ENV_NAME="${1:-}"
 PROJECT_ID="${PROJECT_ID:-}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:?REGION is required (prod is europe-west1)}"
 DEPLOY_SA_NAME="${DEPLOY_SA_NAME:-github-ci}"
 
 if [[ "$ENV_NAME" != "staging" && "$ENV_NAME" != "prod" ]]; then
@@ -51,7 +50,6 @@ SECRET_KEYS=(
   KEYCLOAK_CLIENT_SECRET
   KEYCLOAK_ADMIN_CLIENT_SECRET
   RESEND_API_KEY
-  APP_PASSWORD
   GOOGLE_SERVICE_ACCOUNT_KEY
   CRON_SECRET
 )

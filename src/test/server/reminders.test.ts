@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockDb = {
   changeRequest: { findMany: vi.fn() },
-  notificationDispatch: { findFirst: vi.fn() },
+  notificationDispatch: { findFirst: vi.fn(), create: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb)),
 }
 vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
@@ -19,6 +21,7 @@ const now = Date.now()
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockDb.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(mockDb))
   mockDb.changeRequest.findMany.mockResolvedValue([])
   mockDb.notificationDispatch.findFirst.mockResolvedValue(null)
   notifyChange.mockResolvedValue(undefined)
@@ -48,6 +51,14 @@ describe("approver_nudge", () => {
     expect(notifyChange).toHaveBeenCalledWith("approver_nudge", "c1", expect.objectContaining({
       recipients: [{ userId: "a1", email: "a1@c.com", name: "A One" }],
     }))
+  })
+
+  it("measures the midpoint from submission, not from when the draft was saved", async () => {
+    // Saved as a draft 5 days ago, submitted 10h ago: 38h of the 48h window are left.
+    const resubmitted = { ...pendingChange(120), slaDeadline: new Date(now + 38 * HOUR) }
+    mockDb.changeRequest.findMany.mockResolvedValueOnce([resubmitted]).mockResolvedValueOnce([])
+    const out = await runDueReminders()
+    expect(out.nudged).toBe(0)
   })
 
   it("does not nudge once the SLA has breached — sla_escalated takes over", async () => {

@@ -9,13 +9,14 @@ vi.mock('@/lib/session', () => ({
   }),
 }))
 
-vi.mock('@/server/keycloak', () => ({
-  createKeycloakUser: vi.fn().mockResolvedValue('kc-new'),
+// Hoisted so tests can assert the realm is never touched: Keycloak is shared with other
+// apps, so CMS deactivation must not disable (or re-enable) the account itself.
+const kc = vi.hoisted(() => ({
   createOrFindKeycloakUser: vi.fn().mockResolvedValue({ id: 'kc-new', created: true }),
   assignToOrganization: vi.fn().mockResolvedValue(undefined),
-  deactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
-  reactivateKeycloakUser: vi.fn().mockResolvedValue(undefined),
+  verifyAdoptedKeycloakUser: vi.fn().mockResolvedValue('verified'),
 }))
+vi.mock('@/server/keycloak', () => kc)
 
 vi.mock('@/server/email', () => ({
   sendUserInvitationEmail: vi.fn().mockResolvedValue(undefined),
@@ -49,7 +50,7 @@ const mockDb = {
   cABMembership: { updateMany: vi.fn(async () => ({})) },
   approverAssignment: { updateMany: vi.fn(async () => ({})) },
   changeRequest: { findMany: vi.fn().mockResolvedValue([]) },
-  adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
+  adminAuditLog: { create: vi.fn().mockResolvedValue({}), findFirst: vi.fn().mockResolvedValue(null) },
 }
 
 vi.mock('@/server/db', () => ({ getPrisma: () => mockDb }))
@@ -122,7 +123,7 @@ describe("onboardUser — authorization & ceiling", () => {
 
   it("links an existing email instead of creating a new identity", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
-    mockDb.user.findFirst.mockResolvedValueOnce({ id: "existing", keycloakId: "kc-existing" })
+    mockDb.user.findFirst.mockResolvedValueOnce({ id: "existing", keycloakId: "kc-existing", isActive: true })
     await onboardUser({
       name: "Existing", email: "exists@csquared.com",
       assignments: [{ opcoSlug: "ghana", role: "approver" }],
@@ -206,12 +207,22 @@ describe('deactivateUser — self-lockout', () => {
 })
 
 describe('reactivateUser — authorization', () => {
-  const inactiveTarget = {
-    id: 'target', keycloakId: 'kc-target', isActive: false,
-    opcoAssignments: [{ opco: { slug: 'ghana' } }],
-  }
+  const inactiveTarget = { id: 'target', keycloakId: 'kc-target', isActive: false, isGroupAdmin: false }
+  const lastDeactivation = (ids: string[]) =>
+    mockDb.adminAuditLog.findFirst.mockResolvedValueOnce({ metadata: { endedAssignmentIds: ids } })
+  const endedRows = (rows: Array<{ id: string; role: string; slug: string }>) =>
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce(
+      rows.map((r) => ({ id: r.id, role: r.role, opco: { slug: r.slug } })),
+    )
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
+  })
+
   it('rejects a non-admin caller', async () => {
     mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    lastDeactivation(['a-gh'])
+    endedRows([{ id: 'a-gh', role: 'approver', slug: 'ghana' }])
     await expect(reactivateUser('target')).rejects.toThrow(/Forbidden/)
   })
   it('allows a group_admin to reactivate', async () => {
@@ -222,7 +233,151 @@ describe('reactivateUser — authorization', () => {
   it('allows a ghana admin to reactivate a ghana user', async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
     mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    lastDeactivation(['a-gh'])
+    endedRows([{ id: 'a-gh', role: 'approver', slug: 'ghana' }])
     await expect(reactivateUser('target')).resolves.toBeUndefined()
+  })
+
+  it('refuses a user who is already active', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce({ ...inactiveTarget, isActive: true })
+    await expect(reactivateUser('target')).rejects.toThrow(/already active/i)
+    expect(mockDb.user.update).not.toHaveBeenCalled()
+  })
+
+  it('restores only the roles the last deactivation ended', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    lastDeactivation(['a-gh'])
+    endedRows([{ id: 'a-gh', role: 'approver', slug: 'ghana' }])
+    await reactivateUser('target')
+    expect(mockDb.adminAuditLog.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { action: 'user.deactivate', targetUserId: 'target' }, orderBy: { at: 'desc' },
+    }))
+    expect(mockDb.userOpCoAssignment.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['a-gh'] }, userId: 'target' },
+      data: { isActive: true, endedAt: null },
+    })
+  })
+
+  it('restores no roles when the deactivation recorded none (older deactivations)', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    mockDb.adminAuditLog.findFirst.mockResolvedValueOnce({ metadata: null })
+    await reactivateUser('target')
+    expect(mockDb.user.update).toHaveBeenCalledWith({ where: { id: 'target' }, data: { isActive: true } })
+    expect(mockDb.userOpCoAssignment.updateMany).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a role in an OpCo they do not manage', [{ id: 'a-gh', role: 'approver', slug: 'ghana' }, { id: 'a-ng', role: 'approver', slug: 'nigeria' }]],
+    ['the admin role, which OpCo admins cannot grant', [{ id: 'a-gh', role: 'admin', slug: 'ghana' }]],
+    ['nothing at all', []],
+  ])('refuses an OpCo admin when it would restore %s', async (_label, rows) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    lastDeactivation(rows.map((r) => r.id))
+    if (rows.length) endedRows(rows) // with no ids the lookup never runs; a queued value would leak
+    await expect(reactivateUser('target')).rejects.toThrow(/Forbidden/)
+    expect(mockDb.user.update).not.toHaveBeenCalled()
+  })
+
+  it('refuses an OpCo admin reactivating a group admin', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce({ ...inactiveTarget, isGroupAdmin: true })
+    lastDeactivation(['a-gh'])
+    endedRows([{ id: 'a-gh', role: 'approver', slug: 'ghana' }])
+    await expect(reactivateUser('target')).rejects.toThrow(/Forbidden/)
+  })
+
+  it('leaves the Keycloak account alone', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(inactiveTarget)
+    await reactivateUser('target')
+    for (const fn of Object.values(kc)) expect(fn).not.toHaveBeenCalled()
+  })
+})
+
+describe('deactivateUser — scope', () => {
+  const target = (assignments: Array<{ id: string; slug: string; role?: string }>, extra = {}) => ({
+    id: 'target', keycloakId: 'kc-target', isGroupAdmin: false, ...extra,
+    opcoAssignments: assignments.map((a) => ({
+      id: a.id, role: a.role ?? 'approver', isActive: true, opco: { slug: a.slug, id: `opco-${a.slug}` },
+    })),
+  })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
+  })
+
+  it('refuses an OpCo admin when the user also holds a role in another OpCo', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(target([{ id: 'a-gh', slug: 'ghana' }, { id: 'a-ng', slug: 'nigeria' }]))
+    await expect(deactivateUser('target')).rejects.toThrow(/Forbidden/)
+    expect(mockDb.user.update).not.toHaveBeenCalled()
+  })
+
+  it('refuses an OpCo admin deactivating a group admin', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(ghanaAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(target([{ id: 'a-gh', slug: 'ghana' }], { isGroupAdmin: true }))
+    await expect(deactivateUser('target')).rejects.toThrow(/Forbidden/)
+  })
+
+  it('ends only the active roles and records which ones, for reactivation', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(target([{ id: 'a-gh', slug: 'ghana' }]))
+    await deactivateUser('target')
+    expect(mockDb.userOpCoAssignment.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'target', isActive: true },
+      data: { isActive: false, endedAt: expect.any(Date) },
+    })
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: 'user.deactivate', metadata: { endedAssignmentIds: ['a-gh'] } }),
+    })
+  })
+
+  it('leaves the Keycloak account alone', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findUnique.mockResolvedValueOnce(target([{ id: 'a-gh', slug: 'ghana' }]))
+    await deactivateUser('target')
+    for (const fn of Object.values(kc)) expect(fn).not.toHaveBeenCalled()
+  })
+})
+
+describe('onboardUser — accounts that are switched off', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
+  })
+  const invite = () => onboardUser({
+    name: 'Ama', email: 'ama@csquared.com', assignments: [{ opcoSlug: 'ghana', role: 'requester' }],
+  })
+
+  it('refuses to re-invite a deactivated CMS user', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    mockDb.user.findFirst.mockResolvedValueOnce({ id: 'u-ama', keycloakId: 'kc-ama', isActive: false })
+    await expect(invite()).rejects.toThrow(/deactivated/i)
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+    expect(kc.verifyAdoptedKeycloakUser).not.toHaveBeenCalled()
+  })
+
+  it('refuses a Keycloak account that is disabled, and writes nothing', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    kc.createOrFindKeycloakUser.mockResolvedValueOnce({ id: 'kc-ama', created: false })
+    kc.verifyAdoptedKeycloakUser.mockResolvedValueOnce('disabled')
+    await expect(invite()).rejects.toThrow(/disabled/i)
+    expect(mockDb.user.create).not.toHaveBeenCalled()
+    expect(mockDb.userOpCoAssignment.upsert).not.toHaveBeenCalled()
+    expect(kc.assignToOrganization).not.toHaveBeenCalled()
+    expect(sendUserInvitationEmail).not.toHaveBeenCalled()
+  })
+
+  it('verifies an adopted account that is enabled, then links it', async () => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
+    kc.createOrFindKeycloakUser.mockResolvedValueOnce({ id: 'kc-ama', created: false })
+    await invite()
+    expect(kc.verifyAdoptedKeycloakUser).toHaveBeenCalledWith('kc-ama')
+    expect(mockDb.user.create).toHaveBeenCalled()
   })
 })
 
@@ -274,6 +429,29 @@ describe('setUserAssignments — authorization & diff', () => {
     mockDb.opCo.findUnique.mockResolvedValueOnce({ id: 'opco-gh', slug: 'ghana' })
     await setUserAssignments('target', [{ opcoSlug: 'ghana', role: 'approver' }])
     expect(mockDb.userOpCoAssignment.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('mirrors to Keycloak only after the transaction commits, and not at all if it fails', async () => {
+    // A slow Keycloak inside the transaction ran it past Prisma's 5 s limit, so the role
+    // change failed; and a rolled-back change must not leave a Keycloak org membership.
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin).mockResolvedValueOnce(groupAdmin)
+    mockDb.userOpCoAssignment.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    let inTx = false
+    let calledInTx = false
+    mockDb.$transaction.mockImplementationOnce(async (fn: (tx: typeof mockDb) => unknown) => {
+      inTx = true
+      try { return await fn(mockDb) } finally { inTx = false }
+    })
+    vi.mocked(kc.assignToOrganization).mockImplementation(async () => { calledInTx = inTx })
+    await setUserAssignments('target', [{ opcoSlug: 'ghana', role: 'approver' }])
+    expect(kc.assignToOrganization).toHaveBeenCalledWith('kc-target', 'ghana')
+    expect(calledInTx).toBe(false)
+
+    vi.mocked(kc.assignToOrganization).mockClear()
+    mockDb.$transaction.mockRejectedValueOnce(new Error('rolled back'))
+    await expect(setUserAssignments('target', [{ opcoSlug: 'ghana', role: 'approver' }])).rejects.toThrow('rolled back')
+    expect(kc.assignToOrganization).not.toHaveBeenCalled()
+    vi.mocked(kc.assignToOrganization).mockResolvedValue(undefined)
   })
 
   it('does not require rights for unchanged out-of-scope assignments', async () => {

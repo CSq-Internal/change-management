@@ -43,11 +43,17 @@ export default async function CalendarPage({
       ? {}
       : { OR: [{ opcoId: null }, { opco: { slug: { in: opcoSlugs } } }] }
 
+  // The month runs midnight to midnight in the viewer's zone, which the server doesn't know;
+  // a day of margin each side covers every zone, and the browser drops what falls outside.
+  const DAY = 24 * 60 * 60 * 1000
+  const qStart = new Date(start.getTime() - DAY)
+  const qEnd = new Date(end.getTime() + DAY)
+
   const meUser = await db.user.findUnique({ where: { keycloakId: me.keycloakId }, select: { id: true } })
 
   const [changeRows, blackoutRows, opcos] = await Promise.all([
     db.changeRequest.findMany({
-      where: { AND: [changeScope, { plannedStart: { lt: end }, plannedEnd: { gte: start } }] },
+      where: { AND: [changeScope, { plannedStart: { lt: qEnd }, plannedEnd: { gte: qStart } }] },
       select: {
         id: true, title: true, opcoId: true, infrastructureType: true, riskLevel: true,
         isEmergency: true, status: true, plannedStart: true, plannedEnd: true, requesterId: true,
@@ -56,7 +62,7 @@ export default async function CalendarPage({
     }),
     db.blackoutPeriod.findMany({
       where: {
-        startsAt: { lt: end }, endsAt: { gte: start },
+        startsAt: { lt: qEnd }, endsAt: { gte: qStart },
         ...blackoutScope,
       },
       select: { id: true, label: true, opcoId: true, startsAt: true, endsAt: true },
@@ -75,11 +81,13 @@ export default async function CalendarPage({
     ...manageableOpcos.map((o) => ({ value: o.slug, label: o.name })),
   ]
   const opcoNameById = new Map(opcos.map((o) => [o.id, o.name]))
+  const opcoSlugById = new Map(opcos.map((o) => [o.id, o.slug]))
   const blackouts = blackoutRows
     .map((b) => ({
       id: b.id,
       label: b.label,
       scopeName: b.opcoId ? (opcoNameById.get(b.opcoId) ?? "OpCo") : "Group",
+      opcoSlug: b.opcoId ? (opcoSlugById.get(b.opcoId) ?? null) : null,
       startMs: b.startsAt.getTime(),
       endMs: b.endsAt.getTime(),
     }))
@@ -87,7 +95,7 @@ export default async function CalendarPage({
 
   const calChanges: CalChange[] = changeRows.map((c) => ({
     id: c.id, opcoId: c.opcoId, infrastructureType: c.infrastructureType,
-    riskLevel: c.riskLevel as RiskLevel, isEmergency: c.isEmergency,
+    riskLevel: c.riskLevel as RiskLevel, isEmergency: c.isEmergency, status: c.status,
     start: c.plannedStart!.getTime(), end: c.plannedEnd!.getTime(),
   }))
   const calBlackouts: CalBlackout[] = blackoutRows.map((b) => ({
@@ -107,8 +115,6 @@ export default async function CalendarPage({
     return {
       id: c.id, title: c.title, opcoName: c.opco.name, riskLevel: c.riskLevel, status: c.status,
       startMs: c.plannedStart!.getTime(), endMs: c.plannedEnd!.getTime(),
-      timeLabel: c.plannedStart!.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
-      day: dayKey(c.plannedStart!),
       overlap: cf.overlap, blackout: cf.blackout, severity: cf.severity,
       blackoutLabels: cf.blackoutLabels, canReschedule: canReschedule(c),
     }
@@ -117,14 +123,11 @@ export default async function CalendarPage({
   const firstWeekday = (start.getDay() + 6) % 7
   const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
   const cells: CalDay[] = []
-  for (let i = 0; i < firstWeekday; i++) cells.push({ key: `pad-${i}`, inMonth: false, dayNum: null, isToday: false })
-  const today = new Date()
-  const todayKey = dayKey(today)
+  for (let i = 0; i < firstWeekday; i++) cells.push({ key: `pad-${i}`, inMonth: false, dayNum: null })
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(start.getFullYear(), start.getMonth(), d)
-    cells.push({ key: dayKey(date), inMonth: true, dayNum: d, isToday: dayKey(date) === todayKey })
+    cells.push({ key: dayKey(new Date(start.getFullYear(), start.getMonth(), d)), inMonth: true, dayNum: d })
   }
-  while (cells.length % 7 !== 0) cells.push({ key: `pad-end-${cells.length}`, inMonth: false, dayNum: null, isToday: false })
+  while (cells.length % 7 !== 0) cells.push({ key: `pad-end-${cells.length}`, inMonth: false, dayNum: null })
 
   const prev = new Date(start.getFullYear(), start.getMonth() - 1, 1)
   const next = new Date(start.getFullYear(), start.getMonth() + 1, 1)

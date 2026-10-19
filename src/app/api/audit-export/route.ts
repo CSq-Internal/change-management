@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { getPrisma } from "@/server/db"
 import { NextRequest, NextResponse } from "next/server"
 import { isGroupLevel } from "@/lib/permissions"
+import { csvRow } from "@/lib/csv"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -9,8 +10,18 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl
   const opcoSlug = searchParams.get("opco")
-  const from = searchParams.get("from")
-  const to = searchParams.get("to")
+  // Dates are whole days (yyyy-mm-dd from the date pickers): "to" includes all of that day.
+  const from = searchParams.get("from") ? new Date(searchParams.get("from")!) : null
+  const to = searchParams.get("to") ? new Date(searchParams.get("to")!) : null
+  if ((from && isNaN(from.getTime())) || (to && isNaN(to.getTime()))) {
+    return NextResponse.json({ error: "Invalid date" }, { status: 400 })
+  }
+  const at = from || to
+    ? {
+        ...(from && { gte: from }),
+        ...(to && { lt: new Date(to.getTime() + 24 * 60 * 60 * 1000) }),
+      }
+    : undefined
 
   const db = getPrisma()
   const groupLevel = isGroupLevel(session.user.realmRoles)
@@ -21,8 +32,7 @@ export async function GET(req: NextRequest) {
   const entries = await db.auditLog.findMany({
     where: {
       change: opcoSlugs ? { opco: { slug: { in: opcoSlugs } } } : undefined,
-      ...(from && { at: { gte: new Date(from) } }),
-      ...(to && { at: { lte: new Date(to) } }),
+      at,
     },
     include: { actor: true, change: { include: { opco: true } } },
     orderBy: { at: "desc" },
@@ -33,9 +43,7 @@ export async function GET(req: NextRequest) {
     e.at.toISOString(), e.actor.email, e.action, e.change.title,
     e.change.opco.slug, e.fromStatus ?? "", e.toStatus ?? "", e.note ?? "",
   ])
-  const csv = [headers, ...rows]
-    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n")
+  const csv = [headers, ...rows].map(csvRow).join("\n")
 
   return new NextResponse(csv, {
     headers: {

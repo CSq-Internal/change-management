@@ -1,11 +1,19 @@
 // src/test/server/sla.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const USERS = [
+  { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true },
+  { id: 'cab-1', email: 'cab@group.com', name: 'CAB', isActive: true },
+]
+
 const mockDb = {
-  changeRequest: { findMany: vi.fn(), update: vi.fn().mockResolvedValue({}) },
+  changeRequest: { findMany: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
   userOpCoAssignment: { findMany: vi.fn().mockResolvedValue([]) },
   cABMembership: { findMany: vi.fn().mockResolvedValue([]) },
-  user: { upsert: vi.fn().mockResolvedValue({ id: 'system-user' }) },
+  user: {
+    upsert: vi.fn().mockResolvedValue({ id: 'system-user' }),
+    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => USERS.filter((u) => where.id.in.includes(u.id))),
+  },
   auditLog: { create: vi.fn().mockResolvedValue({}) },
 }
 
@@ -19,7 +27,7 @@ const HOUR = 3_600_000
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockDb.changeRequest.update.mockResolvedValue({})
+  mockDb.changeRequest.updateMany.mockResolvedValue({ count: 1 })
   mockDb.user.upsert.mockResolvedValue({ id: 'system-user' })
   mockDb.userOpCoAssignment.findMany.mockResolvedValue([])
   mockDb.cABMembership.findMany.mockResolvedValue([])
@@ -31,11 +39,9 @@ describe('runDueEscalations', () => {
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(deadline), escalationLevel: 0 },
     ])
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([
-      { user: { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true } },
-    ])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: 'admin-1' }])
 
-    const res = await runDueEscalations({})
+    const res = await runDueEscalations()
 
     expect(res.escalated).toBe(1)
     expect(vi.mocked(notifyEvent)).toHaveBeenCalledWith(
@@ -45,9 +51,13 @@ describe('runDueEscalations', () => {
         context: expect.objectContaining({ level: 1 }),
       })
     )
-    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ escalationLevel: 1 }) })
-    )
+    // The level is claimed (conditionally on the level read) before anything is sent.
+    expect(mockDb.changeRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 'c1', escalationLevel: 0 },
+      data: { escalationLevel: 1, lastEscalatedAt: expect.any(Date) },
+    })
+    expect(mockDb.changeRequest.updateMany.mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(notifyEvent).mock.invocationCallOrder[0])
     expect(mockDb.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: 'sla_escalated', actorId: 'system-user' }) })
     )
@@ -57,10 +67,21 @@ describe('runDueEscalations', () => {
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(Date.now() - 1), escalationLevel: 1 },
     ])
-    const res = await runDueEscalations({})
+    const res = await runDueEscalations()
     expect(res.escalated).toBe(0)
     expect(vi.mocked(notifyEvent)).not.toHaveBeenCalled()
-    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+    expect(mockDb.changeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing when an overlapping run already claimed the level', async () => {
+    mockDb.changeRequest.findMany.mockResolvedValue([
+      { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(Date.now() - 1), escalationLevel: 0 },
+    ])
+    mockDb.changeRequest.updateMany.mockResolvedValueOnce({ count: 0 })
+    const res = await runDueEscalations()
+    expect(res.escalated).toBe(0)
+    expect(vi.mocked(notifyEvent)).not.toHaveBeenCalled()
+    expect(mockDb.auditLog.create).not.toHaveBeenCalled()
   })
 
   it('notifies group CAB members for a level-2 breach and fires both crossed levels', async () => {
@@ -68,10 +89,10 @@ describe('runDueEscalations', () => {
     mockDb.changeRequest.findMany.mockResolvedValue([
       { id: 'c1', title: 'X', riskLevel: 'high', opcoId: 'opco-1', slaDeadline: new Date(deadline), escalationLevel: 0 },
     ])
-    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ user: { id: 'admin-1', email: 'admin@ghana.com', name: 'Admin', isActive: true } }])
-    mockDb.cABMembership.findMany.mockResolvedValue([{ user: { id: 'cab-1', email: 'cab@group.com', name: 'CAB', isActive: true } }])
+    mockDb.userOpCoAssignment.findMany.mockResolvedValue([{ userId: 'admin-1' }])
+    mockDb.cABMembership.findMany.mockResolvedValue([{ userId: 'cab-1' }])
 
-    const res = await runDueEscalations({})
+    const res = await runDueEscalations()
 
     expect(res.escalated).toBe(1)
     expect(vi.mocked(notifyEvent)).toHaveBeenCalledWith(
@@ -88,18 +109,8 @@ describe('runDueEscalations', () => {
         context: expect.objectContaining({ level: 2 }),
       })
     )
-    expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
+    expect(mockDb.changeRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ escalationLevel: 2 }) })
-    )
-  })
-
-  it('scopes the query to the given opcoSlugs', async () => {
-    mockDb.changeRequest.findMany.mockResolvedValue([])
-    await runDueEscalations({ opcoSlugs: ['ghana'] })
-    expect(mockDb.changeRequest.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ opco: { slug: { in: ['ghana'] } } }),
-      })
     )
   })
 })

@@ -76,10 +76,6 @@ export function isMemberOfOpCo(organizations: SessionOrganization[], slug: strin
   return organizations.some((o) => o.alias === slug)
 }
 
-export function getUserOpCos(organizations: SessionOrganization[]): string[] {
-  return organizations.map((o) => o.alias)
-}
-
 export function canManageAnyOpCo(
   organizations: SessionOrganization[],
   realmRoles: string[]

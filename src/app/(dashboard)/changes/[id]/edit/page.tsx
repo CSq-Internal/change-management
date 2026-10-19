@@ -39,12 +39,9 @@ export default async function EditChangePage({
     implementationPlan: change.implementationPlan ?? null,
     testingPlan: change.testingPlan ?? null,
     backoutPlan: change.backoutPlan ?? null,
-    plannedStart: change.plannedStart
-      ? change.plannedStart.toISOString().slice(0, 16)
-      : null,
-    plannedEnd: change.plannedEnd
-      ? change.plannedEnd.toISOString().slice(0, 16)
-      : null,
+    // Full ISO instants: the form shows them in the viewer's zone (toDateTimeLocal).
+    plannedStart: change.plannedStart?.toISOString() ?? null,
+    plannedEnd: change.plannedEnd?.toISOString() ?? null,
     opcoSlug: change.opco.slug,
   }
 
@@ -52,7 +49,7 @@ export default async function EditChangePage({
     <RequestForm
       mode="edit"
       initial={initial}
-      opcoOptions={[change.opco.slug]}
+      opcoOptions={[{ slug: change.opco.slug, name: change.opco.name }]}
       defaultEmail={change.contactEmail}
       attachments={change.attachments.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename, externalUrl: a.externalUrl }))}
       initialApproverIds={change.assignees.filter((a) => a.role === "approver").map((a) => a.userId)}

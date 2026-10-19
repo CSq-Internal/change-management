@@ -43,7 +43,7 @@ export function MonitorView({
             <Card key={tile.status} className="border-border/80 bg-card/90">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold capitalize text-muted-foreground">{tile.status}</span>
+                  <span className="text-xs font-semibold capitalize text-muted-foreground">{t(language, `status.${tile.status}`)}</span>
                   <span className={`h-2 w-2 rounded-full ${STATUS_DOT[tile.status]}`} />
                 </div>
                 <div className="my-2 text-3xl font-semibold tabular-nums">{tile.count}</div>
@@ -85,7 +85,7 @@ export function MonitorView({
               {blackouts.map((b) => (
                 <div key={b.id} className="flex items-start gap-2 text-xs">
                   <Lock className={`mt-0.5 h-3.5 w-3.5 ${b.amber ? "text-amber-500" : "text-rose-500"}`} />
-                  <div><div className="text-foreground">{b.label}</div><div className="text-muted-foreground">{b.scope} · ends in {b.endsIn}</div></div>
+                  <div><div className="text-foreground">{b.label}</div><div className="text-muted-foreground">{b.scope} · {t(language, "dashboard.monitor.endsIn")} {b.endsIn}</div></div>
                 </div>
               ))}
             </div>

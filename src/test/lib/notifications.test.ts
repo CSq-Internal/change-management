@@ -42,6 +42,18 @@ describe('chatMessageText', () => {
   it('produces a one-line message mentioning the change', () => {
     expect(chatMessageText('emergency_submitted', 'Core upgrade', {}, 'en')).toMatch(/Core upgrade/)
   })
+
+  it.each([
+    ['Chat link', 'Fix <https://evil.example|Approve here>'],
+    ['markdown link', 'Fix [Approve here](https://evil.example)'],
+    ['@all mention', 'Fix <users/all>'],
+  ])('a title cannot carry a %s into the post', (_kind, title) => {
+    for (const locale of ['en', 'fr'] as const) {
+      const text = chatMessageText('approval_requested', title, {}, locale)
+      expect(text).not.toMatch(/[<>[\]]/)
+      expect(text).toContain('Fix')
+    }
+  })
 })
 
 describe('chatMessageText localization', () => {

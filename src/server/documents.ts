@@ -1,8 +1,9 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import {
-  isGroupAdmin, isGroupLevel, isMemberOfOpCo, hasRoleInOpCo,
+  isGroupAdmin, isMemberOfOpCo, hasRoleInOpCo,
 } from "@/lib/permissions"
+import { canViewChange } from "@/server/change-access"
 import {
   ensureChangeFolder, uploadDocument, getDownloadBuffer, scanFile,
 } from "@/server/drive"
@@ -153,9 +154,7 @@ export async function getDocumentForDownload(input: { changeId: string; attachme
   })
   if (!change) throw new Error("Change not found")
 
-  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
-    throw new Error("Forbidden: not a member of this OpCo")
-  }
+  if (!(await canViewChange(session, change))) throw new Error("Forbidden: no access to this change")
 
   const attachment = await db.attachment.findUnique({ where: { id: input.attachmentId } })
   if (!attachment || attachment.changeId !== change.id) throw new Error("Attachment not found")

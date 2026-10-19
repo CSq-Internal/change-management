@@ -2,6 +2,7 @@
 // Maps an event type to the people who should hear about it. Call sites say what
 // happened; this decides who to tell.
 import { getPrisma } from "@/server/db"
+import { votesSince } from "@/lib/approval-cycle"
 import { getRoutedApprovers, getNamedApprovers } from "@/server/approval-authority"
 import type { NotifyEventType } from "@/lib/notifications"
 import type { NotifyRecipient } from "@/server/notify"
@@ -66,12 +67,16 @@ async function idsForRole(role: AudienceRole, change: AudienceChange): Promise<s
       return rows.map((r) => r.approverId)
     }
     case "approversPending": {
-      const [routed, named, votes] = await Promise.all([
+      const [routed, named, lastSubmission, votes] = await Promise.all([
         getRoutedApprovers({ infrastructureType: change.infrastructureType, opcoId: change.opcoId }),
         getNamedApprovers(change.id),
-        db.approval.findMany({ where: { changeId: change.id }, select: { approverId: true } }),
+        db.auditLog.findFirst({
+          where: { changeId: change.id, action: "submitted" }, orderBy: { at: "desc" }, select: { at: true },
+        }),
+        db.approval.findMany({ where: { changeId: change.id }, select: { approverId: true, decidedAt: true } }),
       ])
-      const voted = new Set(votes.map((v) => v.approverId))
+      // Only this round's votes: someone who voted before a resubmission still has to act.
+      const voted = new Set(votesSince(votes, lastSubmission?.at ?? null).map((v) => v.approverId))
       return [...routed, ...named].map((u) => u.id).filter((id) => !voted.has(id))
     }
     case "opcoAdmins": {
@@ -94,14 +99,22 @@ export async function resolveAudience(
   change: AudienceChange,
   actorId?: string,
 ): Promise<NotifyRecipient[]> {
-  const roles = AUDIENCE[type] ?? []
+  // The actor already knows what they just did. The exception is a receipt, where telling
+  // them is the entire point.
+  return audienceFor(AUDIENCE[type] ?? [], change, RECEIPT_TYPES.includes(type) ? undefined : actorId)
+}
+
+/** Active users holding any of these roles on the change, minus `exclude`. */
+export async function audienceFor(
+  roles: AudienceRole[],
+  change: AudienceChange,
+  exclude?: string,
+): Promise<NotifyRecipient[]> {
   if (roles.length === 0) return []
 
   const idLists = await Promise.all(roles.map((r) => idsForRole(r, change)))
   const ids = new Set(idLists.flat())
-  // The actor already knows what they just did. The exception is a receipt, where telling
-  // them is the entire point.
-  if (actorId && !RECEIPT_TYPES.includes(type)) ids.delete(actorId)
+  if (exclude) ids.delete(exclude)
   if (ids.size === 0) return []
 
   const db = getPrisma()

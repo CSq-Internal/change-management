@@ -49,9 +49,9 @@ export async function addApproverAssignment(input: { infrastructureType: string;
   return db.$transaction(async (tx) => {
     const actor = await tx.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
     if (!actor) throw new Error("User not found")
-    // findFirst + create/update rather than upsert: the compound unique includes the
-    // nullable opcoId, which Postgres treats as distinct, so it can't be targeted by a
-    // unique `where` when null (group-level overrides).
+    // findFirst + create/update rather than upsert: Prisma's compound-unique `where` can't
+    // target a NULL opcoId (group-level overrides). The index is NULLS NOT DISTINCT, so a
+    // racing second create fails instead of duplicating.
     const existing = await tx.approverAssignment.findFirst({
       where: { infrastructureType: input.infrastructureType, opcoId, userId: input.userId },
     })

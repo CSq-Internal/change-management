@@ -4,17 +4,14 @@ import Link from "next/link"
 import { useState } from "react"
 import { t, type Language } from "@/lib/i18n"
 import type { DashboardChange } from "@/lib/dashboard-metrics"
+import { csvRow } from "@/lib/csv"
 
 type SortKey = "title" | "opcoName" | "infrastructureType" | "riskLevel" | "status" | "plannedStart" | "createdAt"
 
-function csvEscape(s: string) {
-  return `"${s.replace(/"/g, '""')}"`
-}
 function toCsv(rows: DashboardChange[]): string {
   const header = ["ID", "Title", "OpCo", "Infrastructure", "Risk", "Status", "Planned", "Created"]
   const lines = rows.map((r) =>
-    [r.id, r.title, r.opcoName, r.infrastructureType, r.riskLevel, r.status, r.plannedStart ?? "", r.createdAt]
-      .map((v) => csvEscape(String(v))).join(","),
+    csvRow([r.id, r.title, r.opcoName, r.infrastructureType, r.riskLevel, r.status, r.plannedStart, r.createdAt]),
   )
   return [header.join(","), ...lines].join("\n")
 }

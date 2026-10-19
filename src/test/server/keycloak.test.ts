@@ -1,6 +1,6 @@
 // src/test/server/keycloak.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { getAdminToken, createKeycloakUser, findKeycloakUserByEmail, deactivateKeycloakUser, reactivateKeycloakUser } from '@/server/keycloak'
+import { getAdminToken, createOrFindKeycloakUser } from '@/server/keycloak'
 
 const ENV: Record<string, string> = {
   KEYCLOAK_ISSUER: 'https://kc.example.com/realms/csquared',
@@ -76,7 +76,7 @@ describe('realm is parameterised, not hardcoded (C)', () => {
     )
   })
 
-  it('createKeycloakUser targets /admin/realms/<derived realm>/users with the bearer token', async () => {
+  it('createOrFindKeycloakUser targets /admin/realms/<derived realm>/users with the bearer token', async () => {
     process.env.KEYCLOAK_ISSUER = 'https://kc.example.com/realms/acme'
     const fetchMock = vi
       .fn()
@@ -87,7 +87,7 @@ describe('realm is parameterised, not hardcoded (C)', () => {
       }) // create user
     vi.stubGlobal('fetch', fetchMock)
 
-    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace')
+    const { id } = await createOrFindKeycloakUser('a@x.com', 'Ada Lovelace')
     expect(id).toBe('uid-123')
 
     const [url, opts] = fetchMock.mock.calls[1]
@@ -98,7 +98,7 @@ describe('realm is parameterised, not hardcoded (C)', () => {
     expect(body).toMatchObject({ username: 'a@x.com', email: 'a@x.com', enabled: true, emailVerified: true })
   })
 
-  it('createKeycloakUser links an existing Keycloak user when create returns 409', async () => {
+  it('createOrFindKeycloakUser links an existing Keycloak user when create returns 409', async () => {
     process.env.KEYCLOAK_ISSUER = 'https://kc.example.com/realms/acme'
     const fetchMock = vi
       .fn()
@@ -114,50 +114,11 @@ describe('realm is parameterised, not hardcoded (C)', () => {
       }) // exact email lookup
     vi.stubGlobal('fetch', fetchMock)
 
-    const id = await createKeycloakUser('a@x.com', 'Ada Lovelace')
+    const { id } = await createOrFindKeycloakUser('a@x.com', 'Ada Lovelace')
 
     expect(id).toBe('uid-existing')
     expect(fetchMock.mock.calls[2][0]).toBe(
       'https://kc.example.com/admin/realms/acme/users?email=a%40x.com&exact=true'
     )
-  })
-
-  it('findKeycloakUserByEmail returns null when no exact user matches', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(tokenResponse())
-      .mockResolvedValueOnce({ ok: true, json: async () => [] })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(findKeycloakUserByEmail('missing@x.com')).resolves.toBeNull()
-  })
-})
-
-describe('deactivate/reactivate tolerate a missing Keycloak user', () => {
-  it('deactivateKeycloakUser resolves (no throw) when Keycloak returns 404', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(tokenResponse())
-      .mockResolvedValueOnce({ ok: false, status: 404, text: async () => '{"error":"User not found"}' })
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(deactivateKeycloakUser('missing-sub')).resolves.toBeUndefined()
-  })
-
-  it('reactivateKeycloakUser resolves (no throw) when Keycloak returns 404', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(tokenResponse())
-      .mockResolvedValueOnce({ ok: false, status: 404, text: async () => '{"error":"User not found"}' })
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(reactivateKeycloakUser('missing-sub')).resolves.toBeUndefined()
-  })
-
-  it('deactivateKeycloakUser still throws on a non-404 error (e.g. 500)', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(tokenResponse())
-      .mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'boom' })
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(deactivateKeycloakUser('x')).rejects.toThrow()
   })
 })

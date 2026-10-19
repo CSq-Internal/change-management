@@ -3,10 +3,11 @@
 
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
-import { isGroupAdmin, hasRoleInOpCo, isGroupLevel, isMemberOfOpCo, canApprove } from "@/lib/permissions"
+import { isGroupAdmin, hasRoleInOpCo, isMemberOfOpCo, canApprove } from "@/lib/permissions"
 import { notifyEvent, notifyChange } from "@/server/notify"
 import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
-import { getRoutedApprovers, getNamedApprovers, canUserApproveChange, isEligibleApprover } from "@/server/approval-authority"
+import { getRoutedApprovers, getNamedApprovers, isEligibleApprover } from "@/server/approval-authority"
+import { canViewChange } from "@/server/change-access"
 import { SLA_HOURS } from "@/lib/sla"
 import type { NotifyEventType } from "@/lib/notifications"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
@@ -35,6 +36,35 @@ type CreateChangeInput = {
   approverIds?: string[]
 }
 
+type ChangeFormFields = Omit<CreateChangeInput, "approverIds">
+
+// A server action receives whatever JSON the browser sends, whatever its TypeScript type
+// says, so create and update copy only these keys. Spreading the input would let a caller
+// set status, opcoId or implementedById, or forge votes through a nested `approvals` write.
+// The Record type makes the compiler flag a form field added to the type but not here.
+const CHANGE_FORM_FIELDS: Record<keyof ChangeFormFields, true> = {
+  title: true, description: true, category: true, riskLevel: true, contactEmail: true,
+  infrastructureType: true, changeReason: true, impactScope: true, implementationPlan: true,
+  testingPlan: true, backoutPlan: true, changeWindow: true, plannedStart: true,
+  plannedEnd: true, isEmergency: true,
+}
+
+function pickFormFields<T extends Partial<ChangeFormFields>>(data: T): T {
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => Object.hasOwn(CHANGE_FORM_FIELDS, key)),
+  ) as T
+}
+
+/** A blackout (this OpCo's or group-wide) overlapping the window [start, end), if any. */
+async function blockingBlackout(
+  db: ReturnType<typeof getPrisma>, opcoId: string, start: Date, end: Date,
+) {
+  const [blackout] = await db.blackoutPeriod.findMany({
+    where: { OR: [{ opcoId }, { opcoId: null }], startsAt: { lt: end }, endsAt: { gt: start } },
+  })
+  return blackout
+}
+
 export async function getChange(id: string) {
   const session = await getAppSession()
   const db = getPrisma()
@@ -52,33 +82,14 @@ export async function getChange(id: string) {
     },
   })
   if (!change) return null
-  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
-    const user = await db.user.findUnique({
-      where: { keycloakId: session.keycloakId },
-      select: { id: true },
-    })
-    const canApproveThis = user
-      ? await canUserApproveChange({
-          userId: user.id, realmRoles: session.realmRoles,
-          change: { infrastructureType: change.infrastructureType, opcoId: change.opcoId },
-        })
-      : false
-    if (!canApproveThis) return null
-  }
-  return change
+  return (await canViewChange(session, change)) ? change : null
 }
 
-export async function listChanges(opcoSlug: string) {
-  const session = await getAppSession()
-  if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
-    throw new Error("Forbidden: not a member of this OpCo")
+// A draft may leave either date empty, but once both are set the end must come after the start.
+function assertWindow(start: Date | null | undefined, end: Date | null | undefined) {
+  if (start && end && !(new Date(end) > new Date(start))) {
+    throw new Error("Invalid planned window: the end must be after the start")
   }
-  const db = getPrisma()
-  return db.changeRequest.findMany({
-    where: { opco: { slug: opcoSlug } },
-    include: { requester: true, approvals: true, opco: true },
-    orderBy: { createdAt: "desc" },
-  })
 }
 
 export async function createChange(opcoSlug: string, data: CreateChangeInput) {
@@ -96,23 +107,9 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
   if (!user) throw new Error("User not found in database")
 
-  if (!data.isEmergency) {
-    const now = new Date()
-    const activeBlackouts = await db.blackoutPeriod.findMany({
-      where: {
-        OR: [{ opcoId: opco.id }, { opcoId: null }],
-        startsAt: { lte: now }, endsAt: { gte: now },
-      },
-    })
-    if (activeBlackouts.length > 0) {
-      throw new Error(`Blocked by blackout: "${activeBlackouts[0].label}". Submit as emergency to override.`)
-    }
-  }
-
-  const slaDeadline = new Date()
-  slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
-
-  const { approverIds = [], ...changeData } = data
+  const { approverIds = [] } = data
+  const changeData = pickFormFields<ChangeFormFields>(data)
+  assertWindow(changeData.plannedStart, changeData.plannedEnd)
 
   // Validate before opening the transaction so a bad id leaves nothing behind.
   for (const userId of approverIds) {
@@ -128,7 +125,7 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
 
   const change = await db.$transaction(async (tx) => {
     const created = await tx.changeRequest.create({
-      data: { ...changeData, opcoId: opco.id, requesterId: user.id, status: "draft", slaDeadline },
+      data: { ...changeData, opcoId: opco.id, requesterId: user.id, status: "draft" },
     })
     for (const userId of approverIds) {
       await tx.changeAssignee.create({ data: { changeId: created.id, userId, role: "approver" } })
@@ -159,14 +156,9 @@ export async function updateChange(id: string, data: UpdateChangeInput) {
     throw new Error("Forbidden: only the requester or an admin can edit this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be edited")
 
-  const updateData: UpdateChangeInput & { slaDeadline?: Date } = { ...data }
-  if (data.riskLevel) {
-    const slaDeadline = new Date()
-    slaDeadline.setHours(slaDeadline.getHours() + SLA_HOURS[data.riskLevel])
-    updateData.slaDeadline = slaDeadline
-  }
-
-  return db.changeRequest.update({ where: { id }, data: updateData })
+  const fields = pickFormFields(data)
+  assertWindow(fields.plannedStart ?? change.plannedStart, fields.plannedEnd ?? change.plannedEnd)
+  return db.changeRequest.update({ where: { id }, data: fields })
 }
 
 export async function submitChange(id: string) {
@@ -202,6 +194,7 @@ export async function submitChange(id: string) {
   if (missingFields.length > 0) {
     throw new Error(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
   }
+  assertWindow(change.plannedStart, change.plannedEnd)
 
   // At least one approver must be named before a change can enter the approval flow.
   // Requester-named approvers are additive — the routed CAB keeps its authority — but
@@ -217,22 +210,27 @@ export async function submitChange(id: string) {
     throw new Error("Cannot submit: at least one approver must be named")
   }
 
+  // The planned window must clear every blackout, whenever it is submitted. Planned dates
+  // are required above, and checked here rather than on the draft, which may still move.
   if (!change.isEmergency) {
-    const now = new Date()
-    const activeBlackouts = await db.blackoutPeriod.findMany({
-      where: {
-        OR: [{ opcoId: change.opcoId }, { opcoId: null }],
-        startsAt: { lte: now }, endsAt: { gte: now },
-      },
-    })
-    if (activeBlackouts.length > 0) {
-      throw new Error(`Blocked by blackout: "${activeBlackouts[0].label}". Submit as emergency to override.`)
+    const blackout = await blockingBlackout(db, change.opcoId, change.plannedStart!, change.plannedEnd!)
+    if (blackout) {
+      throw new Error(`Blocked by blackout: "${blackout.label}". Submit as emergency to override.`)
     }
   }
 
-  const updated = await db.changeRequest.update({ where: { id }, data: { status: "pending" } })
-  await db.auditLog.create({
-    data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
+  // The SLA clock starts here, and restarts on each resubmission, so a draft's age and an
+  // earlier round's escalations don't count against this round.
+  const slaDeadline = new Date(Date.now() + SLA_HOURS[change.riskLevel] * 3_600_000)
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({
+      where: { id },
+      data: { status: "pending", slaDeadline, escalationLevel: 0, lastEscalatedAt: null },
+    })
+    await tx.auditLog.create({
+      data: { changeId: id, actorId: user.id, action: "submitted", fromStatus: "draft", toStatus: "pending" },
+    })
+    return updated
   })
 
   // Notify the routed CAB's members (group CAB for Equiano, OpCo CAB otherwise) + active delegates,
@@ -288,9 +286,12 @@ export async function discardChange(id: string) {
     throw new Error("Forbidden: only the requester or an admin can discard this change")
   if (change.status !== "draft") throw new Error("Only draft changes can be discarded")
 
-  const updated = await db.changeRequest.update({ where: { id }, data: { status: "cancelled" } })
-  await db.auditLog.create({
-    data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({ where: { id }, data: { status: "cancelled" } })
+    await tx.auditLog.create({
+      data: { changeId: id, actorId: user.id, action: "cancelled", fromStatus: "draft", toStatus: "cancelled" },
+    })
+    return updated
   })
 
   await notifyChange("change_cancelled", id, { actorId: user.id }).catch(() => {})
@@ -300,7 +301,8 @@ export async function discardChange(id: string) {
 
 const VALID_TRANSITIONS: Partial<Record<ChangeStatus, ChangeStatus[]>> = {
   draft: ["pending"],
-  pending: ["approved", "rejected"],
+  // No `pending` entry: a pending change is approved or rejected only by votes through
+  // submitApproval (quorum, CAB, SoD). The emergency pending → implemented path is below.
   approved: ["implemented"],
   implemented: ["verified"],
   verified: ["closed"],
@@ -397,9 +399,12 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
     }
   }
 
-  const updated = await db.changeRequest.update({ where: { id: changeId }, data })
-  await db.auditLog.create({
-    data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({ where: { id: changeId }, data })
+    await tx.auditLog.create({
+      data: { changeId, actorId: user.id, action: "status_changed", fromStatus: change.status, toStatus, note },
+    })
+    return updated
   })
 
   const lifecycleEvent = LIFECYCLE_EVENT[toStatus]
@@ -438,29 +443,25 @@ export async function rescheduleChange(id: string, newStartIso: string, newEndIs
 
   // Blackout is a hard block (overlap is only a soft calendar warning), unless emergency.
   if (!change.isEmergency) {
-    const blackouts = await db.blackoutPeriod.findMany({
-      where: {
-        OR: [{ opcoId: change.opcoId }, { opcoId: null }],
-        startsAt: { lt: newEnd },
-        endsAt: { gt: newStart },
-      },
-    })
-    if (blackouts.length > 0)
-      throw new Error(`Blocked by blackout: "${blackouts[0].label}". Emergencies may override.`)
+    const blackout = await blockingBlackout(db, change.opcoId, newStart, newEnd)
+    if (blackout) throw new Error(`Blocked by blackout: "${blackout.label}". Emergencies may override.`)
   }
 
   const oldWindow = change.plannedStart && change.plannedEnd
     ? `${change.plannedStart.toISOString()} – ${change.plannedEnd.toISOString()}`
     : "unscheduled"
-  const updated = await db.changeRequest.update({
-    where: { id },
-    data: { plannedStart: newStart, plannedEnd: newEnd },
-  })
-  await db.auditLog.create({
-    data: {
-      changeId: id, actorId: user.id, action: "rescheduled",
-      note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
-    },
+  const updated = await db.$transaction(async (tx) => {
+    const updated = await tx.changeRequest.update({
+      where: { id },
+      data: { plannedStart: newStart, plannedEnd: newEnd },
+    })
+    await tx.auditLog.create({
+      data: {
+        changeId: id, actorId: user.id, action: "rescheduled",
+        note: `Rescheduled ${oldWindow} to ${newStart.toISOString()} – ${newEnd.toISOString()}`,
+      },
+    })
+    return updated
   })
 
   await notifyChange("change_rescheduled", id, {

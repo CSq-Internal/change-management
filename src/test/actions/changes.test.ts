@@ -62,19 +62,22 @@ vi.mock('@/server/approval-authority', async (importOriginal) => {
   return { ...actual, isEligibleApprover: vi.fn(async () => true) }
 })
 
-import { listChanges, createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
+import { createChange, updateChangeStatus, submitChange, getChange, updateChange, discardChange } from '@/server/actions/changes'
 import { getAppSession } from '@/lib/session'
 import { notifyEvent, notifyChange } from '@/server/notify'
 import { isEligibleApprover } from '@/server/approval-authority'
 
+// Status writes and their audit rows go through the transaction client; it shares the
+// update and audit mocks with mockDb so assertions read the same either way.
 const tx = {
   changeRequest: {
     create: vi.fn().mockImplementation(({ data }: { data: unknown }) =>
       Promise.resolve({ id: 'cr-new', status: 'draft', ...(data as object) })
     ),
+    update: mockDb.changeRequest.update,
   },
   changeAssignee: { create: vi.fn().mockResolvedValue({}) },
-  auditLog: { create: vi.fn().mockResolvedValue({}) },
+  auditLog: mockDb.auditLog,
 }
 
 beforeEach(() => {
@@ -112,18 +115,16 @@ const ugandaSession = {
   realmRoles: [],
 }
 
-describe('listChanges', () => {
-  it('returns empty array when no changes exist', async () => {
-    expect(await listChanges('ghana')).toEqual([])
-  })
-
-  it('rejects a non-member, non-group caller listing another OpCo', async () => {
-    vi.mocked(getAppSession).mockResolvedValueOnce(ugandaSession)
-    await expect(listChanges('ghana')).rejects.toThrow(/Forbidden/)
-  })
-})
-
 describe('createChange', () => {
+  it('does not check blackouts for a draft (submission does)', async () => {
+    mockDb.blackoutPeriod.findMany.mockClear()
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'low',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+    })
+    expect(mockDb.blackoutPeriod.findMany).not.toHaveBeenCalled()
+  })
+
   it('creates a change request', async () => {
     const result = await createChange('ghana', {
       title: 'Router update', description: 'BGP config',
@@ -184,6 +185,32 @@ const rejectedChange = {
   opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'low',
   isEmergency: false,
 }
+
+describe('updateChangeStatus — votes go through submitApproval only', () => {
+  // A pending change is approved or rejected by votes (quorum, CAB, SoD in submitApproval),
+  // never by setting its status directly.
+  const pendingChange = {
+    id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'user-ap',
+    opco: { slug: 'ghana' }, title: 'Router update', riskLevel: 'high',
+    isEmergency: false, approvals: [],
+  }
+
+  it.each(['approved', 'rejected'] as const)('refuses pending → %s from an approver', async (toStatus) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(pendingChange)
+    await expect(updateChangeStatus('cr-1', toStatus)).rejects.toThrow(/Invalid transition/)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it.each(['approved', 'rejected'] as const)('refuses pending → %s from a group admin', async (toStatus) => {
+    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdminSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ga', keycloakId: 'kc-ga' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(pendingChange)
+    await expect(updateChangeStatus('cr-1', toStatus)).rejects.toThrow(/Invalid transition/)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+})
 
 describe('updateChangeStatus — OpCo authorization', () => {
   it('rejects a non-member acting on another OpCo\'s change', async () => {
@@ -405,13 +432,33 @@ describe('submitChange', () => {
     expect(result).toHaveProperty('status', 'pending')
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
       where: { id: 'cr-1' },
-      data: { status: 'pending' },
+      data: { status: 'pending', slaDeadline: expect.any(Date), escalationLevel: 0, lastEscalatedAt: null },
     })
     expect(mockDb.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ action: 'submitted', fromStatus: 'draft', toStatus: 'pending' }),
       })
     )
+  })
+
+  it('starts the SLA clock at submission, not at draft creation', async () => {
+    // The default change is low risk: 48h from now, whenever the draft was saved.
+    const before = Date.now()
+    await submitChange('cr-1')
+    const { data } = mockDb.changeRequest.update.mock.calls[0][0] as { data: { slaDeadline: Date } }
+    expect(data.slaDeadline.getTime()).toBeGreaterThanOrEqual(before + 48 * 3_600_000)
+    expect(data.slaDeadline.getTime()).toBeLessThanOrEqual(Date.now() + 48 * 3_600_000)
+  })
+
+  it('does not start an SLA clock on a draft', async () => {
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'high',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+    })
+    expect(tx.changeRequest.create.mock.calls[0][0].data).not.toHaveProperty('slaDeadline')
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'draft' })
+    await updateChange('cr-1', { riskLevel: 'high' })
+    expect(mockDb.changeRequest.update).toHaveBeenLastCalledWith({ where: { id: 'cr-1' }, data: { riskLevel: 'high' } })
   })
 
   it('notifies the routed CAB members on submit', async () => {
@@ -444,6 +491,28 @@ describe('submitChange', () => {
     mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ug', keycloakId: 'kc-ug' })
     // change.requesterId is 'user-1', not 'user-ug', and ugandaSession has no admin role
     await expect(submitChange('cr-1')).rejects.toThrow(/Forbidden/)
+  })
+
+  it('checks blackouts against the planned window, not the time of submission', async () => {
+    // The default change is planned for 1-2 Jul 2026.
+    await submitChange('cr-1')
+    expect(mockDb.blackoutPeriod.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [{ opcoId: 'opco-1' }, { opcoId: null }],
+        startsAt: { lt: new Date('2026-07-02') },
+        endsAt: { gt: new Date('2026-07-01') },
+      },
+    })
+  })
+
+  it('writes the status and its audit row in one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    await submitChange('cr-1')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.changeRequest.update).toHaveBeenCalled()
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'submitted' }) })
+    )
   })
 
   it('throws "Blocked by blackout" when submitting a non-emergency draft during an active blackout', async () => {
@@ -556,6 +625,61 @@ describe('updateChange', () => {
   })
 })
 
+describe('change writes keep to the form fields', () => {
+  // Server actions take arbitrary JSON from the browser, whatever their TypeScript types say.
+  const forged = {
+    status: 'approved', opcoId: 'opco-other', requesterId: 'user-other',
+    implementedById: 'user-other', implementedAt: new Date(), expedited: true,
+    retroApprovedAt: new Date(), driveFolderId: 'folder-x', escalationLevel: 2,
+    approvals: { create: [{ approverId: 'cab-1', decision: 'approve', isCab: true }] },
+    auditTrail: { create: [{ actorId: 'user-other', action: 'approved' }] },
+  }
+
+  it('updateChange drops fields the edit form does not have', async () => {
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'draft' })
+    await updateChange('cr-1', { title: 'Updated title', ...forged } as never)
+    expect(mockDb.changeRequest.update).toHaveBeenCalledWith({
+      where: { id: 'cr-1' },
+      data: { title: 'Updated title' },
+    })
+  })
+
+  it('createChange drops fields the request form does not have', async () => {
+    await createChange('ghana', {
+      title: 'Router update', description: 'BGP config', category: 'config', riskLevel: 'low',
+      contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+      ...forged,
+    } as never)
+    const data = tx.changeRequest.create.mock.calls[0][0].data
+    for (const key of Object.keys(forged)) {
+      if (key === 'status' || key === 'opcoId' || key === 'requesterId') continue
+      expect(data).not.toHaveProperty(key)
+    }
+    expect(data).toMatchObject({ status: 'draft', opcoId: 'opco-1', requesterId: 'user-1', title: 'Router update' })
+  })
+})
+
+describe('status changes are written with their audit row', () => {
+  it('discardChange uses one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    mockDb.changeRequest.update.mockResolvedValueOnce({ id: 'cr-1', status: 'cancelled' })
+    await discardChange('cr-1')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('updateChangeStatus uses one transaction', async () => {
+    mockDb.$transaction.mockClear()
+    vi.mocked(getAppSession).mockResolvedValueOnce(approverSession)
+    mockDb.user.findUnique.mockResolvedValueOnce({ id: 'user-ap', keycloakId: 'kc-ap' })
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce(approvedChange)
+    await updateChangeStatus('cr-1', 'implemented')
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'status_changed', toStatus: 'implemented' }) })
+    )
+  })
+})
+
 describe('discardChange', () => {
   it('cancels a draft and writes an audit row', async () => {
     await discardChange('cr-1')
@@ -657,7 +781,7 @@ describe('submitChange — mandatory approver', () => {
     })
     await submitChange('cr-1')
     expect(mockDb.changeRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'cr-1' }, data: { status: 'pending' } })
+      expect.objectContaining({ where: { id: 'cr-1' }, data: expect.objectContaining({ status: 'pending' }) })
     )
   })
 
@@ -717,5 +841,31 @@ describe('lifecycle notifications', () => {
     })
     vi.mocked(notifyChange).mockRejectedValue(new Error('boom'))
     await expect(submitChange('cr-1')).resolves.toBeDefined()
+  })
+})
+
+describe('planned window: the end must come after the start', () => {
+  const backwards = { plannedStart: new Date('2026-07-02T10:00Z'), plannedEnd: new Date('2026-07-02T08:00Z') }
+  const form = {
+    title: 'Router update', description: 'BGP config', category: 'config' as const, riskLevel: 'low' as const,
+    contactEmail: 'test@csquared.com', infrastructureType: 'Backbone IP Network',
+  }
+
+  it('createChange refuses a backwards window and stores nothing', async () => {
+    await expect(createChange('ghana', { ...form, ...backwards })).rejects.toThrow(/end must be after/i)
+    expect(tx.changeRequest.create).not.toHaveBeenCalled()
+  })
+
+  it('updateChange refuses an end moved before the stored start', async () => {
+    await expect(updateChange('cr-1', { plannedEnd: new Date('2026-06-30') })).rejects.toThrow(/end must be after/i)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
+  })
+
+  it('submitChange refuses a draft whose window is backwards', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      ...(await mockDb.changeRequest.findUnique()), ...backwards,
+    })
+    await expect(submitChange('cr-1')).rejects.toThrow(/end must be after/i)
+    expect(mockDb.changeRequest.update).not.toHaveBeenCalled()
   })
 })

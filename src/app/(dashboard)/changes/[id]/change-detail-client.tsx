@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { DateTime } from "@/components/date-time"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,7 +44,7 @@ export type SerializedChange = {
   createdAt: string
   updatedAt: string
   opco: { slug: string; name: string }
-  requester: { keycloakId: string; name: string | null; email: string }
+  requester: { name: string | null; email: string }
   approvals: Array<{
     id: string
     approverId: string
@@ -78,21 +79,11 @@ export type Caps = {
   isNamedImplementer: boolean
   canApprove: boolean
   isAdmin: boolean
-  isCabMember: boolean
   canExportEvidence: boolean
   canManageAssignees: boolean
   soleApproverIsMe: boolean
   /** Already voted in the current decision stage — the server would refuse a second. */
   hasVotedThisStage: boolean
-}
-
-// Friendly labels for the five required documents (matches the request form).
-const DOC_LABEL: Record<string, string> = {
-  impact_scope: "Impact & Scope",
-  implementation_plan: "Implementation Plan",
-  testing_plan: "Testing & Validation",
-  backout_plan: "Backout Plan",
-  solution_document: "Solution Document",
 }
 
 const DOC_LABEL_KEY: Record<string, string> = {
@@ -105,16 +96,7 @@ const DOC_LABEL_KEY: Record<string, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmt(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
+const fmt = (iso: string | null) => (iso ? <DateTime value={iso} /> : null)
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   if (!value || value === "—") return null
@@ -137,6 +119,11 @@ interface Props {
 
 export default function ChangeDetailClient({ change, caps, assigneeCandidates, approverCandidates }: Props) {
   const { language } = useStore()
+  // Stored values (audit actions, categories) with a translation, else shown as stored.
+  const label = (key: string, raw: string) => {
+    const text = t(language, key)
+    return text === key ? raw : text
+  }
   const { toast } = useToast()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -171,7 +158,9 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     reopen: change.status === "rejected" && (caps.isRequester || caps.isAdmin),
     discard: change.status === "draft" && (caps.isRequester || caps.isAdmin),
   }
-  const hasActions = Object.values(a).some(Boolean)
+  // The PIR panel (the form, or the note that someone independent must write it) is an action too.
+  const pirPanel = change.status === "implemented" && (caps.canApprove || caps.isAdmin || caps.isImplementer) && !change.hasPir
+  const hasActions = Object.values(a).some(Boolean) || pirPanel
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -187,8 +176,8 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
       startTransition(() => router.refresh())
     } catch (err) {
       toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "An error occurred",
+        title: t(language, "common.error"),
+        description: err instanceof Error ? err.message : t(language, "common.errorOccurred"),
         variant: "error",
       })
     } finally {
@@ -201,20 +190,20 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     // instead of a masked server 500. The server submitChange remains the backstop.
     const present = new Set(change.attachments.map((d) => d.kind))
     const missingDocs = documentsRequiredForRisk(change.riskLevel)
-      ? REQUIRED_DOC_KINDS.filter((k) => !present.has(k)).map((k) => DOC_LABEL[k] ?? k)
+      ? REQUIRED_DOC_KINDS.filter((k) => !present.has(k)).map((k) => { const key = DOC_LABEL_KEY[k]; return key ? t(language, key) : k })
       : []
     const missingFields = ([
-      ["Title", change.title], ["Description", change.description],
-      ["Contact email", change.contactEmail], ["Infrastructure type", change.infrastructureType],
-      ["Planned start", change.plannedStart], ["Planned end", change.plannedEnd],
-    ] as const).filter(([, v]) => v == null || v === "").map(([k]) => k)
+      ["requests.col.title", change.title], ["common.description", change.description],
+      ["detail.field.contactEmail", change.contactEmail], ["detail.field.infraType", change.infrastructureType],
+      ["detail.field.plannedStart", change.plannedStart], ["detail.field.plannedEnd", change.plannedEnd],
+    ] as const).filter(([, v]) => v == null || v === "").map(([k]) => t(language, k))
     if (missingDocs.length || missingFields.length) {
       const parts: string[] = []
-      if (missingDocs.length) parts.push(`document(s): ${missingDocs.join(", ")}`)
-      if (missingFields.length) parts.push(`field(s): ${missingFields.join(", ")}`)
+      if (missingDocs.length) parts.push(`${t(language, "detail.toast.missingDocs")}: ${missingDocs.join(", ")}`)
+      if (missingFields.length) parts.push(`${t(language, "detail.toast.missingFields")}: ${missingFields.join(", ")}`)
       toast({
-        title: "Can't submit yet",
-        description: `Add the missing ${parts.join(" and ")} before submitting for approval.`,
+        title: t(language, "detail.toast.submitBlocked"),
+        description: `${t(language, "detail.toast.missingPrefix")} ${parts.join(` ${t(language, "detail.toast.and")} `)} ${t(language, "detail.toast.missingSuffix")}`,
         variant: "error",
       })
       return
@@ -230,10 +219,10 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     setIsActing(true)
     try {
       await discardChange(change.id)
-      toast({ title: "Draft discarded", description: "The change has been cancelled.", variant: "success" })
+      toast({ title: t(language, "detail.toast.discarded"), description: t(language, "detail.toast.discardedDesc"), variant: "success" })
       router.push("/requests")
     } catch (err) {
-      toast({ title: "Error", description: err instanceof Error ? err.message : "An error occurred", variant: "error" })
+      toast({ title: t(language, "common.error"), description: err instanceof Error ? err.message : t(language, "common.errorOccurred"), variant: "error" })
     } finally {
       setIsActing(false)
       setConfirmDiscard(false)
@@ -242,7 +231,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
 
   function handleApprove() {
     handleAction(
-      () => submitApproval(change.id, "approve", comment || undefined, caps.isCabMember),
+      () => submitApproval(change.id, "approve", comment || undefined),
       t(language, "detail.toast.approved"),
       t(language, "detail.toast.approvedDesc")
     )
@@ -251,14 +240,14 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
   function handleReject() {
     if (!comment.trim()) {
       toast({
-        title: "Error",
+        title: t(language, "common.error"),
         description: t(language, "detail.toast.commentRequired"),
         variant: "error",
       })
       return
     }
     handleAction(
-      () => submitApproval(change.id, "reject", comment, caps.isCabMember),
+      () => submitApproval(change.id, "reject", comment),
       t(language, "detail.toast.rejected"),
       t(language, "detail.toast.rejectedDesc")
     )
@@ -269,8 +258,8 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     // round-trip (which would otherwise surface as a masked 500). Server stays authoritative.
     if (toStatus === "implemented" && caps.soleApproverIsMe) {
       toast({
-        title: "Can't implement this change",
-        description: "You approved it, so a different approver or an admin must implement it (separation of duties).",
+        title: t(language, "detail.toast.implementBlocked"),
+        description: t(language, "detail.toast.implementBlockedDesc"),
         variant: "error",
       })
       return
@@ -322,7 +311,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
               <span>•</span>
               <RiskPill risk={change.riskLevel} />
               <span>•</span>
-              <span className="capitalize">{change.category}</span>
+              <span className="capitalize">{label(`requests.category.${change.category}`, change.category)}</span>
             </div>
           </CardHeader>
         </Card>
@@ -406,7 +395,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
                     <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-border" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                        <span className="font-medium capitalize">{log.action.replace(/_/g, " ")}</span>
+                        <span className="font-medium capitalize">{label(`audit.action.${log.action}`, log.action.replace(/_/g, " "))}</span>
                         {log.fromStatus && log.toStatus && (
                           <span className="text-muted-foreground text-xs">
                             <StatusPill status={log.fromStatus} />
@@ -489,10 +478,10 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
         )}
         {confirmDiscard && (
           <ConfirmDialog
-            title="Discard this draft?"
-            body="The change will be cancelled and removed from active lists. Its audit trail is kept. This can't be undone."
-            confirmLabel="Discard"
-            cancelLabel="Cancel"
+            title={t(language, "detail.discard.title")}
+            body={t(language, "detail.discard.body")}
+            confirmLabel={t(language, "detail.discard.confirm")}
+            cancelLabel={t(language, "users.confirm.cancel")}
             pending={isActing}
             onConfirm={handleDiscard}
             onCancel={() => setConfirmDiscard(false)}
@@ -521,7 +510,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
                           : "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
                       }`}
                     >
-                      {ap.decision}
+                      {label(`detail.vote.${ap.decision}`, ap.decision)}
                     </span>
                   </div>
                   {ap.comment && (
@@ -587,7 +576,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
                 disabled={isPending || isActing}
                 onClick={() => setConfirmDiscard(true)}
               >
-                Discard Draft
+                {t(language, "detail.discard.button")}
               </Button>
             )}
 
@@ -624,7 +613,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
               </Button>
             )}
 
-            {change.status === "implemented" && (caps.canApprove || caps.isAdmin || caps.isImplementer) && !change.hasPir && (
+            {pirPanel && (
               (caps.isRequester || caps.isImplementer) && needsIndependentPir(change) ? (
                 <p className="text-sm text-muted-foreground">{t(language, "pir.needsIndependent")}</p>
               ) : (

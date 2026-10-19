@@ -15,11 +15,10 @@
 # the channel, checks and policies by display name, reusing or updating them in place.
 #
 # Usage:
-#   PROJECT_ID=my-gcp-project ALERT_EMAIL=ops@example.com \
+#   PROJECT_ID=my-gcp-project REGION=europe-west1 ALERT_EMAIL=ops@example.com \
 #     ./scripts/provision-gcp-alerting.sh <staging|prod>
 #
 # Optional overrides (defaults shown):
-#   REGION=us-central1       Cloud Run region
 #   SERVICE_NAME=cms-<env>   Cloud Run service
 
 set -euo pipefail
@@ -28,7 +27,7 @@ set -euo pipefail
 ENV_NAME="${1:-}"
 PROJECT_ID="${PROJECT_ID:-}"
 ALERT_EMAIL="${ALERT_EMAIL:-}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:?REGION is required (prod is europe-west1)}"
 
 if [[ "$ENV_NAME" != "staging" && "$ENV_NAME" != "prod" ]]; then
   echo "ERROR: first argument must be 'staging' or 'prod'. e.g. PROJECT_ID=p ALERT_EMAIL=e $0 prod" >&2

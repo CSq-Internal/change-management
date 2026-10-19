@@ -2,9 +2,11 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { getUserOpCos, OPCO_NAMES, OPCO_SLUGS } from "@/lib/opco"
+import { useStore } from "@/lib/store"
+import { t } from "@/lib/i18n"
 import { isGroupAdmin } from "@/lib/permissions"
-import { useMemo } from "react"
+import { listActiveOpCos } from "@/server/actions/opcos"
+import { useEffect, useMemo, useState } from "react"
 
 // Stores active OpCo in a cookie; server components read it from request headers
 function setActiveOpCo(slug: string) {
@@ -19,19 +21,26 @@ function readActiveOpCoCookie(): string | null {
 
 export function OpCoSwitcher() {
   const { data: session } = useSession()
+  const language = useStore((s) => s.language)
 
   const userIsGroupAdmin = session ? isGroupAdmin(session.user.realmRoles) : false
-  const userOpCos = useMemo(() => session ? getUserOpCos(session.user.organizations) : [], [session])
+  // A group admin can switch to any OpCo, so the list comes from the database, not the session.
+  const [allOpCos, setAllOpCos] = useState<{ slug: string; name: string }[]>([])
+  useEffect(() => {
+    if (userIsGroupAdmin) listActiveOpCos().then(setAllOpCos).catch(() => {})
+  }, [userIsGroupAdmin])
 
   const options = useMemo(() => {
     if (userIsGroupAdmin) {
       return [
-        { value: "all", label: "All OpCos" },
-        ...OPCO_SLUGS.map((s) => ({ value: s, label: OPCO_NAMES[s] })),
+        { value: "all", label: t(language, "requests.filter.allOpcos") },
+        ...allOpCos.map((o) => ({ value: o.slug, label: o.name })),
       ]
     }
-    return userOpCos.map((s) => ({ value: s, label: OPCO_NAMES[s] }))
-  }, [userIsGroupAdmin, userOpCos])
+    const own = session?.user.organizations.map((o) => ({ value: o.alias, label: o.name })) ?? []
+    // With more than one OpCo, "All" is the way back to seeing every one of them.
+    return own.length > 1 ? [{ value: "all", label: t(language, "requests.filter.allOpcos") }, ...own] : own
+  }, [userIsGroupAdmin, allOpCos, session, language])
 
   if (!session) return null
   if (options.length <= 1) return null
@@ -39,8 +48,7 @@ export function OpCoSwitcher() {
   // Reflect the persisted active OpCo (cookie) so the dropdown shows the current
   // selection after the reload. A ref callback sets it when the <select> actually
   // mounts (the session/options aren't ready on the first render), which keeps SSR
-  // rendering the neutral fallback with no hydration mismatch or setState-in-effect.
-  const fallback = userIsGroupAdmin ? "all" : (userOpCos[0] ?? "all")
+  // rendering the neutral "all" with no hydration mismatch or setState-in-effect.
 
   return (
     <select
@@ -48,7 +56,7 @@ export function OpCoSwitcher() {
         const active = readActiveOpCoCookie()
         if (el && active) el.value = active
       }}
-      defaultValue={fallback}
+      defaultValue="all"
       onChange={(e) => setActiveOpCo(e.target.value)}
       className="rounded border bg-background px-2 py-1 text-sm"
     >

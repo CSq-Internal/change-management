@@ -1,8 +1,9 @@
 // src/server/sla.ts
-// SLA escalation orchestration. Called lazily on page load and from the cron route.
+// SLA escalation orchestration, run by the cron route (/api/cron/sla).
 import { getPrisma } from "@/server/db"
 import { dueEscalationLevel, SLA_HOURS } from "@/lib/sla"
-import { notifyEvent, type NotifyRecipient } from "@/server/notify"
+import { notifyEvent } from "@/server/notify"
+import { audienceFor } from "@/server/audience"
 import type { RiskLevel } from "@prisma/client"
 
 type Db = ReturnType<typeof getPrisma>
@@ -18,31 +19,13 @@ async function systemActorId(db: Db): Promise<string> {
   return u.id
 }
 
-async function opcoAdminRecipients(db: Db, opcoId: string): Promise<NotifyRecipient[]> {
-  const rows = await db.userOpCoAssignment.findMany({
-    where: { opcoId, role: "admin", isActive: true },
-    select: { user: { select: { id: true, email: true, name: true, isActive: true } } },
-  })
-  return rows.filter((r) => r.user.isActive).map((r) => ({ userId: r.user.id, email: r.user.email, name: r.user.name }))
-}
-
-async function groupCabRecipients(db: Db): Promise<NotifyRecipient[]> {
-  const rows = await db.cABMembership.findMany({
-    where: { opcoId: null, isActive: true },
-    select: { user: { select: { id: true, email: true, name: true, isActive: true } } },
-  })
-  return rows.filter((r) => r.user.isActive).map((r) => ({ userId: r.user.id, email: r.user.email, name: r.user.name }))
-}
-
 /**
  * Escalate every pending change whose SLA breach has crossed a new tier.
  * Idempotent: a level already recorded on the change is never re-sent.
  * Best-effort emails (Promise.allSettled); escalation state advances regardless
  * so repeated reads don't re-spam.
  */
-export async function runDueEscalations(
-  { opcoSlugs }: { opcoSlugs?: string[] }
-): Promise<{ escalated: number }> {
+export async function runDueEscalations(): Promise<{ escalated: number }> {
   const db = getPrisma()
   const now = Date.now()
 
@@ -50,9 +33,11 @@ export async function runDueEscalations(
     where: {
       status: "pending",
       slaDeadline: { not: null },
-      ...(opcoSlugs ? { opco: { slug: { in: opcoSlugs } } } : {}),
     },
-    select: { id: true, title: true, riskLevel: true, opcoId: true, slaDeadline: true, escalationLevel: true },
+    select: {
+      id: true, title: true, riskLevel: true, opcoId: true, slaDeadline: true, escalationLevel: true,
+      infrastructureType: true, requesterId: true,
+    },
   })
 
   let escalated = 0
@@ -62,10 +47,18 @@ export async function runDueEscalations(
     const target = dueEscalationLevel(c.slaDeadline!.getTime(), SLA_HOURS[c.riskLevel as RiskLevel], now)
     if (target <= c.escalationLevel) continue
 
+    // Claim the level before sending: only the run whose conditional write lands sends, so
+    // overlapping runs (a manual trigger during the schedule, a retry) can't double-send.
+    const { count } = await db.changeRequest.updateMany({
+      where: { id: c.id, escalationLevel: c.escalationLevel },
+      data: { escalationLevel: target, lastEscalatedAt: new Date(now) },
+    })
+    if (count === 0) continue
+
     actorId ??= await systemActorId(db)
 
     for (let level = c.escalationLevel + 1; level <= target; level++) {
-      const recipients = level === 1 ? await opcoAdminRecipients(db, c.opcoId) : await groupCabRecipients(db)
+      const recipients = await audienceFor([level === 1 ? "opcoAdmins" : "groupCab"], c)
       await notifyEvent({
         type: "sla_escalated",
         recipients,
@@ -76,11 +69,6 @@ export async function runDueEscalations(
         data: { changeId: c.id, actorId, action: "sla_escalated", note: `Escalated to level ${level}` },
       })
     }
-
-    await db.changeRequest.update({
-      where: { id: c.id },
-      data: { escalationLevel: target, lastEscalatedAt: new Date(now) },
-    })
     escalated++
   }
 

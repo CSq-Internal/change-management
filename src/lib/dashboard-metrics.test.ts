@@ -136,3 +136,38 @@ it("labels a pending change with no SLA deadline instead of rendering NaN", () =
   expect(item.why).toBe("No SLA deadline")
   expect(item.why).not.toMatch(/NaN/)
 })
+
+test("whenLabel with utc gives the same text on a UTC server and in a Nairobi browser", () => {
+  // Hydration needs the server pass and the first browser pass to agree.
+  const when = Date.parse("2026-06-02T20:30:00Z") // 20:30 UTC, 23:30 in Nairobi
+  const saved = process.env.TZ
+  process.env.TZ = "UTC"
+  const server = whenLabel(when, now, true)
+  process.env.TZ = "Africa/Nairobi"
+  const browser = whenLabel(when, now, true)
+  const local = whenLabel(when, now)
+  process.env.TZ = saved
+  expect(browser).toBe(server)
+  expect(server).toBe("Tonight 20:30")
+  expect(local).toBe("Tonight 23:30")
+})
+
+import { feedTone } from "./dashboard-metrics"
+
+test("feedTone colours the actions the audit log actually stores", () => {
+  expect(feedTone("submitted", null)).toBe("bg-amber-500")
+  expect(feedTone("approved", null)).toBe("bg-emerald-500")
+  expect(feedTone("rejected", null)).toBe("bg-rose-500")
+  expect(feedTone("sla_escalated", null)).toBe("bg-rose-500")
+  // implement and verify are status_changed rows; the target status says which.
+  expect(feedTone("status_changed", "implemented")).toBe("bg-blue-500")
+  expect(feedTone("status_changed", "verified")).toBe("bg-violet-500")
+  expect(feedTone("document_uploaded", null)).toBe("bg-slate-400")
+})
+
+test("whenLabel names a past day instead of calling it Today", () => {
+  const nowMs = Date.parse("2026-06-10T09:00:00Z")
+  expect(whenLabel(Date.parse("2026-06-09T14:00:00Z"), nowMs, true)).toBe("Yesterday 14:00")
+  expect(whenLabel(Date.parse("2026-06-03T14:00:00Z"), nowMs, true)).toBe("3 Jun 14:00")
+  expect(whenLabel(Date.parse("2026-06-10T07:00:00Z"), nowMs, true)).toBe("Today 07:00")
+})

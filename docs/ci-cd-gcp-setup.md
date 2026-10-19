@@ -11,7 +11,7 @@ Settings → Secrets and variables → Actions → **Variables**:
 | Variable | Example | Meaning |
 |----------|---------|---------|
 | `GCP_PROJECT_ID` | `csquared-cms` | GCP project id |
-| `AR_REGION` | `us-central1` | Artifact Registry region |
+| `AR_REGION` | `europe-west1` | Artifact Registry region |
 | `AR_REPO` | `cms` | Artifact Registry repository name |
 | `GCP_SA_EMAIL` | `github-ci@csquared-cms.iam.gserviceaccount.com` | Deploy service account |
 | `GCP_WIF_PROVIDER` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github-oidc` | WIF provider resource name |
@@ -70,9 +70,9 @@ PROJECT_ID=<project> ./scripts/provision-gcp-runtime.sh staging
 PROJECT_ID=<project> ./scripts/provision-gcp-runtime.sh prod
 ```
 
-This creates **empty, namespaced** secrets `cms-<env>-<key>` (8 credentials:
+This creates **empty, namespaced** secrets `cms-<env>-<key>` (7 credentials:
 `database-url`, `nextauth-secret`, `keycloak-client-secret`, `keycloak-admin-client-secret`,
-`resend-api-key`, `app-password`, `google-service-account-key`, `cron-secret`), a runtime SA
+`resend-api-key`, `google-service-account-key`, `cron-secret`), a runtime SA
 `cms-run-<env>` with `secretAccessor` on only that env's secrets, and grants the deploy SA
 `run.admin` + `serviceAccountUser`. You then add secret **values** (`gcloud secrets versions add …`).
 Non-sensitive config (`NEXTAUTH_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID`,
