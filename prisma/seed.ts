@@ -16,32 +16,27 @@ const opcos = [
     slug: 'ghana',
     name: 'CSquared Ghana',
     locale: 'en',
-    keycloakOrgId: 'org-ghana',
   },
   {
     slug: 'uganda',
     name: 'CSquared Uganda',
     locale: 'en',
-    keycloakOrgId: 'org-uganda',
   },
-  { slug: 'drc', name: 'CSquared DRC', locale: 'fr', keycloakOrgId: 'org-drc' },
+  { slug: 'drc', name: 'CSquared DRC', locale: 'fr' },
   {
     slug: 'togo',
     name: 'CSquared Togo',
     locale: 'fr',
-    keycloakOrgId: 'org-togo',
   },
   {
     slug: 'liberia',
     name: 'CSquared Liberia',
     locale: 'en',
-    keycloakOrgId: 'org-liberia',
   },
   {
     slug: 'mauritius',
     name: 'CSquared Mauritius',
     locale: 'en',
-    keycloakOrgId: 'org-mauritius',
   },
 ];
 
@@ -62,11 +57,12 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: 'devops@csquared.com' },
-    update: {},
+    update: { isGroupAdmin: true },
     create: {
       keycloakId: 'REPLACE_WITH_KEYCLOAK_SUB',
       email: 'devops@csquared.com',
       name: 'Dev Admin',
+      isGroupAdmin: true,
     },
   });
   console.log('Seeded dev admin user');
