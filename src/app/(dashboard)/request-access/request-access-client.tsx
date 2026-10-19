@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
@@ -10,14 +10,24 @@ import { Button } from "@/components/ui/button"
 
 export type OpCoOption = { name: string; slug: string }
 
-export default function RequestAccessClient({ opcos }: { opcos: OpCoOption[] }) {
+export default function RequestAccessClient({ opcos, hasAccess = false }: { opcos: OpCoOption[]; hasAccess?: boolean }) {
   const { language } = useStore()
   const tr = (k: string) => t(language, k)
-  const { update } = useSession()
+  const { update, status } = useSession()
   const router = useRouter()
   const [opcoSlug, setOpcoSlug] = useState(opcos[0]?.slug ?? "")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Access arrived on the server's 60s refresh, but the cookie the proxy reads is stale:
+  // rewrite it before leaving, or the proxy sends the user straight back here. update()
+  // is a no-op while the first session load runs, so wait for it, and refresh only once.
+  const refreshed = useRef(false)
+  useEffect(() => {
+    if (!hasAccess || status === "loading" || refreshed.current) return
+    refreshed.current = true
+    void update({}).then(() => router.replace("/"))
+  }, [hasAccess, status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit() {
     setBusy(true)
@@ -34,6 +44,8 @@ export default function RequestAccessClient({ opcos }: { opcos: OpCoOption[] }) 
       setBusy(false)
     }
   }
+
+  if (hasAccess) return null
 
   return (
     <div className="mx-auto max-w-xl space-y-6 p-6">
