@@ -22,7 +22,7 @@ import { runDueReminders } from '@/server/reminders'
 beforeAll(async () => {
   await startTestDb()
   const db = getTestDb()
-  const opco = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
+  const opco = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana' } })
   const requester = await db.user.create({ data: { keycloakId: 'kc-1', email: 'a@csquared.com' } })
   requesterId = requester.id
   opcoId = opco.id

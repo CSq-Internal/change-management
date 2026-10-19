@@ -166,31 +166,6 @@ export async function assignToOrganization(
   }
 }
 
-export async function createKeycloakOrg(slug: string, name: string): Promise<string> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(`${adminRealmUrl}/organizations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      name,
-      alias: slug,
-      domains: [{ name: `${slug}.csquared.local`, verified: false }],
-    }),
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to create Keycloak org: ${res.status} ${await res.text()}`)
-  }
-  const location = res.headers.get("Location")
-  if (!location) throw new Error("No Location header in Keycloak create-org response")
-  const id = location.split("/").at(-1)
-  if (!id) throw new Error(`Could not parse org id from Location: ${location}`)
-  return id
-}
-
 /**
  * Check an adopted account (one that already existed on the shared realm) and mark its email
  * verified, which CMS sign-in requires. Never enables it: a disabled account may have been
