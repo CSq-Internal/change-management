@@ -15,9 +15,9 @@ const SQL = readFileSync(
 beforeAll(async () => {
   await startTestDb()
   const db = getTestDb()
-  const ghana = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
-  const uganda = await db.opCo.create({ data: { slug: 'uganda', name: 'Uganda', keycloakOrgId: 'org-ug' } })
-  const closed = await db.opCo.create({ data: { slug: 'closed', name: 'Closed', keycloakOrgId: 'org-cl', archivedAt: new Date() } })
+  const ghana = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana' } })
+  const uganda = await db.opCo.create({ data: { slug: 'uganda', name: 'Uganda' } })
+  const closed = await db.opCo.create({ data: { slug: 'closed', name: 'Closed', archivedAt: new Date() } })
   const ama = await db.user.create({ data: { keycloakId: 'kc-ama', email: 'ama@csquared.com' } })
   const kofi = await db.user.create({ data: { keycloakId: 'kc-kofi', email: 'kofi@csquared.com' } })
   const esi = await db.user.create({ data: { keycloakId: 'kc-esi', email: 'esi@csquared.com' } })

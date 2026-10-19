@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import type { Role } from "@/lib/types"
-import { setUserAssignments } from "@/server/actions/users"
+import { setGroupRole, setUserAssignments, type GroupRole } from "@/server/actions/users"
 import type { DbUser } from "./types"
 
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
@@ -16,11 +16,12 @@ interface EditUserDialogProps {
   user: DbUser
   language: Language
   opcos: { slug: string; name: string }[]
+  canSetGroupRole: boolean
   onClose: () => void
   onSaved: () => void
 }
 
-export default function EditUserDialog({ user, language, opcos, onClose, onSaved }: EditUserDialogProps) {
+export default function EditUserDialog({ user, language, opcos, canSetGroupRole, onClose, onSaved }: EditUserDialogProps) {
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
   const availableSlugs = opcos.map((o) => o.slug)
@@ -37,6 +38,25 @@ export default function EditUserDialog({ user, language, opcos, onClose, onSaved
       .filter((a) => canManageSlug(a.opco.slug))
       .map((a) => ({ opcoSlug: a.opco.slug, role: a.role as Role }))
   )
+
+  const currentGroupRole: GroupRole | "" = user.isGroupAdmin ? "group_admin" : user.isGroupAuditor ? "group_auditor" : ""
+  const [groupRole, setGroupRoleValue] = useState<GroupRole | "">(currentGroupRole)
+
+  const saveGroupRole = () => {
+    startTransition(async () => {
+      try {
+        await setGroupRole(user.id, groupRole || null)
+        toast({ title: t(language, "users.groupRole.saved"), description: user.email, variant: "success" })
+        onSaved()
+      } catch (err) {
+        toast({
+          title: t(language, "common.failed"),
+          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+          variant: "error",
+        })
+      }
+    })
+  }
 
   const usedSlugs = new Set([...rows.map((r) => r.opcoSlug), ...readOnly.map((a) => a.opco.slug)])
   const addableSlugs = availableSlugs.filter((s) => !usedSlugs.has(s))
@@ -87,6 +107,24 @@ export default function EditUserDialog({ user, language, opcos, onClose, onSaved
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {canSetGroupRole && (
+            <div className="flex items-center gap-2 border-b border-border pb-4">
+              <label htmlFor="group-role" className="w-40 text-sm">{t(language, "users.groupRole.label")}</label>
+              <select
+                id="group-role"
+                className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                value={groupRole}
+                onChange={(e) => setGroupRoleValue(e.target.value as GroupRole | "")}
+              >
+                <option value="">{t(language, "users.groupRole.none")}</option>
+                <option value="group_admin">{t(language, "users.groupAdmin")}</option>
+                <option value="group_auditor">{t(language, "users.groupAuditor")}</option>
+              </select>
+              <Button variant="outline" onClick={saveGroupRole} disabled={isPending || groupRole === currentGroupRole}>
+                {t(language, "users.groupRole.save")}
+              </Button>
+            </div>
+          )}
           {readOnly.length > 0 && (
             <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
               {readOnly.map((a) => (

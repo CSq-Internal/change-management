@@ -5,7 +5,8 @@ const joinOpCo = vi.fn()
 const update = vi.fn()
 const replace = vi.fn()
 vi.mock("@/server/actions/access-requests", () => ({ joinOpCo: (...a: unknown[]) => joinOpCo(...a) }))
-vi.mock("next-auth/react", () => ({ useSession: () => ({ update }) }))
+let status = "authenticated"
+vi.mock("next-auth/react", () => ({ useSession: () => ({ update, status }) }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }))
 let language = "en"
 vi.mock("@/lib/store", () => ({ useStore: () => ({ language }) }))
@@ -17,6 +18,7 @@ const opcos = [{ name: "CSquared Ghana", slug: "ghana" }, { name: "CSquared Ugan
 beforeEach(() => {
   vi.clearAllMocks()
   language = "en"
+  status = "authenticated"
 })
 
 describe("RequestAccessClient (choose your OpCo)", () => {
@@ -57,5 +59,30 @@ describe("RequestAccessClient (choose your OpCo)", () => {
   it("shows the empty state when no OpCos exist", () => {
     render(<RequestAccessClient opcos={[]} />)
     expect(screen.getByText("No OpCos are set up yet. Contact your administrator.")).toBeInTheDocument()
+  })
+
+  it("with access already granted, refreshes the session cookie before leaving", async () => {
+    // The server saw the access on its 60s refresh, but the cookie the proxy reads is stale;
+    // a server redirect to / would bounce straight back here.
+    update.mockResolvedValue({})
+    render(<RequestAccessClient opcos={[]} hasAccess />)
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"))
+    expect(update).toHaveBeenCalledWith({})
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(replace.mock.invocationCallOrder[0])
+  })
+
+  it("waits for the first session load, since update() is a no-op while it is loading", async () => {
+    update.mockResolvedValue({})
+    status = "loading"
+    const { rerender } = render(<RequestAccessClient opcos={[]} hasAccess />)
+    expect(update).not.toHaveBeenCalled()
+    status = "authenticated"
+    rerender(<RequestAccessClient opcos={[]} hasAccess />)
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"))
+    status = "loading" // update() itself flips status while it fetches
+    rerender(<RequestAccessClient opcos={[]} hasAccess />)
+    status = "authenticated"
+    rerender(<RequestAccessClient opcos={[]} hasAccess />)
+    expect(update).toHaveBeenCalledTimes(1)
   })
 })

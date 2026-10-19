@@ -53,13 +53,6 @@ const authConfig: NextAuthConfig = {
         // Standard OIDC `picture` claim — present once Keycloak's Google IdP has a
         // `picture` attribute-importer mapper. Absent until then (falls back to initials).
         token.picture = (p.picture as string | undefined) ?? null
-        // Group-level roles are CMS *client* roles, scoped to this app within the
-        // shared realm — read from resource_access[<client>].roles, not realm roles.
-        const clientId = process.env.KEYCLOAK_CLIENT_ID ?? "csquared-cms"
-        const resourceAccess = p.resource_access as
-          | Record<string, { roles?: string[] }>
-          | undefined
-        token.realmRoles = resourceAccess?.[clientId]?.roles ?? []
       }
       return token
     },

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 vi.mock("@/lib/session", () => ({ getAppSession: vi.fn() }))
 vi.mock("@/server/audit", () => ({ recordAdminAction: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/server/notify", () => ({ notifyUsers: vi.fn().mockResolvedValue(undefined) }))
-vi.mock("@/server/keycloak", () => ({ assignToOrganization: vi.fn().mockResolvedValue(undefined) }))
+vi.mock("@/server/keycloak", () => ({}))
 vi.mock("@/server/email", () => ({ sendAccessRequestEmail: vi.fn().mockResolvedValue(undefined) }))
 
 const mockDb = {
@@ -77,7 +77,6 @@ describe("listAccessRequests", () => {
 })
 
 import { approveAccessRequest, denyAccessRequest } from "@/server/actions/access-requests"
-import { assignToOrganization } from "@/server/keycloak"
 
 const pendingReq = {
   id: "ar-1",
@@ -104,7 +103,6 @@ describe("approveAccessRequest", () => {
     expect(mockDb.accessRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "ar-1", status: "pending" }, data: expect.objectContaining({ status: "approved", decidedById: "ga-db" }) })
     )
-    expect(assignToOrganization).toHaveBeenCalledWith("kc-bob", "ghana")
     expect(notifyUsers).toHaveBeenCalledWith([{ userId: "bob-db" }], expect.objectContaining({ type: "access.approved" }))
   })
 
@@ -208,7 +206,6 @@ describe("joinOpCo", () => {
       data: { userId: "bob-db", opcoId: "opco-ghana", role: "requester" },
     })
     expect(recordAdminAction).toHaveBeenCalledWith(mockDb, expect.objectContaining({ action: "access.join", opcoId: "opco-ghana" }))
-    expect(assignToOrganization).toHaveBeenCalledWith("kc-bob", "ghana")
     expect(notifyUsers).toHaveBeenCalledWith([{ userId: "admin-1" }], expect.objectContaining({ type: "access.joined" }))
     expect(sendAccessRequestEmail).not.toHaveBeenCalled()
   })

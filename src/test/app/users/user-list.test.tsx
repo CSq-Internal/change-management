@@ -5,24 +5,24 @@ import type { DbUser } from '@/app/(dashboard)/users/types'
 
 const users: DbUser[] = [
   {
-    id: 'u1', name: 'Ada', email: 'ada@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: 'approved',
+    id: 'u1', name: 'Ada', email: 'ada@csquared.com', isActive: true, isGroupAdmin: false, isGroupAuditor: false, accessStatus: 'approved',
     opcoAssignments: [{ role: 'admin', isActive: true, opco: { name: 'Ghana', slug: 'ghana' } }],
   },
   {
-    id: 'u2', name: 'Bo', email: 'bo@csquared.com', isActive: false, isGroupAdmin: false, accessStatus: 'approved',
+    id: 'u2', name: 'Bo', email: 'bo@csquared.com', isActive: false, isGroupAdmin: false, isGroupAuditor: false, accessStatus: 'approved',
     opcoAssignments: [{ role: 'requester', isActive: false, opco: { name: 'Uganda', slug: 'uganda' } }],
   },
 ]
 
 const noAccessUsers: DbUser[] = [
-  { id: 'p1', name: 'Pia', email: 'pia@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: 'pending', opcoAssignments: [] },
-  { id: 'd1', name: 'Dex', email: 'dex@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: 'denied', opcoAssignments: [] },
-  { id: 'n1', name: 'Nan', email: 'nan@csquared.com', isActive: true, isGroupAdmin: false, accessStatus: null, opcoAssignments: [] },
+  { id: 'p1', name: 'Pia', email: 'pia@csquared.com', isActive: true, isGroupAdmin: false, isGroupAuditor: false, accessStatus: 'pending', opcoAssignments: [] },
+  { id: 'd1', name: 'Dex', email: 'dex@csquared.com', isActive: true, isGroupAdmin: false, isGroupAuditor: false, accessStatus: 'denied', opcoAssignments: [] },
+  { id: 'n1', name: 'Nan', email: 'nan@csquared.com', isActive: true, isGroupAdmin: false, isGroupAuditor: false, accessStatus: null, opcoAssignments: [] },
 ]
 
 // A group admin's authority is the Keycloak role, not an OpCo assignment.
 const groupAdmin: DbUser = {
-  id: 'g1', name: 'Gail', email: 'gail@csquared.com', isActive: true, isGroupAdmin: true, accessStatus: null, opcoAssignments: [],
+  id: 'g1', name: 'Gail', email: 'gail@csquared.com', isActive: true, isGroupAdmin: true, isGroupAuditor: false, accessStatus: null, opcoAssignments: [],
 }
 
 function renderList(list: DbUser[]) {
@@ -63,6 +63,13 @@ describe('UserList', () => {
     renderList([groupAdmin])
     expect(screen.getByText('gail@csquared.com')).toBeInTheDocument()
     expect(screen.getByText('Group admin')).toBeInTheDocument()
+    expect(screen.queryByText('No access / Pending')).not.toBeInTheDocument()
+  })
+
+  it('lists a group auditor with no OpCo under access, with a Group auditor badge', () => {
+    const auditor: DbUser = { ...groupAdmin, id: 'a1', name: 'Abi', isGroupAdmin: false, isGroupAuditor: true }
+    renderList([auditor])
+    expect(screen.getByText('Group auditor')).toBeInTheDocument()
     expect(screen.queryByText('No access / Pending')).not.toBeInTheDocument()
   })
 })
