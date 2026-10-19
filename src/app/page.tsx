@@ -6,6 +6,7 @@ import { requestScope, openOrRecent } from "@/server/request-scope"
 import { activeOpCoSlug, withActiveOpCo } from "@/server/active-opco"
 import { durLabel, feedTone, type DashboardChange } from "@/lib/dashboard-metrics"
 import DashboardClient from "./dashboard-client"
+import { infraTypeOptions } from "@/lib/approver-routing"
 import type { FeedEvent } from "@/components/dashboard/monitor-view"
 
 const initials = (name: string | null, email: string) => {
@@ -75,7 +76,7 @@ export default async function Home() {
     retroApprovedAt: r.retroApprovedAt?.toISOString() ?? null,
   }))
 
-  const infraOptions = [...new Set(changes.map((c) => c.infrastructureType))].sort()
+  const infraOptions = infraTypeOptions(changes.map((c) => c.infrastructureType))
   const opcoOptions = [...new Map(changes.map((c) => [c.opcoSlug, c.opcoName])).entries()]
     .map(([slug, name]) => ({ slug, name }))
     .sort((a, b) => a.name.localeCompare(b.name))

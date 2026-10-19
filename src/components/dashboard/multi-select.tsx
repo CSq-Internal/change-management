@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect, useRef } from "react"
+
 export interface MultiSelectOption { value: string; label: string }
 
 export function MultiSelect({
@@ -13,8 +15,25 @@ export function MultiSelect({
   const toggle = (v: string) =>
     onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v])
 
+  // A native <details> only closes from its own summary; close it on a click elsewhere
+  // or on Escape, like any other dropdown.
+  const ref = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const close = (e: Event) => {
+      const el = ref.current
+      if (!el?.open) return
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !el.contains(e.target as Node)) el.open = false
+    }
+    document.addEventListener("pointerdown", close)
+    document.addEventListener("keydown", close)
+    return () => {
+      document.removeEventListener("pointerdown", close)
+      document.removeEventListener("keydown", close)
+    }
+  }, [])
+
   return (
-    <details className="relative">
+    <details ref={ref} className="relative">
       <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium">
         {label}
         {selected.length > 0 && (
