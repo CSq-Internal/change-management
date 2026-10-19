@@ -10,24 +10,6 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": false,
   "editUsernameAllowed": false,
-  "roles": {
-    "client": {
-      "csquared-cms": [
-        {
-          "name": "group_admin",
-          "description": "CSquared CMS administrator",
-          "composite": false,
-          "clientRole": true
-        },
-        {
-          "name": "group_auditor",
-          "description": "CSquared CMS auditor",
-          "composite": false,
-          "clientRole": true
-        }
-      ]
-    }
-  },
   "clients": [
     {
       "clientId": "csquared-cms",
@@ -48,24 +30,7 @@
       ],
       "attributes": {
         "post.logout.redirect.uris": "http://localhost:3000/*"
-      },
-      "protocolMappers": [
-        {
-          "name": "client-roles",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-client-role-mapper",
-          "consentRequired": false,
-          "config": {
-            "usermodel.clientRoleMapping.clientId": "csquared-cms",
-            "claim.name": "resource_access.${client_id}.roles",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
-        }
-      ]
+      }
     },
     {
       "clientId": "csquared-cms-admin",
@@ -94,12 +59,7 @@
           "value": "Admin2025$",
           "temporary": false
         }
-      ],
-      "clientRoles": {
-        "csquared-cms": [
-          "group_admin"
-        ]
-      }
+      ]
     },
     {
       "username": "service-account-csquared-cms-admin",
