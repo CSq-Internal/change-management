@@ -391,6 +391,9 @@ export async function setGroupRole(userId: string, role: GroupRole | null) {
   const db = getPrisma()
   // Serializable: two admins demoting each other at once can't both pass the last-admin check.
   await db.$transaction(async (tx) => {
+    // The session can be up to 60s old: a just-revoked group admin must not hand out roles.
+    const me = await tx.user.findUnique({ where: { keycloakId: session.keycloakId } })
+    if (!me?.isActive || !me.isGroupAdmin) throw new Error("Forbidden: only a group admin can change group roles")
     const user = await tx.user.findUnique({ where: { id: userId } })
     if (!user) throw new Error("User not found")
     if (user.keycloakId === session.keycloakId) throw new Error("Forbidden: cannot change your own group role")

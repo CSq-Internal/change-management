@@ -34,7 +34,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
   mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id?: string; keycloakId?: string } }) =>
-    where.keycloakId ? { id: 'actor' } : target())
+    where.keycloakId ? { id: 'actor', isActive: true, isGroupAdmin: true } : target())
   mockDb.user.count.mockResolvedValue(1)
   vi.mocked(getAppSession).mockResolvedValue(groupAdmin as never)
 })
@@ -60,7 +60,7 @@ describe('setGroupRole', () => {
 
   it('writes nothing when the role is unchanged', async () => {
     mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
-      where.id ? target({ isGroupAdmin: true }) : { id: 'actor' })
+      where.id ? target({ isGroupAdmin: true }) : { id: 'actor', isActive: true, isGroupAdmin: true })
     await setGroupRole('target', 'group_admin')
     expect(mockDb.user.update).not.toHaveBeenCalled()
     expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled()
@@ -72,15 +72,23 @@ describe('setGroupRole', () => {
     expect(mockDb.user.update).not.toHaveBeenCalled()
   })
 
+  it('refuses a caller whose group admin was revoked since their session was built', async () => {
+    // The session's realmRoles can be up to 60s old; granting privilege must check the DB row.
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id?: string; keycloakId?: string } }) =>
+      where.keycloakId ? { id: 'actor', isActive: true, isGroupAdmin: false } : target())
+    await expect(setGroupRole('target', 'group_admin')).rejects.toThrow(/^Forbidden/)
+    expect(mockDb.user.update).not.toHaveBeenCalled()
+  })
+
   it('refuses changing your own group role', async () => {
     mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
-      where.id ? target({ keycloakId: 'kc-ga', isGroupAdmin: true }) : { id: 'actor' })
+      where.id ? target({ keycloakId: 'kc-ga', isGroupAdmin: true }) : { id: 'actor', isActive: true, isGroupAdmin: true })
     await expect(setGroupRole('target', null)).rejects.toThrow(/Forbidden: cannot change your own group role/)
   })
 
   it('refuses removing the last active group admin', async () => {
     mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
-      where.id ? target({ isGroupAdmin: true }) : { id: 'actor' })
+      where.id ? target({ isGroupAdmin: true }) : { id: 'actor', isActive: true, isGroupAdmin: true })
     mockDb.user.count.mockResolvedValue(0)
     await expect(setGroupRole('target', 'group_auditor')).rejects.toThrow(/last active group admin/)
     expect(mockDb.user.count).toHaveBeenCalledWith({
@@ -91,7 +99,7 @@ describe('setGroupRole', () => {
 
   it('refuses an inactive target', async () => {
     mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
-      where.id ? target({ isActive: false }) : { id: 'actor' })
+      where.id ? target({ isActive: false }) : { id: 'actor', isActive: true, isGroupAdmin: true })
     await expect(setGroupRole('target', 'group_admin')).rejects.toThrow(/deactivated/)
   })
 
