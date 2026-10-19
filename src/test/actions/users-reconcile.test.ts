@@ -10,7 +10,6 @@ vi.mock('@/lib/session', () => ({
 
 vi.mock('@/server/keycloak', () => ({
   createOrFindKeycloakUser: vi.fn().mockResolvedValue({ id: 'kc-new', created: true }),
-  assignToOrganization: vi.fn().mockResolvedValue(undefined),
   verifyAdoptedKeycloakUser: vi.fn().mockResolvedValue('verified'),
 }))
 
