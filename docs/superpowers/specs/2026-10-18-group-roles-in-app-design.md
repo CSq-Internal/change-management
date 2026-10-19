@@ -111,11 +111,19 @@ the migration cannot read.
    demoted in Keycloak who have not signed in since.
 3. User confirms the final lists.
 4. Claude prepares one SQL transaction that sets both flags to exactly the confirmed lists.
-   User approves it before it runs.
+   User approves it before it runs. `isGroupAuditor` does not exist before the deploy, so the
+   transaction starts with the migration's own re-runnable
+   `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isGroupAuditor" BOOLEAN NOT NULL DEFAULT false;`
+   (the old code ignores the extra column). Otherwise current group auditors lose the role at
+   the deploy.
 5. Keycloak holders with no DB row are listed. After their first sign-in, an existing
    group admin grants them the role in the CMS (audited).
 
 Role changes made in Keycloak between step 1 and the deploy are not picked up.
+
+If the guard still fires at deploy, Prisma records the migration as failed (P3009) and blocks
+later deploys. Set a group admin, then run
+`prisma migrate resolve --rolled-back 20261019120000_group_roles_in_app` and redeploy.
 
 ### Local and dev
 
