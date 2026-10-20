@@ -60,10 +60,11 @@ export default async function CalendarPage({
         opco: { select: { slug: true, name: true } },
       },
     }),
+    // This month's blackouts shade the grid; upcoming ones stay listed whatever month is
+    // shown, or a freeze set for a later month vanishes from view once saved.
     db.blackoutPeriod.findMany({
       where: {
-        startsAt: { lt: qEnd }, endsAt: { gte: qStart },
-        ...blackoutScope,
+        AND: [blackoutScope, { OR: [{ startsAt: { lt: qEnd }, endsAt: { gte: qStart } }, { endsAt: { gte: new Date() } }] }],
       },
       select: { id: true, label: true, opcoId: true, startsAt: true, endsAt: true },
     }),
