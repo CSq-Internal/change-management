@@ -6,17 +6,18 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import { activeOpCos } from "@/server/opco-scope"
+import { UserError } from "@/lib/user-error"
 
 function assertGroupAdmin(session: { realmRoles: string[] }) {
   if (!isGroupAdmin(session.realmRoles)) {
-    throw new Error("Forbidden: only a group_admin can manage OpCos")
+    throw new UserError("Forbidden: only a group_admin can manage OpCos")
   }
 }
 
 // Loads an OpCo by id; throws if missing.
 async function loadOpCo(db: ReturnType<typeof getPrisma>, opcoId: string) {
   const opco = await db.opCo.findUnique({ where: { id: opcoId } })
-  if (!opco) throw new Error("OpCo not found")
+  if (!opco) throw new UserError("OpCo not found")
   return opco
 }
 
@@ -42,7 +43,7 @@ export async function createOpCo(input: { slug: string; name: string; locale?: s
 
   const db = getPrisma()
   const existing = await db.opCo.findUnique({ where: { slug: input.slug } })
-  if (existing) throw new Error(`OpCo slug already exists: ${input.slug}`)
+  if (existing) throw new UserError(`OpCo slug already exists: ${input.slug}`)
 
   return db.$transaction(async (tx) => {
     const opco = await tx.opCo.create({

@@ -11,6 +11,7 @@ import { t } from "@/lib/i18n"
 import { DateTime } from "@/components/date-time"
 import { submitApproval } from "@/server/actions/approvals"
 import { QuorumProgress } from "@/components/quorum-progress"
+import { errorMessage } from "@/lib/user-error"
 
 type Requester = { name: string | null; email: string }
 type OpCo = { name: string; slug: string }
@@ -63,7 +64,7 @@ export default function ApprovalsClient({ changes }: ApprovalsClientProps) {
       })
       startTransition(() => router.refresh())
     } catch (err) {
-      const message = err instanceof Error ? err.message : t(language, "common.errorOccurred")
+      const message = errorMessage(err, t(language, "common.errorOccurred"))
       setRemoved((prev) => {
         const next = new Set(prev)
         next.delete(changeId)

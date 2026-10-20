@@ -4,6 +4,8 @@
 // pinned here and validated on the way in; the database only enforces that a triaged row
 // HAS an outcome (CHECK feedback_triage_needs_outcome).
 
+import { UserError } from "@/lib/user-error"
+
 export const FEEDBACK_OUTCOMES = [
   /** Shipped. The note should name the release or PR. */
   "fixed",
@@ -40,11 +42,11 @@ export function assertTriageDecision(
   note: unknown
 ): { outcome: FeedbackOutcome; note: string | null } {
   if (!isFeedbackOutcome(outcome)) {
-    throw new Error(`outcome must be one of ${FEEDBACK_OUTCOMES.join(", ")}`)
+    throw new UserError(`outcome must be one of ${FEEDBACK_OUTCOMES.join(", ")}`)
   }
   const trimmed = typeof note === "string" ? note.trim() : ""
   if (requiresNote(outcome) && trimmed === "") {
-    throw new Error(`${outcome} needs a note saying why`)
+    throw new UserError(`${outcome} needs a note saying why`)
   }
   return { outcome, note: trimmed === "" ? null : trimmed }
 }

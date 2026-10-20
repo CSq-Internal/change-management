@@ -7,12 +7,13 @@ import { canManageTeams } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
 import type { SessionOrganization } from "@/types/next-auth"
 import type { TeamRole } from "@prisma/client"
+import { UserError } from "@/lib/user-error"
 
 type Session = { keycloakId: string; organizations: SessionOrganization[]; realmRoles: string[] }
 
 function assertCanManageTeams(session: Session, opcoSlug: string) {
   if (!canManageTeams(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot manage teams in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot manage teams in ${opcoSlug}`)
   }
 }
 
@@ -22,7 +23,7 @@ async function loadTeamOpco(
   teamId: string
 ): Promise<{ opcoId: string; opcoSlug: string }> {
   const team = await db.team.findUnique({ where: { id: teamId }, include: { opco: true } })
-  if (!team) throw new Error("Team not found")
+  if (!team) throw new UserError("Team not found")
   return { opcoId: team.opcoId, opcoSlug: team.opco.slug }
 }
 
@@ -42,7 +43,7 @@ export async function createTeam(input: { opcoSlug: string; name: string; descri
 
   const db = getPrisma()
   const opco = await db.opCo.findUnique({ where: { slug: input.opcoSlug } })
-  if (!opco) throw new Error(`OpCo not found: ${input.opcoSlug}`)
+  if (!opco) throw new UserError(`OpCo not found: ${input.opcoSlug}`)
 
   return db.$transaction(async (tx) => {
     const team = await tx.team.create({
@@ -105,7 +106,7 @@ export async function addTeamMember(teamId: string, userId: string, role: TeamRo
   const assignment = await db.userOpCoAssignment.findFirst({
     where: { userId, opcoId, isActive: true },
   })
-  if (!assignment) throw new Error("Forbidden: user is not assigned to this team's OpCo")
+  if (!assignment) throw new UserError("Forbidden: user is not assigned to this team's OpCo")
 
   return db.$transaction(async (tx) => {
     const member = await tx.teamMember.upsert({

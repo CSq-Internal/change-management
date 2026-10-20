@@ -11,6 +11,7 @@ import ConfirmDialog from "../users/confirm-dialog"
 import OpcoList from "./opco-list"
 import OpcoFormDialog from "./opco-form-dialog"
 import type { DbOpCo } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 interface OpcosClientProps {
   opcos: DbOpCo[]
@@ -39,7 +40,7 @@ export default function OpcosClient({ opcos }: OpcosClientProps) {
       toast({ title: t(language, "opcosAdmin.unarchived"), description: opco.name, variant: "success" })
       refresh()
     } catch (err) {
-      toast({ title: t(language, "opcosAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "opcosAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     }
   }
 
@@ -52,7 +53,7 @@ export default function OpcosClient({ opcos }: OpcosClientProps) {
       setConfirmArchive(null)
       refresh()
     } catch (err) {
-      toast({ title: t(language, "opcosAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "opcosAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

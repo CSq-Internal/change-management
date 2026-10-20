@@ -11,6 +11,7 @@ import { sendUserInvitationEmail } from "@/server/email"
 import { coerceLocale } from "@/lib/i18n"
 import { isAllowedSignInEmail } from "@/lib/sign-in-domain"
 import type { Role, Prisma } from "@prisma/client"
+import { UserError } from "@/lib/user-error"
 
 // Deactivating or reactivating acts on the whole user, so a caller below group_admin must
 // hold the right (`rights`, one per role touched) for every role, and may not act on a
@@ -22,7 +23,7 @@ function assertCanActOnEveryRole(
 ) {
   if (isGroupAdmin(session.realmRoles)) return
   if (target.isGroupAdmin || target.isGroupAuditor || rights.length === 0 || rights.includes(false)) {
-    throw new Error("Forbidden: this user has roles you cannot manage. Ask a group admin.")
+    throw new UserError("Forbidden: this user has roles you cannot manage. Ask a group admin.")
   }
 }
 
@@ -33,20 +34,20 @@ export async function onboardUser(input: {
 }) {
   const session = await getAppSession()
 
-  if (input.assignments.length === 0) throw new Error("At least one assignment is required")
+  if (input.assignments.length === 0) throw new UserError("At least one assignment is required")
   // Stored exactly as the Google profile will send it, so the row matches at sign-in.
   const email = input.email.trim().toLowerCase()
-  if (!isAllowedSignInEmail(email)) throw new Error("Only @csquared.com addresses can be onboarded.")
+  if (!isAllowedSignInEmail(email)) throw new UserError("Only @csquared.com addresses can be onboarded.")
   for (const a of input.assignments) {
     if (!canAssignRole(session.organizations, session.realmRoles, a.opcoSlug, a.role)) {
-      throw new Error(`Forbidden: cannot assign ${a.role} in ${a.opcoSlug}`)
+      throw new UserError(`Forbidden: cannot assign ${a.role} in ${a.opcoSlug}`)
     }
   }
 
   const db = getPrisma()
   const existing = await db.user.findFirst({ where: { email } })
   if (existing && !existing.isActive) {
-    throw new Error("This user is deactivated. Reactivate them from the Users page instead.")
+    throw new UserError("This user is deactivated. Reactivate them from the Users page instead.")
   }
 
   // Keycloak identity work happens outside the DB transaction (external, non-rollbackable).
@@ -72,7 +73,7 @@ export async function onboardUser(input: {
       console.warn(`[onboardUser] Keycloak reconcile skipped for ${email}:`, err)
     }
     if (state === "disabled") {
-      throw new Error("This account is disabled in Keycloak, which other CSquared apps share. Ask IT before inviting.")
+      throw new UserError("This account is disabled in Keycloak, which other CSquared apps share. Ask IT before inviting.")
     }
   }
 
@@ -137,7 +138,7 @@ async function assertNotLastAdmin(
   const others = await client.userOpCoAssignment.count({
     where: { opcoId, role: "admin", isActive: true, userId: { not: excludingUserId } },
   })
-  if (others === 0) throw new Error("Forbidden: cannot remove the last admin of an OpCo")
+  if (others === 0) throw new UserError("Forbidden: cannot remove the last admin of an OpCo")
 }
 
 // Throws if `excludingUserId` losing group admin would leave no active group admin.
@@ -145,7 +146,7 @@ async function assertNotLastGroupAdmin(client: Pick<Prisma.TransactionClient, "u
   const others = await client.user.count({
     where: { isGroupAdmin: true, isActive: true, id: { not: excludingUserId } },
   })
-  if (others === 0) throw new Error("Forbidden: cannot remove the last active group admin")
+  if (others === 0) throw new UserError("Forbidden: cannot remove the last active group admin")
 }
 
 export async function deactivateUser(userId: string) {
@@ -156,10 +157,10 @@ export async function deactivateUser(userId: string) {
     where: { id: userId },
     include: { opcoAssignments: { where: { isActive: true }, include: { opco: true } } },
   })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   if (user.keycloakId === session.keycloakId) {
-    throw new Error("Forbidden: cannot deactivate yourself")
+    throw new UserError("Forbidden: cannot deactivate yourself")
   }
 
   assertCanActOnEveryRole(
@@ -207,8 +208,8 @@ export async function reactivateUser(userId: string) {
 
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { id: userId } })
-  if (!user) throw new Error("User not found")
-  if (user.isActive) throw new Error("User is already active")
+  if (!user) throw new UserError("User not found")
+  if (user.isActive) throw new UserError("User is already active")
 
   // Restore only the roles the last deactivation ended; roles removed before it stay
   // removed. Deactivations recorded before this metadata existed restore none.
@@ -255,17 +256,17 @@ export async function setUserAssignments(
 
   const slugs = desired.map((d) => d.opcoSlug)
   if (new Set(slugs).size !== slugs.length) {
-    throw new Error("Duplicate OpCo in assignments")
+    throw new UserError("Duplicate OpCo in assignments")
   }
   if (desired.length === 0) {
-    throw new Error("At least one assignment is required")
+    throw new UserError("At least one assignment is required")
   }
 
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { id: true, keycloakId: true },
   })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const current = await db.userOpCoAssignment.findMany({
     where: { userId, isActive: true },
@@ -288,13 +289,13 @@ export async function setUserAssignments(
       desiredRole === undefined
         ? isGroupAdmin(session.realmRoles) || canManageUsers(session.organizations, session.realmRoles, slug)
         : canAssignRole(session.organizations, session.realmRoles, slug, desiredRole)
-    if (!ok) throw new Error(`Forbidden: cannot manage roles in ${slug}`)
+    if (!ok) throw new UserError(`Forbidden: cannot manage roles in ${slug}`)
   }
 
   if (user.keycloakId === session.keycloakId) {
     for (const [slug, role] of currentBySlug) {
       if (role === "admin" && desiredBySlug.get(slug) !== "admin") {
-        throw new Error("Forbidden: cannot remove your own admin access")
+        throw new UserError("Forbidden: cannot remove your own admin access")
       }
     }
   }
@@ -343,10 +344,10 @@ export async function listOpCoApprovers(opcoSlug: string | null) {
   const session = await getAppSession()
   if (opcoSlug === null) {
     if (!isGroupAdmin(session.realmRoles)) {
-      throw new Error("Forbidden: only a group_admin can list group approvers")
+      throw new UserError("Forbidden: only a group_admin can list group approvers")
     }
   } else if (!canManageUsers(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot list approvers in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot list approvers in ${opcoSlug}`)
   }
 
   const db = getPrisma()
@@ -365,10 +366,10 @@ export async function listCabEligible(opcoSlug: string | null) {
   const session = await getAppSession()
   if (opcoSlug === null) {
     if (!isGroupAdmin(session.realmRoles)) {
-      throw new Error("Forbidden: only a group_admin can list group CAB candidates")
+      throw new UserError("Forbidden: only a group_admin can list group CAB candidates")
     }
   } else if (!canManageUsers(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot list CAB candidates in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot list CAB candidates in ${opcoSlug}`)
   }
 
   const db = getPrisma()
@@ -385,19 +386,19 @@ export type GroupRole = "group_admin" | "group_auditor"
 /** Grant, change or remove a user's group role. Only a group admin may call it. */
 export async function setGroupRole(userId: string, role: GroupRole | null) {
   const session = await getAppSession()
-  if (role !== null && role !== "group_admin" && role !== "group_auditor") throw new Error("Invalid group role")
-  if (!isGroupAdmin(session.realmRoles)) throw new Error("Forbidden: only a group admin can change group roles")
+  if (role !== null && role !== "group_admin" && role !== "group_auditor") throw new UserError("Invalid group role")
+  if (!isGroupAdmin(session.realmRoles)) throw new UserError("Forbidden: only a group admin can change group roles")
 
   const db = getPrisma()
   // Serializable: two admins demoting each other at once can't both pass the last-admin check.
   await db.$transaction(async (tx) => {
     // The session can be up to 60s old: a just-revoked group admin must not hand out roles.
     const me = await tx.user.findUnique({ where: { keycloakId: session.keycloakId } })
-    if (!me?.isActive || !me.isGroupAdmin) throw new Error("Forbidden: only a group admin can change group roles")
+    if (!me?.isActive || !me.isGroupAdmin) throw new UserError("Forbidden: only a group admin can change group roles")
     const user = await tx.user.findUnique({ where: { id: userId } })
-    if (!user) throw new Error("User not found")
-    if (user.keycloakId === session.keycloakId) throw new Error("Forbidden: cannot change your own group role")
-    if (!user.isActive) throw new Error("This user is deactivated. Reactivate them first.")
+    if (!user) throw new UserError("User not found")
+    if (user.keycloakId === session.keycloakId) throw new UserError("Forbidden: cannot change your own group role")
+    if (!user.isActive) throw new UserError("This user is deactivated. Reactivate them first.")
 
     const from: GroupRole | null = user.isGroupAdmin ? "group_admin" : user.isGroupAuditor ? "group_auditor" : null
     if (from === role) return

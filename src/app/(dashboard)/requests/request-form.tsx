@@ -18,6 +18,7 @@ import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-k
 import { isGroupLevelInfra, INFRA_TYPES as infraTypes } from "@/lib/approver-routing"
 import { toDateTimeLocal } from "@/lib/dates"
 import type { AttachmentKind } from "@prisma/client"
+import { errorMessage } from "@/lib/user-error"
 
 type Initial = {
   id: string
@@ -272,7 +273,7 @@ export default function RequestForm({ opcoOptions, mode = "create", initial, def
     } catch (err) {
       toast({
         title: t(language, "requests.toast.failed"),
-        description: err instanceof Error ? err.message : "Error",
+        description: errorMessage(err, "Error"),
         variant: "error",
       })
     } finally {

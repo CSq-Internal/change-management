@@ -13,6 +13,7 @@ import ConfirmDialog from "../users/confirm-dialog"
 import DelegationList from "./delegation-list"
 import DelegationCreateDialog from "./delegation-create-dialog"
 import type { DbDelegation } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 interface DelegationsClientProps {
   delegations: DbDelegation[]
@@ -42,7 +43,7 @@ export default function DelegationsClient({ delegations, manageableSlugs }: Dele
       setConfirm(null)
       refresh()
     } catch (err) {
-      toast({ title: t(language, "delegationsAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "delegationsAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

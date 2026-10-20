@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import type { Role } from "@/lib/types"
 import { onboardUser } from "@/server/actions/users"
+import { errorMessage } from "@/lib/user-error"
 
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
 type Assignment = { opcoSlug: string; role: Role }
@@ -95,7 +96,7 @@ export default function OnboardWizard({ language, opcos, onClose, onCreated }: O
       } catch (err) {
         toast({
           title: t(language, "users.toast.createFailed"),
-          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+          description: errorMessage(err, t(language, "common.unknownError")),
           variant: "error",
         })
       }

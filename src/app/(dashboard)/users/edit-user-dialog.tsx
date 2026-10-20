@@ -8,6 +8,7 @@ import { t, type Language } from "@/lib/i18n"
 import type { Role } from "@/lib/types"
 import { setGroupRole, setUserAssignments, type GroupRole } from "@/server/actions/users"
 import type { DbUser } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 const roles: Role[] = ["requester", "approver", "auditor", "admin"]
 type Row = { opcoSlug: string; role: Role }
@@ -51,7 +52,7 @@ export default function EditUserDialog({ user, language, opcos, canSetGroupRole,
       } catch (err) {
         toast({
           title: t(language, "common.failed"),
-          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+          description: errorMessage(err, t(language, "common.unknownError")),
           variant: "error",
         })
       }
@@ -90,7 +91,7 @@ export default function EditUserDialog({ user, language, opcos, canSetGroupRole,
       } catch (err) {
         toast({
           title: t(language, "common.failed"),
-          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+          description: errorMessage(err, t(language, "common.unknownError")),
           variant: "error",
         })
       }

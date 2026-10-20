@@ -9,6 +9,7 @@ import { decidableAccessRequests } from "@/server/access-queue"
 import { notifyUsers } from "@/server/notify"
 import { sendAccessRequestEmail } from "@/server/email"
 import { coerceLocale, t } from "@/lib/i18n"
+import { UserError } from "@/lib/user-error"
 
 export type RequestableRole = "approver" | "auditor" | "admin"
 const REQUESTABLE_ROLES: readonly string[] = ["approver", "auditor", "admin"]
@@ -17,26 +18,26 @@ const MAX_REASON = 500
 // Elevation: ask for a higher role in an OpCo. Who is told mirrors canAssignRole:
 // OpCo admins can grant approver/auditor in their OpCo; only group admins grant admin.
 export async function requestRole(input: { opcoSlug: string; role: RequestableRole; reason: string }) {
-  if (!REQUESTABLE_ROLES.includes(input.role)) throw new Error(`The ${input.role} role cannot be requested`)
+  if (!REQUESTABLE_ROLES.includes(input.role)) throw new UserError(`The ${input.role} role cannot be requested`)
   const reason = input.reason.trim()
-  if (!reason) throw new Error("A reason is required")
-  if (reason.length > MAX_REASON) throw new Error(`Keep the reason to ${MAX_REASON} characters`)
+  if (!reason) throw new UserError("A reason is required")
+  if (reason.length > MAX_REASON) throw new UserError(`Keep the reason to ${MAX_REASON} characters`)
 
   const session = await getAppSession()
   const db = getPrisma()
 
   const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true, isActive: true } })
-  if (!me) throw new Error("User not found")
-  if (!me.isActive) throw new Error("Your account is deactivated")
+  if (!me) throw new UserError("User not found")
+  if (!me.isActive) throw new UserError("Your account is deactivated")
   // Role requests are for people already in the CMS; newcomers join an OpCo first.
   const memberships = await db.userOpCoAssignment.count({ where: { userId: me.id, isActive: true } })
-  if (memberships === 0) throw new Error("Choose your OpCo first, then request a role")
+  if (memberships === 0) throw new UserError("Choose your OpCo first, then request a role")
 
   const opco = await db.opCo.findUnique({
     where: { slug: input.opcoSlug },
     select: { id: true, name: true, locale: true, archivedAt: true },
   })
-  if (!opco || opco.archivedAt) throw new Error("OpCo not found")
+  if (!opco || opco.archivedAt) throw new UserError("OpCo not found")
 
   const created = await db.$transaction(async (tx) => {
     // Lock the user's row so two concurrent requests can't both pass the
@@ -47,13 +48,13 @@ export async function requestRole(input: { opcoSlug: string; role: RequestableRo
       where: { userId: me.id, opcoId: opco.id, role: input.role, isActive: true },
       select: { id: true },
     })
-    if (holds) throw new Error("You already have this role in this OpCo")
+    if (holds) throw new UserError("You already have this role in this OpCo")
 
     const pending = await tx.accessRequest.findFirst({
       where: { userId: me.id, opcoId: opco.id, status: "pending" },
       select: { id: true },
     })
-    if (pending) throw new Error("You already have a pending request for this OpCo")
+    if (pending) throw new UserError("You already have a pending request for this OpCo")
 
     const row = await tx.accessRequest.create({
       data: { userId: me.id, opcoId: opco.id, role: input.role, note: reason },
@@ -142,14 +143,14 @@ export async function joinOpCo(opcoSlug: string) {
   const db = getPrisma()
 
   const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true, isActive: true } })
-  if (!me) throw new Error("User not found")
-  if (!me.isActive) throw new Error("Your account is deactivated")
+  if (!me) throw new UserError("User not found")
+  if (!me.isActive) throw new UserError("Your account is deactivated")
 
   const opco = await db.opCo.findUnique({
     where: { slug: opcoSlug },
     select: { id: true, name: true, slug: true, locale: true, archivedAt: true },
   })
-  if (!opco || opco.archivedAt) throw new Error("OpCo not found")
+  if (!opco || opco.archivedAt) throw new UserError("OpCo not found")
 
   await db.$transaction(async (tx) => {
     // Lock the user's row so two concurrent joins run one after the other: the
@@ -159,7 +160,7 @@ export async function joinOpCo(opcoSlug: string) {
       where: { userId: me.id },
       select: { id: true },
     })
-    if (hadAccess) throw new Error("You already have, or had, OpCo access. Ask an admin to change it.")
+    if (hadAccess) throw new UserError("You already have, or had, OpCo access. Ask an admin to change it.")
 
     await tx.userOpCoAssignment.create({
       data: { userId: me.id, opcoId: opco.id, role: "requester" },
@@ -236,21 +237,21 @@ async function loadDecidableRequest(id: string) {
       user: { select: { keycloakId: true, locale: true, isActive: true } },
     },
   })
-  if (!req) throw new Error("Access request not found")
-  if (req.status !== "pending") throw new Error("Access request already decided")
+  if (!req) throw new UserError("Access request not found")
+  if (req.status !== "pending") throw new UserError("Access request already decided")
   if (!canAssignRole(session.organizations, session.realmRoles, req.opco.slug, req.role)) {
-    throw new Error(`Forbidden: cannot grant ${req.role} in ${req.opco.slug}`)
+    throw new UserError(`Forbidden: cannot grant ${req.role} in ${req.opco.slug}`)
   }
 
   const actor = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
   // Separation of duties: nobody decides their own role request.
-  if (actor && actor.id === req.userId) throw new Error("You can't decide your own role request")
+  if (actor && actor.id === req.userId) throw new UserError("You can't decide your own role request")
   return { session, db, req, actorId: actor?.id ?? null }
 }
 
 export async function approveAccessRequest(id: string) {
   const { session, db, req, actorId } = await loadDecidableRequest(id)
-  if (!req.user.isActive) throw new Error("This account is deactivated")
+  if (!req.user.isActive) throw new UserError("This account is deactivated")
 
   await db.$transaction(async (tx) => {
     // The pending check above runs outside this transaction, so a second admin can pass it
@@ -259,7 +260,7 @@ export async function approveAccessRequest(id: string) {
       where: { id: req.id, status: "pending" },
       data: { status: "approved", decidedById: actorId, decidedAt: new Date() },
     })
-    if (count !== 1) throw new Error("Access request already decided")
+    if (count !== 1) throw new UserError("Access request already decided")
 
     // Approving replaces the user's role in this OpCo. Keep the Users page's rule:
     // an OpCo can't lose its last admin this way.
@@ -271,7 +272,7 @@ export async function approveAccessRequest(id: string) {
       const otherAdmins = await tx.userOpCoAssignment.count({
         where: { opcoId: req.opco.id, role: "admin", isActive: true, userId: { not: req.userId } },
       })
-      if (otherAdmins === 0) throw new Error("Forbidden: cannot remove the last admin of an OpCo")
+      if (otherAdmins === 0) throw new UserError("Forbidden: cannot remove the last admin of an OpCo")
     }
 
     await tx.userOpCoAssignment.upsert({
@@ -309,7 +310,7 @@ export async function denyAccessRequest(id: string, reason?: string) {
       where: { id: req.id, status: "pending" },
       data: { status: "denied", decidedById: actorId, decidedAt: new Date(), decisionReason: reason ?? null },
     })
-    if (count !== 1) throw new Error("Access request already decided")
+    if (count !== 1) throw new UserError("Access request already decided")
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,
       actorEmail: session.email,

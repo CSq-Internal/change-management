@@ -7,6 +7,7 @@ import { notifyChange } from "@/server/notify"
 import { isGroupAdmin, hasRoleInOpCo, canApprove } from "@/lib/permissions"
 import { needsIndependentPir } from "@/lib/pir-policy"
 import type { PirOutcome } from "@prisma/client"
+import { UserError } from "@/lib/user-error"
 
 export async function submitPostImplementationReview(
   changeId: string,
@@ -15,20 +16,20 @@ export async function submitPostImplementationReview(
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id: changeId },
     include: { opco: true, pir: true },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
   if (change.status !== "implemented") {
-    throw new Error("A PIR can only be recorded for an implemented change")
+    throw new UserError("A PIR can only be recorded for an implemented change")
   }
-  if (change.pir) throw new Error("This change already has a Post-Implementation Review")
+  if (change.pir) throw new UserError("This change already has a Post-Implementation Review")
 
   if (!input.summary?.trim()) {
-    throw new Error("A summary is required for the Post-Implementation Review")
+    throw new UserError("A summary is required for the Post-Implementation Review")
   }
 
   const authorized =
@@ -36,16 +37,16 @@ export async function submitPostImplementationReview(
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin") ||
     canApprove(session.organizations, change.opco.slug) ||
     change.implementedById === user.id
-  if (!authorized) throw new Error("Forbidden: not authorized to record a PIR for this change")
+  if (!authorized) throw new UserError("Forbidden: not authorized to record a PIR for this change")
 
   const selfReview = user.id === change.requesterId || user.id === change.implementedById
   if (selfReview && needsIndependentPir(change, input)) {
-    throw new Error("Forbidden: this PIR must be recorded by someone who neither requested nor implemented the change")
+    throw new UserError("Forbidden: this PIR must be recorded by someone who neither requested nor implemented the change")
   }
 
   // Expedited emergencies must be sanctioned (retrospective approval) before verification.
   if (change.expedited && !change.retroApprovedAt) {
-    throw new Error("This emergency change needs a retrospective approval before it can be verified")
+    throw new UserError("This emergency change needs a retrospective approval before it can be verified")
   }
 
   const pir = await db.$transaction(async (tx) => {

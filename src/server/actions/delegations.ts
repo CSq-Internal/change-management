@@ -5,11 +5,12 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { canManageUsers, canAudit } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
+import { UserError } from "@/lib/user-error"
 
 // Resolves an OpCo by slug; throws if it doesn't exist.
 async function resolveOpCo(db: ReturnType<typeof getPrisma>, slug: string) {
   const opco = await db.opCo.findUnique({ where: { slug } })
-  if (!opco) throw new Error(`OpCo not found: ${slug}`)
+  if (!opco) throw new UserError(`OpCo not found: ${slug}`)
   return opco
 }
 
@@ -23,7 +24,7 @@ async function assertApprover(
   const assignment = await db.userOpCoAssignment.findFirst({
     where: { userId, opcoId, role: "approver", isActive: true },
   })
-  if (!assignment) throw new Error(`Forbidden: ${label} must be an approver in this OpCo`)
+  if (!assignment) throw new UserError(`Forbidden: ${label} must be an approver in this OpCo`)
 }
 
 export async function createDelegation(input: {
@@ -33,12 +34,12 @@ export async function createDelegation(input: {
   validUntil: Date
 }) {
   if (input.fromUserId === input.toUserId) {
-    throw new Error("A user cannot delegate to itself")
+    throw new UserError("A user cannot delegate to itself")
   }
 
   const session = await getAppSession()
   if (!canManageUsers(session.organizations, session.realmRoles, input.opcoSlug)) {
-    throw new Error(`Forbidden: cannot manage delegations in ${input.opcoSlug}`)
+    throw new UserError(`Forbidden: cannot manage delegations in ${input.opcoSlug}`)
   }
 
   const db = getPrisma()
@@ -74,14 +75,14 @@ export async function revokeDelegation(delegationId: string) {
   const db = getPrisma()
 
   const delegation = await db.approverDelegation.findUnique({ where: { id: delegationId } })
-  if (!delegation) throw new Error("Delegation not found")
+  if (!delegation) throw new UserError("Delegation not found")
 
   const opco = delegation.opcoId
     ? await db.opCo.findUnique({ where: { id: delegation.opcoId } })
     : null
-  if (!opco) throw new Error("OpCo not found")
+  if (!opco) throw new UserError("OpCo not found")
   if (!canManageUsers(session.organizations, session.realmRoles, opco.slug)) {
-    throw new Error(`Forbidden: cannot manage delegations in ${opco.slug}`)
+    throw new UserError(`Forbidden: cannot manage delegations in ${opco.slug}`)
   }
 
   await db.$transaction(async (tx) => {
@@ -101,7 +102,7 @@ export async function revokeDelegation(delegationId: string) {
 export async function listDelegations(opcoSlug: string) {
   const session = await getAppSession()
   if (!canAudit(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot read delegations in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot read delegations in ${opcoSlug}`)
   }
   const db = getPrisma()
   const opco = await resolveOpCo(db, opcoSlug)

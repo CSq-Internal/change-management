@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toaster"
 import { riskScore, riskBand } from "@/lib/risk-score"
 import { createRisk, updateRisk, type RiskInput } from "@/server/actions/risk-register"
+import { errorMessage } from "@/lib/user-error"
 
 export type RiskRow = {
   id: string; title: string; description: string; category: string
@@ -87,7 +88,7 @@ export default function RiskRegisterClient({
         setEditing(null)
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "risk.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+        toast({ title: t(language, "risk.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
       }
     })
   }

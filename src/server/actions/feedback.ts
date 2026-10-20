@@ -9,6 +9,7 @@ import { isGroupAdmin } from "@/lib/permissions"
 import { assertTriageDecision } from "@/lib/feedback-outcome"
 import { CHANGE_ID_RE } from "@/lib/feedback-context"
 import { sendFeedbackEmail } from "@/server/email"
+import { UserError } from "@/lib/user-error"
 
 // What the CLIENT may send. Author, roles and OpCos are taken from the session, never the
 // payload, so a submission cannot misattribute itself.
@@ -33,13 +34,13 @@ export async function submitFeedback(input: FeedbackSubmission) {
   const session = await getAppSession()
   const parsed = submissionSchema.safeParse(input)
   if (!parsed.success) {
-    throw new Error(`Invalid feedback: ${parsed.error.issues.map((i) => i.path.join(".") || i.message).join(", ")}`)
+    throw new UserError(`Invalid feedback: ${parsed.error.issues.map((i) => i.path.join(".") || i.message).join(", ")}`)
   }
   const s = parsed.data
   const db = getPrisma()
 
   const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-  if (!me) throw new Error("User not found")
+  if (!me) throw new UserError("User not found")
 
   const roles = [
     ...session.realmRoles,
@@ -89,16 +90,16 @@ export async function submitFeedback(input: FeedbackSubmission) {
 /** Record what was decided about one report. Group admins only; a triage is final. */
 export async function triageFeedback(id: string, outcome: string, note: string) {
   const session = await getAppSession()
-  if (!isGroupAdmin(session.realmRoles)) throw new Error("Forbidden")
+  if (!isGroupAdmin(session.realmRoles)) throw new UserError("Forbidden")
   const decision = assertTriageDecision(outcome, note)
   const db = getPrisma()
 
   const me = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-  if (!me) throw new Error("User not found")
+  if (!me) throw new UserError("User not found")
 
   const row = await db.feedback.findUnique({ where: { id }, select: { id: true, triagedAt: true } })
-  if (!row) throw new Error("Feedback not found")
-  if (row.triagedAt) throw new Error("Feedback is already triaged")
+  if (!row) throw new UserError("Feedback not found")
+  if (row.triagedAt) throw new UserError("Feedback is already triaged")
 
   const triagedAt = new Date()
   // Conditional on triagedAt still being null, so two triagers cannot both "win".
@@ -106,7 +107,7 @@ export async function triageFeedback(id: string, outcome: string, note: string) 
     where: { id, triagedAt: null },
     data: { triagedAt, outcome: decision.outcome, triageNote: decision.note, triagedById: me.id },
   })
-  if (count === 0) throw new Error("Feedback is already triaged")
+  if (count === 0) throw new UserError("Feedback is already triaged")
 
   return { id, triagedAt: triagedAt.toISOString(), outcome: decision.outcome, triageNote: decision.note }
 }

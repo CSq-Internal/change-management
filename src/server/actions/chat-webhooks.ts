@@ -4,13 +4,14 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
+import { UserError } from "@/lib/user-error"
 
 async function assertCanManage(opcoSlug: string | null) {
   const session = await getAppSession()
   const ok = opcoSlug === null
     ? isGroupAdmin(session.realmRoles)
     : isGroupAdmin(session.realmRoles) || hasRoleInOpCo(session.organizations, opcoSlug, "admin")
-  if (!ok) throw new Error("Forbidden: not authorized to manage this Chat webhook")
+  if (!ok) throw new UserError("Forbidden: not authorized to manage this Chat webhook")
   return session
 }
 
@@ -26,16 +27,16 @@ export async function listChatWebhooks() {
 
 export async function upsertChatWebhook(input: { opcoSlug: string | null; url: string }) {
   if (!/^https:\/\/chat\.googleapis\.com\//.test(input.url))
-    throw new Error("URL must be a Google Chat webhook (https://chat.googleapis.com/...)")
+    throw new UserError("URL must be a Google Chat webhook (https://chat.googleapis.com/...)")
   const session = await assertCanManage(input.opcoSlug)
   const db = getPrisma()
   const opco = input.opcoSlug ? await db.opCo.findUnique({ where: { slug: input.opcoSlug } }) : null
-  if (input.opcoSlug && !opco) throw new Error("OpCo not found")
+  if (input.opcoSlug && !opco) throw new UserError("OpCo not found")
   const opcoId = opco?.id ?? null
 
   return db.$transaction(async (tx) => {
     const actor = await tx.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-    if (!actor) throw new Error("User not found")
+    if (!actor) throw new UserError("User not found")
     const existing = await tx.chatWebhook.findFirst({ where: { opcoId } })
     const hook = existing
       ? await tx.chatWebhook.update({ where: { id: existing.id }, data: { url: input.url, isActive: true } })
@@ -51,7 +52,7 @@ export async function upsertChatWebhook(input: { opcoSlug: string | null; url: s
 export async function setChatWebhookActive(id: string, isActive: boolean) {
   const db = getPrisma()
   const hook = await db.chatWebhook.findUnique({ where: { id }, include: { opco: { select: { slug: true } } } })
-  if (!hook) throw new Error("Webhook not found")
+  if (!hook) throw new UserError("Webhook not found")
   const session = await assertCanManage(hook.opco?.slug ?? null)
   await db.$transaction(async (tx) => {
     await tx.chatWebhook.update({ where: { id }, data: { isActive } })
@@ -66,7 +67,7 @@ export async function setChatWebhookActive(id: string, isActive: boolean) {
 export async function deleteChatWebhook(id: string) {
   const db = getPrisma()
   const hook = await db.chatWebhook.findUnique({ where: { id }, include: { opco: { select: { slug: true } } } })
-  if (!hook) throw new Error("Webhook not found")
+  if (!hook) throw new UserError("Webhook not found")
   const session = await assertCanManage(hook.opco?.slug ?? null)
   await db.$transaction(async (tx) => {
     await tx.chatWebhook.delete({ where: { id } })
