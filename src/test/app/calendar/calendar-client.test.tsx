@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, within, fireEvent, waitFor } from "@testing-library/react"
 
 vi.mock("@/lib/store", () => ({ useStore: () => ({ language: "en" }) }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
-vi.mock("@/components/ui/toaster", () => ({ useToast: () => ({ toast: vi.fn() }) }))
+const { toast, deleteBlackoutPeriod } = vi.hoisted(() => ({ toast: vi.fn(), deleteBlackoutPeriod: vi.fn() }))
+vi.mock("@/components/ui/toaster", () => ({ useToast: () => ({ toast }) }))
 vi.mock("@/server/actions/changes", () => ({ rescheduleChange: vi.fn() }))
-vi.mock("@/server/actions/blackout", () => ({ createBlackoutPeriod: vi.fn(), deleteBlackoutPeriod: vi.fn() }))
+vi.mock("@/server/actions/blackout", () => ({ createBlackoutPeriod: vi.fn(), deleteBlackoutPeriod }))
 
 import CalendarClient, { type CalDay, type CalChipData } from "@/app/(dashboard)/calendar/calendar-client"
 
@@ -49,5 +50,35 @@ describe("CalendarClient", () => {
     const row = (label: string) => screen.getByText(label).closest("div.flex")! as HTMLElement
     expect(within(row("Ghana freeze")).queryByRole("button", { name: "Remove" })).toBeInTheDocument()
     expect(within(row("Group freeze")).queryByRole("button", { name: "Remove" })).not.toBeInTheDocument()
+  })
+
+  it("shades the days a blackout covers, for viewers who cannot manage blackouts too", () => {
+    const { container } = render(
+      <CalendarClient monthLabel="October 2026" prevMonth="2026-09" nextMonth="2026-11" cells={october} chips={[]}
+        blackouts={[{ id: "b1", label: "Ghana freeze", scopeName: "Ghana", opcoSlug: "ghana",
+          startMs: Date.parse("2026-10-09T21:00:00Z"), endMs: Date.parse("2026-10-11T21:00:00Z") }]} />, // 10-11 Oct, Nairobi
+    )
+    const cell = (n: number) => [...container.querySelectorAll("div.min-h-24")].find((c) => c.querySelector("div")!.textContent === String(n))!
+    expect(cell(9).textContent).not.toContain("Ghana freeze")
+    expect(cell(10).textContent).toContain("Ghana freeze")
+    expect(cell(11).textContent).toContain("Ghana freeze")
+    expect(cell(12).textContent).not.toContain("Ghana freeze")
+    // Phones get the agenda, not the grid; the blackout is listed there as well.
+    expect(container.querySelector("div.sm\\:hidden")!.textContent).toContain("Ghana freeze")
+  })
+
+  it("shows a server error's own words, though production hides its message", async () => {
+    const { UserError } = await import("@/lib/user-error")
+    const sent = new UserError("Forbidden: not authorized to remove this blackout period")
+    deleteBlackoutPeriod.mockRejectedValue(Object.assign(new Error("An error occurred in the Server Components render."), { digest: sent.digest }))
+    render(
+      <CalendarClient monthLabel="October 2026" prevMonth="2026-09" nextMonth="2026-11" cells={october} chips={[]}
+        canManageBlackouts blackoutScopes={[{ value: "ghana", label: "Ghana" }]}
+        blackouts={[{ id: "b1", label: "Ghana freeze", scopeName: "Ghana", opcoSlug: "ghana", startMs: 0, endMs: 1 }]} />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+      description: "Forbidden: not authorized to remove this blackout period", variant: "error",
+    })))
   })
 })
