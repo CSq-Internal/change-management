@@ -5,12 +5,13 @@ import { getAppSession } from "@/lib/session"
 import { listApprovableChanges } from "@/server/approval-authority"
 import { coerceLocale, type Language } from "@/lib/i18n"
 import { decidableAccessRequests } from "@/server/access-queue"
+import { UserError } from "@/lib/user-error"
 
 async function meId(): Promise<string> {
   const session = await getAppSession()
   const db = getPrisma()
   const u = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-  if (!u) throw new Error("User not found")
+  if (!u) throw new UserError("User not found")
   return u.id
 }
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { requestRole, type RequestableRole } from "@/server/actions/access-requests"
+import { errorMessage } from "@/lib/user-error"
 
 export type MyRoleRequest = {
   id: string
@@ -50,7 +51,7 @@ export default function RoleRequestCard({
       setDone(true)
       router.refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e, tr("common.unknownError")))
     } finally {
       setBusy(false)
     }

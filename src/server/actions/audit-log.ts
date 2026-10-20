@@ -4,6 +4,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupLevel, canManageAnyOpCo, manageableOpCoSlugs } from "@/lib/permissions"
+import { UserError } from "@/lib/user-error"
 
 export type AdminAuditRow = {
   id: string
@@ -24,7 +25,7 @@ export async function listAdminAudit(filters: {
   const groupLevel = isGroupLevel(session.realmRoles)
   const anyAdmin = canManageAnyOpCo(session.organizations, session.realmRoles)
   if (!groupLevel && !anyAdmin) {
-    throw new Error("Forbidden: cannot read the admin audit log")
+    throw new UserError("Forbidden: cannot read the admin audit log")
   }
 
   const db = getPrisma()

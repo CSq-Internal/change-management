@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { setChangeAssignees } from "@/server/actions/assignees"
+import { errorMessage } from "@/lib/user-error"
 
 type Entry = { userId: string; role: "approver" | "implementer" }
 
@@ -52,7 +53,7 @@ export default function AssigneesDialog({
       toast({ title: t(language, "assignees.saved"), variant: "success" })
       onClose(); router.refresh()
     } catch (err) {
-      toast({ title: t(language, "assignees.failed"), description: err instanceof Error ? err.message : "", variant: "error" })
+      toast({ title: t(language, "assignees.failed"), description: errorMessage(err, ""), variant: "error" })
     }
   })
 

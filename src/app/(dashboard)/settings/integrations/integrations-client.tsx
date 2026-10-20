@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toaster"
 import { upsertChatWebhook, setChatWebhookActive, deleteChatWebhook } from "@/server/actions/chat-webhooks"
+import { errorMessage } from "@/lib/user-error"
 
 export type WebhookRow = { id: string; opcoSlug: string | null; opcoName: string | null; url: string; isActive: boolean }
 
@@ -25,7 +26,7 @@ export default function IntegrationsClient({
   const run = (fn: () => Promise<unknown>, okKey: string) =>
     startTransition(async () => {
       try { await fn(); toast({ title: t(language, okKey), variant: "success" }); router.refresh() }
-      catch (err) { toast({ title: t(language, "chat.failed"), description: err instanceof Error ? err.message : "", variant: "error" }) }
+      catch (err) { toast({ title: t(language, "chat.failed"), description: errorMessage(err, ""), variant: "error" }) }
     })
 
   return (

@@ -15,6 +15,7 @@ import UserList from "./user-list"
 import OnboardWizard from "./onboard-wizard"
 import EditUserDialog from "./edit-user-dialog"
 import ConfirmDialog from "./confirm-dialog"
+import { errorMessage } from "@/lib/user-error"
 
 interface UsersClientProps {
   users: DbUser[]
@@ -54,7 +55,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
     } catch (err) {
       toast({
         title: t(language, "common.failed"),
-        description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+        description: errorMessage(err, t(language, "common.unknownError")),
         variant: "error",
       })
     } finally {
@@ -74,7 +75,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
     } catch (err) {
       toast({
         title: t(language, "common.failed"),
-        description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+        description: errorMessage(err, t(language, "common.unknownError")),
         variant: "error",
       })
     }

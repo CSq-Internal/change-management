@@ -5,11 +5,12 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, isGroupLevel, isMemberOfOpCo, canManageUsers } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
+import { UserError } from "@/lib/user-error"
 
 export async function getActiveBlackouts(opcoSlug: string) {
   const session = await getAppSession()
   if (!isGroupLevel(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
-    throw new Error("Forbidden: not a member of this OpCo")
+    throw new UserError("Forbidden: not a member of this OpCo")
   }
   const db = getPrisma()
   const opco = await db.opCo.findUnique({ where: { slug: opcoSlug } })
@@ -36,7 +37,7 @@ export async function createBlackoutPeriod(input: {
     : isGroupAdmin(session.realmRoles) ||
       canManageUsers(session.organizations, session.realmRoles, input.opcoSlug)
   if (!authorized) {
-    throw new Error("Forbidden: not authorized to create blackout for this OpCo")
+    throw new UserError("Forbidden: not authorized to create blackout for this OpCo")
   }
 
   const db = getPrisma()
@@ -46,7 +47,7 @@ export async function createBlackoutPeriod(input: {
 
   return db.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { keycloakId: session.keycloakId } })
-    if (!user) throw new Error("User not found")
+    if (!user) throw new UserError("User not found")
 
     const created = await tx.blackoutPeriod.create({
       data: {
@@ -76,7 +77,7 @@ export async function deleteBlackoutPeriod(id: string) {
     where: { id },
     include: { opco: { select: { slug: true } } },
   })
-  if (!existing) throw new Error("Blackout period not found")
+  if (!existing) throw new UserError("Blackout period not found")
 
   // Same authority model as creation: group-scoped blackouts require a group admin;
   // OpCo-scoped ones allow a group admin or that OpCo's user-manager.
@@ -85,7 +86,7 @@ export async function deleteBlackoutPeriod(id: string) {
     : isGroupAdmin(session.realmRoles) ||
       canManageUsers(session.organizations, session.realmRoles, existing.opco.slug)
   if (!authorized) {
-    throw new Error("Forbidden: not authorized to remove this blackout period")
+    throw new UserError("Forbidden: not authorized to remove this blackout period")
   }
 
   await db.$transaction(async (tx) => {

@@ -15,6 +15,7 @@ import TeamList from "./team-list"
 import TeamFormDialog from "./team-form-dialog"
 import TeamMembersDialog from "./team-members-dialog"
 import type { DbTeam } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 interface TeamsClientProps {
   teams: DbTeam[]
@@ -51,7 +52,7 @@ export default function TeamsClient({ teams, manageableSlugs }: TeamsClientProps
       setConfirmTeam(null)
       refresh()
     } catch (err) {
-      toast({ title: t(language, "teamsAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "teamsAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

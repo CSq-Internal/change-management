@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import { addTeamMember, removeTeamMember, setTeamMemberRole, listOpCoMembers } from "@/server/actions/teams"
 import type { DbTeam, OpCoMember } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 interface TeamMembersDialogProps {
   language: Language
@@ -33,7 +34,7 @@ export default function TeamMembersDialog({ language, team, onClose, onChanged }
       await fn()
       onChanged()
     } catch (err) {
-      toast({ title: t(language, "teamsAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "teamsAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }
