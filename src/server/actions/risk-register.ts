@@ -6,6 +6,7 @@ import { isGroupAdmin, isGroupLevel, hasRoleInOpCo } from "@/lib/permissions"
 import { activeOpCoSlug } from "@/server/active-opco"
 import { recordAdminAction } from "@/server/audit"
 import type { RiskCategory, RiskStatus } from "@prisma/client"
+import { UserError } from "@/lib/user-error"
 
 export type RiskInput = {
   title: string
@@ -22,9 +23,9 @@ export type RiskInput = {
 
 function validate(input: RiskInput) {
   if (!input.title.trim() || !input.description.trim() || !input.owner.trim())
-    throw new Error("Title, description and owner are required")
+    throw new UserError("Title, description and owner are required")
   if (![input.likelihood, input.impact].every((n) => Number.isInteger(n) && n >= 1 && n <= 5))
-    throw new Error("Likelihood and impact must be integers from 1 to 5")
+    throw new UserError("Likelihood and impact must be integers from 1 to 5")
 }
 
 async function assertCanManage(opcoSlug: string | null) {
@@ -32,7 +33,7 @@ async function assertCanManage(opcoSlug: string | null) {
   const allowed = opcoSlug === null
     ? isGroupAdmin(session.realmRoles)
     : isGroupAdmin(session.realmRoles) || hasRoleInOpCo(session.organizations, opcoSlug, "admin")
-  if (!allowed) throw new Error("Forbidden: not authorized to manage risks in this scope")
+  if (!allowed) throw new UserError("Forbidden: not authorized to manage risks in this scope")
   return session
 }
 
@@ -60,11 +61,11 @@ export async function createRisk(input: RiskInput) {
   const session = await assertCanManage(input.opcoSlug)
   const db = getPrisma()
   const opco = input.opcoSlug ? await db.opCo.findUnique({ where: { slug: input.opcoSlug } }) : null
-  if (input.opcoSlug && !opco) throw new Error("OpCo not found")
+  if (input.opcoSlug && !opco) throw new UserError("OpCo not found")
 
   return db.$transaction(async (tx) => {
     const actor = await tx.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-    if (!actor) throw new Error("User not found")
+    if (!actor) throw new UserError("User not found")
     const risk = await tx.riskRegister.create({
       data: {
         title: input.title, description: input.description, category: input.category,
@@ -86,11 +87,11 @@ export async function updateRisk(id: string, input: RiskInput) {
   validate(input)
   const db = getPrisma()
   const existing = await db.riskRegister.findUnique({ where: { id }, include: { opco: { select: { slug: true } } } })
-  if (!existing) throw new Error("Risk not found")
+  if (!existing) throw new UserError("Risk not found")
   await assertCanManage(existing.opco?.slug ?? null)
   const session = await assertCanManage(input.opcoSlug)
   const opco = input.opcoSlug ? await db.opCo.findUnique({ where: { slug: input.opcoSlug } }) : null
-  if (input.opcoSlug && !opco) throw new Error("OpCo not found")
+  if (input.opcoSlug && !opco) throw new UserError("OpCo not found")
 
   return db.$transaction(async (tx) => {
     const risk = await tx.riskRegister.update({

@@ -13,6 +13,7 @@ import ConfirmDialog from "../users/confirm-dialog"
 import CabTable from "./cab-table"
 import CabAddDialog from "./cab-add-dialog"
 import type { CabMember } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 interface CabClientProps {
   perOpco: CabMember[]
@@ -49,7 +50,7 @@ export default function CabClient({ perOpco, group, showGroup, manageableOpcos }
       setConfirm(null)
       refresh()
     } catch (err) {
-      toast({ title: t(language, "cabAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "cabAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

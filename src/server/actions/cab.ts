@@ -5,11 +5,12 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { canManageCab, isGroupAdmin, isGroupLevel, canAudit } from "@/lib/permissions"
 import { recordAdminAction } from "@/server/audit"
+import { UserError } from "@/lib/user-error"
 
 // Resolves an OpCo by slug; throws if it doesn't exist.
 async function resolveOpCo(db: ReturnType<typeof getPrisma>, slug: string) {
   const opco = await db.opCo.findUnique({ where: { slug } })
-  if (!opco) throw new Error(`OpCo not found: ${slug}`)
+  if (!opco) throw new UserError(`OpCo not found: ${slug}`)
   return opco
 }
 
@@ -20,12 +21,12 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
   // --- Group CAB (opcoId = null) ---
   if (opcoSlug === null) {
     if (!isGroupAdmin(session.realmRoles)) {
-      throw new Error("Forbidden: only a group_admin can manage the group CAB")
+      throw new UserError("Forbidden: only a group_admin can manage the group CAB")
     }
     const eligible = await db.userOpCoAssignment.findFirst({
       where: { userId, role: { in: ["approver", "admin"] }, isActive: true },
     })
-    if (!eligible) throw new Error("Forbidden: user must be an approver or admin in at least one OpCo")
+    if (!eligible) throw new UserError("Forbidden: user must be an approver or admin in at least one OpCo")
 
     // Prisma's compound-unique upsert can't target a NULL opcoId, so find-then-create/update.
     // The unique index is NULLS NOT DISTINCT, so a racing second create fails instead of duplicating.
@@ -51,14 +52,14 @@ export async function addCabMember(userId: string, opcoSlug: string | null) {
 
   // --- Per-OpCo CAB ---
   if (!canManageCab(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
   }
   const opco = await resolveOpCo(db, opcoSlug)
 
   const eligible = await db.userOpCoAssignment.findFirst({
     where: { userId, opcoId: opco.id, role: { in: ["approver", "admin"] }, isActive: true },
   })
-  if (!eligible) throw new Error(`Forbidden: user must be an approver or admin in ${opcoSlug}`)
+  if (!eligible) throw new UserError(`Forbidden: user must be an approver or admin in ${opcoSlug}`)
 
   return db.$transaction(async (tx) => {
     const member = await tx.cABMembership.upsert({
@@ -85,12 +86,12 @@ export async function removeCabMember(userId: string, opcoSlug: string | null) {
 
   if (opcoSlug === null) {
     if (!isGroupAdmin(session.realmRoles)) {
-      throw new Error("Forbidden: only a group_admin can manage the group CAB")
+      throw new UserError("Forbidden: only a group_admin can manage the group CAB")
     }
     const existing = await db.cABMembership.findFirst({
       where: { userId, opcoId: null, isActive: true },
     })
-    if (!existing) throw new Error("User is not an active group CAB member")
+    if (!existing) throw new UserError("User is not an active group CAB member")
     await db.$transaction(async (tx) => {
       await tx.cABMembership.update({
         where: { id: existing.id },
@@ -109,7 +110,7 @@ export async function removeCabMember(userId: string, opcoSlug: string | null) {
   }
 
   if (!canManageCab(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot manage the CAB in ${opcoSlug}`)
   }
   const opco = await resolveOpCo(db, opcoSlug)
 
@@ -136,13 +137,13 @@ export async function listCabMembers(opcoSlug: string | null) {
 
   if (opcoSlug === null) {
     if (!isGroupLevel(session.realmRoles)) {
-      throw new Error("Forbidden: cannot read the group CAB")
+      throw new UserError("Forbidden: cannot read the group CAB")
     }
     return db.cABMembership.findMany({ where: { opcoId: null, isActive: true }, include: { user: true } })
   }
 
   if (!canAudit(session.organizations, session.realmRoles, opcoSlug)) {
-    throw new Error(`Forbidden: cannot read the CAB in ${opcoSlug}`)
+    throw new UserError(`Forbidden: cannot read the CAB in ${opcoSlug}`)
   }
   const opco = await resolveOpCo(db, opcoSlug)
   return db.cABMembership.findMany({ where: { opcoId: opco.id, isActive: true }, include: { user: true } })

@@ -10,6 +10,7 @@ import {
 import { MAX_FILE_BYTES } from "@/lib/upload-constraints"
 import { isGoogleWorkspaceUrl } from "@/lib/google-links"
 import type { AttachmentKind } from "@prisma/client"
+import { UserError } from "@/lib/user-error"
 
 export const ALLOWED_MIME_TYPES = new Set<string>([
   "application/pdf",
@@ -33,29 +34,29 @@ type AttachInput = {
 
 export async function attachDocument(input: AttachInput) {
   if (!ALLOWED_MIME_TYPES.has(input.mimeType)) {
-    throw new Error(`Unsupported file type: ${input.mimeType}`)
+    throw new UserError(`Unsupported file type: ${input.mimeType}`)
   }
   if (input.buffer.length > MAX_FILE_BYTES) {
-    throw new Error("File exceeds the 25 MB size limit")
+    throw new UserError("File exceeds the 25 MB size limit")
   }
 
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id: input.changeId },
     include: { opco: true },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== user.id && !isAdmin) {
-    throw new Error("Forbidden: only the requester or an admin can upload documents")
+    throw new UserError("Forbidden: only the requester or an admin can upload documents")
   }
-  if (change.status !== "draft") throw new Error("Documents can only be uploaded to a draft change")
+  if (change.status !== "draft") throw new UserError("Documents can only be uploaded to a draft change")
 
   await scanFile(input.buffer, input.filename)
 
@@ -99,26 +100,26 @@ export async function attachDocument(input: AttachInput) {
 
 export async function attachLink(input: { changeId: string; kind: AttachmentKind; url: string }) {
   if (!isGoogleWorkspaceUrl(input.url)) {
-    throw new Error("Link must be a Google Docs, Sheets, Slides, or Drive URL")
+    throw new UserError("Link must be a Google Docs, Sheets, Slides, or Drive URL")
   }
 
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id: input.changeId },
     include: { opco: true },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== user.id && !isAdmin) {
-    throw new Error("Forbidden: only the requester or an admin can link documents")
+    throw new UserError("Forbidden: only the requester or an admin can link documents")
   }
-  if (change.status !== "draft") throw new Error("Documents can only be linked on a draft change")
+  if (change.status !== "draft") throw new UserError("Documents can only be linked on a draft change")
 
   const attachment = await db.attachment.upsert({
     where: { changeId_kind: { changeId: change.id, kind: input.kind } },
@@ -147,20 +148,20 @@ export async function getDocumentForDownload(input: { changeId: string; attachme
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id: input.changeId }, include: { opco: true },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
-  if (!(await canViewChange(session, change))) throw new Error("Forbidden: no access to this change")
+  if (!(await canViewChange(session, change))) throw new UserError("Forbidden: no access to this change")
 
   const attachment = await db.attachment.findUnique({ where: { id: input.attachmentId } })
-  if (!attachment || attachment.changeId !== change.id) throw new Error("Attachment not found")
+  if (!attachment || attachment.changeId !== change.id) throw new UserError("Attachment not found")
 
   if (attachment.externalUrl || !attachment.storageKey) {
-    throw new Error("This document is an external link — open it in Google instead")
+    throw new UserError("This document is an external link — open it in Google instead")
   }
   const buffer = await getDownloadBuffer(attachment.storageKey)
 

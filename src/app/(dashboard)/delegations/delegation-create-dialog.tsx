@@ -9,6 +9,7 @@ import { t, type Language } from "@/lib/i18n"
 import { dayEnd } from "@/lib/dates"
 import { createDelegation } from "@/server/actions/delegations"
 import { listOpCoApprovers } from "@/server/actions/users"
+import { errorMessage } from "@/lib/user-error"
 
 type Approver = { id: string; name: string | null; email: string }
 
@@ -43,7 +44,7 @@ export default function DelegationCreateDialog({ language, manageableSlugs, onCl
       toast({ title: t(language, "delegationsAdmin.created"), variant: "success" })
       onCreated()
     } catch (err) {
-      toast({ title: t(language, "delegationsAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "delegationsAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

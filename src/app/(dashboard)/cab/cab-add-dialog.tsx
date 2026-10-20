@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import { addCabMember } from "@/server/actions/cab"
 import { listCabEligible } from "@/server/actions/users"
+import { errorMessage } from "@/lib/user-error"
 
 type Eligible = { id: string; name: string | null; email: string }
 
@@ -38,7 +39,7 @@ export default function CabAddDialog({ language, opcos, existing, onClose, onAdd
       toast({ title: t(language, "cabAdmin.added"), variant: "success" })
       onAdded()
     } catch (err) {
-      toast({ title: t(language, "cabAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "cabAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

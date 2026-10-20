@@ -9,6 +9,7 @@ import { isGroupLevelInfra } from "@/lib/approver-routing"
 import { canUserApproveChange, getRoutedApprovers } from "@/server/approval-authority"
 import { isGroupAdmin } from "@/lib/permissions"
 import { votesSince, hasVotedSince } from "@/lib/approval-cycle"
+import { UserError } from "@/lib/user-error"
 
 export async function submitApproval(
   changeId: string,
@@ -18,12 +19,12 @@ export async function submitApproval(
   const session = await getAppSession()
 
   if (decision === "reject" && !comment?.trim()) {
-    throw new Error("A comment is required when rejecting a change")
+    throw new UserError("A comment is required when rejecting a change")
   }
 
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const { approval, change, outcome } = await db.$transaction(async (tx) => {
     // Lock the change so votes on it run one at a time. Each vote then reads the ones before
@@ -34,9 +35,9 @@ export async function submitApproval(
       where: { id: changeId },
       include: { approvals: true, opco: true },
     })
-    if (!change) throw new Error("Change not found")
+    if (!change) throw new UserError("Change not found")
     const isRetrospective = change.status === "implemented" && change.isEmergency && change.expedited === true
-    if (change.status !== "pending" && !isRetrospective) throw new Error("Change is not pending")
+    if (change.status !== "pending" && !isRetrospective) throw new UserError("Change is not pending")
 
     // Votes are scoped to the stage they were cast in — see @/lib/approval-cycle. A change
     // can go rejected → draft → pending again, and approvals from before the last
@@ -57,7 +58,7 @@ export async function submitApproval(
     // retrospective path had no cap at all and each repeat rewrote `retroApprovedAt`.
     const stageStart = isRetrospective ? change.implementedAt : (lastSubmission?.at ?? null)
     if (hasVotedSince(change.approvals, stageStart, user.id)) {
-      throw new Error("You have already voted on this change")
+      throw new UserError("You have already voted on this change")
     }
 
     const allowed = await canUserApproveChange({
@@ -67,17 +68,17 @@ export async function submitApproval(
       changeId,
     })
     if (!allowed) {
-      throw new Error("Forbidden: not authorized to approve this change")
+      throw new UserError("Forbidden: not authorized to approve this change")
     }
 
     // ISO 27001 A.5.3 — Segregation of Duties: requesters cannot approve their own changes
     if (change.requesterId === user.id) {
-      throw new Error("Approvers cannot approve their own requests (SoD violation — ISO 27001 A.5.3)")
+      throw new UserError("Approvers cannot approve their own requests (SoD violation — ISO 27001 A.5.3)")
     }
     // Expediting an emergency stands in for its approval; the retrospective vote is the check
     // on whoever did it, so they cannot cast it themselves.
     if (isRetrospective && change.implementedById === user.id) {
-      throw new Error("You implemented this change, so someone else must give the retrospective decision (SoD — ISO 27001 A.5.3)")
+      throw new UserError("You implemented this change, so someone else must give the retrospective decision (SoD — ISO 27001 A.5.3)")
     }
 
     // A CAB vote comes from the routed CAB (members, infra overrides, active delegates) or a

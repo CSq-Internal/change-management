@@ -18,6 +18,7 @@ import PirForm from "./pir-form"
 import { needsIndependentPir } from "@/lib/pir-policy"
 import AssigneesDialog from "./assignees-dialog"
 import ConfirmDialog from "../../users/confirm-dialog"
+import { errorMessage } from "@/lib/user-error"
 
 // ── Serialised types (Dates as ISO strings) ──────────────────────────────────
 
@@ -177,7 +178,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
     } catch (err) {
       toast({
         title: t(language, "common.error"),
-        description: err instanceof Error ? err.message : t(language, "common.errorOccurred"),
+        description: errorMessage(err, t(language, "common.errorOccurred")),
         variant: "error",
       })
     } finally {
@@ -222,7 +223,7 @@ export default function ChangeDetailClient({ change, caps, assigneeCandidates, a
       toast({ title: t(language, "detail.toast.discarded"), description: t(language, "detail.toast.discardedDesc"), variant: "success" })
       router.push("/requests")
     } catch (err) {
-      toast({ title: t(language, "common.error"), description: err instanceof Error ? err.message : t(language, "common.errorOccurred"), variant: "error" })
+      toast({ title: t(language, "common.error"), description: errorMessage(err, t(language, "common.errorOccurred")), variant: "error" })
     } finally {
       setIsActing(false)
       setConfirmDiscard(false)

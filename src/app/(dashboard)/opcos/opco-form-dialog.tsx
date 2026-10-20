@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toaster"
 import { t, type Language } from "@/lib/i18n"
 import { createOpCo, renameOpCo } from "@/server/actions/opcos"
 import type { DbOpCo } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 interface OpcoFormDialogProps {
   language: Language
@@ -37,7 +38,7 @@ export default function OpcoFormDialog({ language, opco, onClose, onSaved }: Opc
       toast({ title: t(language, "opcosAdmin.saved"), description: name, variant: "success" })
       onSaved()
     } catch (err) {
-      toast({ title: t(language, "opcosAdmin.failed"), description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: t(language, "opcosAdmin.failed"), description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

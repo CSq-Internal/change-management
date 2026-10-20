@@ -5,6 +5,7 @@ import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, hasRoleInOpCo } from "@/lib/permissions"
 import { isEligibleApprover } from "@/server/approval-authority"
 import { notifyChange } from "@/server/notify"
+import { UserError } from "@/lib/user-error"
 
 type AssigneeInput = { userId: string; role: "approver" | "implementer" }
 
@@ -22,7 +23,7 @@ async function loadChangeForAssigneeWrite(changeId: string) {
     where: { keycloakId: session.keycloakId },
     select: { id: true },
   })
-  if (!me) throw new Error("User not found")
+  if (!me) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id: changeId },
@@ -31,12 +32,12 @@ async function loadChangeForAssigneeWrite(changeId: string) {
       infrastructureType: true, opco: { select: { slug: true } },
     },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin =
     isGroupAdmin(session.realmRoles) || hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== me.id && !isAdmin) {
-    throw new Error("Forbidden: only the requester or an admin can set assignees")
+    throw new UserError("Forbidden: only the requester or an admin can set assignees")
   }
   return { db, me, change }
 }
@@ -51,10 +52,10 @@ async function assertApproversEligible(
     // submitApproval rejects self-approval (SoD), so naming the requester would satisfy the
     // mandatory-approver gate while leaving nobody able to actually approve.
     if (userId === requesterId) {
-      throw new Error("Cannot name yourself as an approver on your own change")
+      throw new UserError("Cannot name yourself as an approver on your own change")
     }
     if (!(await isEligibleApprover(userId, opcoId, infrastructureType))) {
-      throw new Error("Assignee is not an eligible approver for this change's scope")
+      throw new UserError("Assignee is not an eligible approver for this change's scope")
     }
   }
 }
@@ -67,7 +68,7 @@ export async function setChangeAssignees(changeId: string, assignees: AssigneeIn
   // requester could submit with one and immediately strip it back out. Scoped to pending:
   // naming an implementer on an already-approved change is routine and must not be blocked.
   if (change.status === "pending" && approverIds.length === 0) {
-    throw new Error(NO_APPROVER_ERROR)
+    throw new UserError(NO_APPROVER_ERROR)
   }
   await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
 
@@ -105,7 +106,7 @@ export async function setChangeApprovers(changeId: string, approverIds: string[]
   const { db, me, change } = await loadChangeForAssigneeWrite(changeId)
 
   if (change.status === "pending" && approverIds.length === 0) {
-    throw new Error(NO_APPROVER_ERROR)
+    throw new UserError(NO_APPROVER_ERROR)
   }
   await assertApproversEligible(approverIds, change.opcoId, change.infrastructureType, change.requesterId)
 

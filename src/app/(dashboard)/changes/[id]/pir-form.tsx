@@ -7,6 +7,7 @@ import { submitPostImplementationReview } from "@/server/actions/pir"
 import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import type { PirOutcome } from "@prisma/client"
+import { errorMessage } from "@/lib/user-error"
 
 export default function PirForm({ changeId }: { changeId: string }) {
   const language = useStore((s) => s.language)
@@ -24,7 +25,7 @@ export default function PirForm({ changeId }: { changeId: string }) {
         await submitPostImplementationReview(changeId, { outcome, summary, backoutUsed })
         router.refresh()
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to submit PIR")
+        setError(errorMessage(e, "Failed to submit PIR"))
       }
     })
   }

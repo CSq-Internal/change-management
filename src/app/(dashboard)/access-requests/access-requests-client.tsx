@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n"
 import { approveAccessRequest, denyAccessRequest } from "@/server/actions/access-requests"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
+import { errorMessage } from "@/lib/user-error"
 
 export type QueueRow = {
   id: string
@@ -34,7 +35,7 @@ export default function AccessRequestsClient({ requests }: { requests: QueueRow[
     try {
       await action()
     } catch (err) {
-      toast({ title: tr("access.queue.failed"), description: err instanceof Error ? err.message : String(err), variant: "error" })
+      toast({ title: tr("access.queue.failed"), description: errorMessage(err, tr("common.unknownError")), variant: "error" })
     } finally {
       setBusy(false)
       startTransition(() => router.refresh())

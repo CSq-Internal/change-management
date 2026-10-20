@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toaster"
 import { addApproverAssignment, removeApproverAssignment } from "@/server/actions/approval-matrix"
+import { errorMessage } from "@/lib/user-error"
 
 type OverrideRow = { id: string; infrastructureType: string; opcoSlug: string | null; opcoName: string | null; userLabel: string }
 
@@ -33,7 +34,7 @@ export default function ApprovalMatrixClient({
   const run = (fn: () => Promise<unknown>, okKey: string) =>
     startTransition(async () => {
       try { await fn(); toast({ title: t(language, okKey), variant: "success" }); router.refresh() }
-      catch (err) { toast({ title: t(language, "matrix.failed"), description: err instanceof Error ? err.message : "", variant: "error" }) }
+      catch (err) { toast({ title: t(language, "matrix.failed"), description: errorMessage(err, ""), variant: "error" }) }
     })
 
   return (

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { triageFeedback } from "@/server/actions/feedback"
 import type { FeedbackRow } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 const CATEGORIES = ["bug", "confusing", "missing", "praise"] as const
 const splitSlugs = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean)
@@ -53,7 +54,7 @@ export default function FeedbackClient({ rows: initialRows }: { rows: FeedbackRo
       )
     } catch (err) {
       // The server's own message ("deferred needs a note saying why") is actionable.
-      setErrors((e) => ({ ...e, [id]: err instanceof Error ? err.message : tr("feedback.triage.failed") }))
+      setErrors((e) => ({ ...e, [id]: errorMessage(err, tr("feedback.triage.failed")) }))
     } finally {
       setPending((p) => ({ ...p, [id]: false }))
     }
