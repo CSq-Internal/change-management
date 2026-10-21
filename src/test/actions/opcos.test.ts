@@ -11,10 +11,6 @@ vi.mock("@/lib/session", () => ({
   }),
 }))
 
-vi.mock("@/server/keycloak", () => ({
-  createKeycloakOrg: vi.fn().mockResolvedValue("kc-org-1"),
-}))
-
 const mockDb = {
   $transaction: vi.fn(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb)),
   opCo: {
@@ -30,7 +26,6 @@ vi.mock("@/server/db", () => ({ getPrisma: () => mockDb }))
 
 import { createOpCo, renameOpCo, archiveOpCo, unarchiveOpCo } from "@/server/actions/opcos"
 import { getAppSession } from "@/lib/session"
-import { createKeycloakOrg } from "@/server/keycloak"
 
 const groupAdmin = { keycloakId: "kc-ga", email: "ga@t.co", name: "GA", organizations: [], realmRoles: ["group_admin"] }
 
@@ -38,7 +33,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb))
   mockDb.opCo.findUnique.mockResolvedValue(null)
-  vi.mocked(createKeycloakOrg).mockResolvedValue("kc-org-1")
 })
 
 describe("createOpCo", () => {
@@ -52,21 +46,11 @@ describe("createOpCo", () => {
     await expect(createOpCo({ slug: "kenya", name: "Kenya" })).rejects.toThrow(/already exists/i)
   })
 
-  it("creates an OpCo with the Keycloak org id and writes an audit row", async () => {
+  it("creates an OpCo and writes an audit row", async () => {
     vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
-    await createOpCo({ slug: "kenya", name: "Kenya" })
-    expect(mockDb.opCo.create).toHaveBeenCalledWith({
-      data: { slug: "kenya", name: "Kenya", locale: "en", keycloakOrgId: "kc-org-1" },
-    })
-    expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
-  })
-
-  it("falls back to a placeholder keycloakOrgId when Keycloak is unavailable", async () => {
-    vi.mocked(getAppSession).mockResolvedValueOnce(groupAdmin)
-    vi.mocked(createKeycloakOrg).mockRejectedValueOnce(new Error("no keycloak"))
     await createOpCo({ slug: "kenya", name: "Kenya", locale: "sw" })
     expect(mockDb.opCo.create).toHaveBeenCalledWith({
-      data: { slug: "kenya", name: "Kenya", locale: "sw", keycloakOrgId: "pending-keycloak-kenya" },
+      data: { slug: "kenya", name: "Kenya", locale: "sw" },
     })
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledTimes(1)
   })

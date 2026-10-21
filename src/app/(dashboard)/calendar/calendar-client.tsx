@@ -12,6 +12,7 @@ import { rescheduleChange } from "@/server/actions/changes"
 import { createBlackoutPeriod, deleteBlackoutPeriod } from "@/server/actions/blackout"
 import { chipDay, localDayKey, type RiskLevel } from "@/lib/calendar"
 import { useClientValue } from "@/lib/use-hydrated"
+import { errorMessage } from "@/lib/user-error"
 
 export type CalDay = { key: string; inMonth: boolean; dayNum: number | null }
 export type CalChipData = {
@@ -89,7 +90,7 @@ export default function CalendarClient({
         toast({ title: t(language, "calendar.blackout.created"), variant: "success" })
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : t(language, "common.unknownError"), variant: "error" })
+        toast({ title: t(language, "calendar.blackout.failed"), description: errorMessage(err, t(language, "common.unknownError")), variant: "error" })
       }
     })
   }
@@ -101,7 +102,7 @@ export default function CalendarClient({
         toast({ title: t(language, "calendar.blackout.removed"), variant: "success" })
         router.refresh()
       } catch (err) {
-        toast({ title: t(language, "calendar.blackout.failed"), description: err instanceof Error ? err.message : t(language, "common.unknownError"), variant: "error" })
+        toast({ title: t(language, "calendar.blackout.failed"), description: errorMessage(err, t(language, "common.unknownError")), variant: "error" })
       }
     })
   }
@@ -129,6 +130,15 @@ export default function CalendarClient({
   for (const arr of chipsByDay.values()) arr.sort((a, b) => a.startMs - b.startMs)
   const agenda = [...chipsByDay.entries()].sort(([a], [b]) => a.localeCompare(b))
 
+  // A blackout covers a day when it overlaps the viewer's local midnight-to-midnight.
+  const blackoutsOn = (key: string) => {
+    if (!hydrated) return []
+    const [y, m, d] = key.split("-").map(Number)
+    const from = new Date(y, m - 1, d).getTime()
+    const to = new Date(y, m - 1, d + 1).getTime()
+    return blackouts.filter((b) => b.startMs < to && b.endMs > from)
+  }
+
   const onDrop = (dayKey: string) => {
     const chip = placed.find((c) => c.id === dragId)
     setDragId(null)
@@ -146,7 +156,7 @@ export default function CalendarClient({
       } catch (err) {
         toast({
           title: t(language, "calendar.reschedule.failed"),
-          description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+          description: errorMessage(err, t(language, "common.unknownError")),
           variant: "error",
         })
       }
@@ -185,16 +195,20 @@ export default function CalendarClient({
           <div className={`grid grid-cols-7 gap-px ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
             {cells.map((cell) => {
               const dayChips = cell.inMonth ? (chipsByDay.get(cell.key) ?? []) : []
+              const dayBlackouts = cell.inMonth ? blackoutsOn(cell.key) : []
               return (
                 <div
                   key={cell.key}
                   onDragOver={(e) => { if (cell.inMonth) e.preventDefault() }}
                   onDrop={() => { if (cell.inMonth) onDrop(cell.key) }}
-                  className={`min-h-24 rounded-md border p-1 ${cell.inMonth ? "border-border/60 bg-background" : "border-transparent bg-muted/30"} ${cell.key === todayKey ? "ring-2 ring-primary/60" : ""}`}
+                  className={`min-h-24 rounded-md border p-1 ${!cell.inMonth ? "border-transparent bg-muted/30" : dayBlackouts.length ? "border-rose-500/40 bg-rose-500/10" : "border-border/60 bg-background"} ${cell.key === todayKey ? "ring-2 ring-primary/60" : ""}`}
                 >
                   {cell.dayNum != null && (
                     <div className={`mb-1 text-xs ${cell.key === todayKey ? "font-bold text-primary" : "text-muted-foreground"}`}>{cell.dayNum}</div>
                   )}
+                  {dayBlackouts.map((b) => (
+                    <div key={b.id} title={t(language, "calendar.blackout.title")} className="mb-1 truncate text-[11px] font-medium text-rose-700 dark:text-rose-300">🚫 {b.label}</div>
+                  ))}
                   <div className="space-y-1">
                     {dayChips.map((chip) => (
                       <Link
@@ -224,6 +238,12 @@ export default function CalendarClient({
 
       {/* Mobile agenda: chronological list of this month's changes (the 7-col grid is unusable at phone width) */}
       <div className="space-y-4 sm:hidden">
+        {blackouts.filter((b) => monthDays.some((c) => blackoutsOn(c.key).includes(b))).map((b) => (
+          <div key={b.id} className="rounded-md border border-rose-500/40 bg-rose-500/10 p-2.5 text-sm">
+            <span className="font-medium">🚫 {b.label}</span>
+            <span className="text-muted-foreground"> · {formatDayLabel(localDayKey(b.startMs), language)} → {formatDayLabel(localDayKey(b.endMs), language)}</span>
+          </div>
+        ))}
         {agenda.length === 0 ? (
           <Card className="border-border/80 bg-card/95">
             <CardContent className="p-4 text-sm text-muted-foreground">{t(language, "calendar.empty")}</CardContent>

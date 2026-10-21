@@ -4,6 +4,7 @@ import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin, isMemberOfOpCo } from "@/lib/permissions"
 import { listEligibleApproversForScope } from "@/server/approval-authority"
+import { UserError } from "@/lib/user-error"
 
 /**
  * Approver candidates for a scope the caller is allowed to raise changes in.
@@ -20,7 +21,7 @@ export async function listEligibleApproversAction(
 ) {
   const session = await getAppSession()
   if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
-    throw new Error("Forbidden: not a member of this OpCo")
+    throw new UserError("Forbidden: not a member of this OpCo")
   }
   const db = getPrisma()
   const me = await db.user.findUnique({

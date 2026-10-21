@@ -4,20 +4,20 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { isGroupAdmin } from "@/lib/permissions"
-import { createKeycloakOrg } from "@/server/keycloak"
 import { recordAdminAction } from "@/server/audit"
 import { activeOpCos } from "@/server/opco-scope"
+import { UserError } from "@/lib/user-error"
 
 function assertGroupAdmin(session: { realmRoles: string[] }) {
   if (!isGroupAdmin(session.realmRoles)) {
-    throw new Error("Forbidden: only a group_admin can manage OpCos")
+    throw new UserError("Forbidden: only a group_admin can manage OpCos")
   }
 }
 
 // Loads an OpCo by id; throws if missing.
 async function loadOpCo(db: ReturnType<typeof getPrisma>, opcoId: string) {
   const opco = await db.opCo.findUnique({ where: { id: opcoId } })
-  if (!opco) throw new Error("OpCo not found")
+  if (!opco) throw new UserError("OpCo not found")
   return opco
 }
 
@@ -43,20 +43,11 @@ export async function createOpCo(input: { slug: string; name: string; locale?: s
 
   const db = getPrisma()
   const existing = await db.opCo.findUnique({ where: { slug: input.slug } })
-  if (existing) throw new Error(`OpCo slug already exists: ${input.slug}`)
-
-  // Best-effort Keycloak org provisioning; fall back to a placeholder id if unavailable.
-  let keycloakOrgId: string
-  try {
-    keycloakOrgId = await createKeycloakOrg(input.slug, input.name)
-  } catch (err) {
-    console.warn(`[createOpCo] Keycloak org creation skipped for ${input.slug}:`, err)
-    keycloakOrgId = `pending-keycloak-${input.slug}`
-  }
+  if (existing) throw new UserError(`OpCo slug already exists: ${input.slug}`)
 
   return db.$transaction(async (tx) => {
     const opco = await tx.opCo.create({
-      data: { slug: input.slug, name: input.name, locale: input.locale ?? "en", keycloakOrgId },
+      data: { slug: input.slug, name: input.name, locale: input.locale ?? "en" },
     })
     await recordAdminAction(tx, {
       actorKeycloakId: session.keycloakId,

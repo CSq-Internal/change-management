@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
 import { NOTIFY_EVENT_GROUPS, DEFAULT_CHANNELS, type NotifyChannel } from "@/lib/notifications"
 import { setMyPreference, type PrefCell } from "@/server/actions/notification-prefs"
+import { errorMessage } from "@/lib/user-error"
 
 const CHANNELS: NotifyChannel[] = ["email", "in_app"]
 
@@ -27,7 +28,7 @@ export default function NotificationsPrefsClient({ prefs }: { prefs: PrefCell[] 
         toast({ title: t(language, "notifPrefs.saved"), variant: "success" })
       } catch (err) {
         setCells((m) => new Map(m).set(key, !next))
-        toast({ title: t(language, "notifPrefs.failed"), description: err instanceof Error ? err.message : "", variant: "error" })
+        toast({ title: t(language, "notifPrefs.failed"), description: errorMessage(err, ""), variant: "error" })
       }
     })
   }

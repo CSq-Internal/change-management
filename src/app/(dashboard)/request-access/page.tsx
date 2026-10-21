@@ -7,8 +7,9 @@ import RequestAccessClient from "./request-access-client"
 export default async function RequestAccessPage() {
   const session = await auth()
   if (!session) redirect("/login")
-  // Users who already have access don't belong here.
-  if (hasAnyAccess(session.user.organizations, session.user.realmRoles)) redirect("/")
+  // Users who already have access don't belong here. The client refreshes the session
+  // cookie first; a server redirect would loop against the proxy's stale cookie.
+  if (hasAnyAccess(session.user.organizations, session.user.realmRoles)) return <RequestAccessClient opcos={[]} hasAccess />
 
   const opcos = await getPrisma().opCo.findMany({
     where: { archivedAt: null },

@@ -8,8 +8,8 @@ beforeAll(async () => {
   await startTestDb()
   const db = getTestDb()
 
-  const ghana = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
-  const uganda = await db.opCo.create({ data: { slug: 'uganda', name: 'Uganda', keycloakOrgId: 'org-ug' } })
+  const ghana = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana' } })
+  const uganda = await db.opCo.create({ data: { slug: 'uganda', name: 'Uganda' } })
 
   const ghanaUser = await db.user.create({ data: { keycloakId: 'kc-gh', email: 'gh@csquared.com' } })
   const ugandaUser = await db.user.create({ data: { keycloakId: 'kc-ug', email: 'ug@csquared.com' } })

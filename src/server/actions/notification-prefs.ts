@@ -3,6 +3,7 @@
 import { getPrisma } from "@/server/db"
 import { getAppSession } from "@/lib/session"
 import { NOTIFY_EVENT_TYPES, DEFAULT_CHANNELS, type NotifyEventType, type NotifyChannel } from "@/lib/notifications"
+import { UserError } from "@/lib/user-error"
 
 const CHANNELS: NotifyChannel[] = ["email", "in_app"]
 
@@ -10,7 +11,7 @@ async function meId(): Promise<string> {
   const session = await getAppSession()
   const db = getPrisma()
   const u = await db.user.findUnique({ where: { keycloakId: session.keycloakId }, select: { id: true } })
-  if (!u) throw new Error("User not found")
+  if (!u) throw new UserError("User not found")
   return u.id
 }
 

@@ -8,7 +8,7 @@ import { startTestDb, stopTestDb, getTestDb } from '../db'
 beforeAll(async () => {
   await startTestDb()
   const db = getTestDb()
-  await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
+  await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana' } })
   await db.user.create({ data: { keycloakId: 'kc-cab', email: 'cab@csquared.com' } })
 }, 120_000)
 

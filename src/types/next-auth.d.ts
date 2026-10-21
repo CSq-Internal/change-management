@@ -16,7 +16,7 @@ declare module "next-auth" {
       image?: string | null
       keycloakId: string
       organizations: SessionOrganization[]
-      realmRoles: string[]  // CMS client roles on csquared-cms: "group_admin" | "group_auditor"
+      realmRoles: string[]  // group roles from User.isGroupAdmin / isGroupAuditor: "group_admin" | "group_auditor"
       orphaned?: boolean    // keycloakId maps to no DB user, or a deactivated one → client guard signs out
     }
   }

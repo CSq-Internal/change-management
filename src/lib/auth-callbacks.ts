@@ -42,6 +42,15 @@ function orphan(token: JWT): JWT {
   return token
 }
 
+type GroupFlags = { isGroupAdmin: boolean; isGroupAuditor: boolean }
+
+/** Group roles live on the User row and are granted in the CMS (setGroupRole), not Keycloak. */
+function groupRoles(row: Partial<GroupFlags> | null | undefined): string[] {
+  if (row?.isGroupAdmin) return ["group_admin"]
+  if (row?.isGroupAuditor) return ["group_auditor"]
+  return []
+}
+
 /**
  * Node-only enriched jwt callback. Runs the edge-safe base extraction first,
  * then — only on sign-in (account present) — sources OpCo memberships+roles
@@ -74,9 +83,10 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
 
     const existing = await db.user.findUnique({ where: { keycloakId: sub } })
     let isActive = existing?.isActive ?? true
+    let flags: Partial<GroupFlags> | null = existing
     if (!existing) {
       if (p.email) {
-        const byEmail = await db.user.findUnique({ where: { email: p.email }, select: { id: true, isActive: true } })
+        const byEmail = await db.user.findUnique({ where: { email: p.email }, select: { id: true, isActive: true, isGroupAdmin: true, isGroupAuditor: true } })
         if (!byEmail) {
           // Brand-new identity (e.g. first brokered Google sign-in). A fresh row carries
           // zero OpCo assignments — no standing access — so creating it needs no verified
@@ -90,6 +100,7 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
           // privileged) row to a different sub — closing the account-takeover vector.
           await db.user.update({ where: { email: p.email }, data: { keycloakId: sub } })
           isActive = byEmail.isActive
+          flags = byEmail
         }
       }
     }
@@ -99,27 +110,21 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     token.organizations = await loadOrganizations(db, sub)
     token.orgsRefreshedAt = Date.now()
 
-    // Mirror the group_admin client role onto the DB row so group-level admins
-    // (whose role lives only in Keycloak) are enumerable for notifications.
-    // Writes both true and false so a demotion clears the marker. updateMany is a
+    token.realmRoles = groupRoles(flags)
+
+    // Names are IdP-sourced; re-sync the row when the token carries one. updateMany is a
     // no-op when no row matches (e.g. an unverified email that wasn't created/relinked).
-    // Also re-sync the IdP-sourced name when the token carries one.
-    const realmRoles = (token.realmRoles as string[] | undefined) ?? []
-    await db.user.updateMany({
-      where: { keycloakId: sub },
-      data: {
-        isGroupAdmin: realmRoles.includes("group_admin"),
-        ...(profileName ? { name: profileName } : {}),
-      },
-    })
+    if (profileName) {
+      await db.user.updateMany({ where: { keycloakId: sub }, data: { name: profileName } })
+    }
   } else if (
     token.keycloakId &&
     (params.trigger === "update" || Date.now() - (token.orgsRefreshedAt ?? 0) > ORGS_TTL_MS)
   ) {
     // No fresh sign-in, but the cached orgs are stale (or the client called update(),
     // as it does right after joining an OpCo): reload OpCo assignments so an
-    // access grant / role edit reaches the live session without re-login. Group roles
-    // (realmRoles) are Keycloak-sourced and intentionally not refreshed here.
+    // access grant / role edit reaches the live session without re-login. Group roles are
+    // reloaded with them.
     const db = getPrisma()
     const sub = token.keycloakId as string
 
@@ -133,11 +138,12 @@ export async function enrichedJwt(params: JwtParams): Promise<JWT> {
     // EXISTENCE, not org count — an access-less user (self-registered) still has a row.
     // A deactivated row is treated the same, so deactivation ends a live session within
     // the TTL, group roles included.
-    const stillLinked = await db.user.findUnique({ where: { keycloakId: sub }, select: { isActive: true } })
+    const stillLinked = await db.user.findUnique({ where: { keycloakId: sub }, select: { isActive: true, isGroupAdmin: true, isGroupAuditor: true } })
     if (!stillLinked?.isActive) return orphan(token)
 
     token.orphaned = false
     token.organizations = await loadOrganizations(db, sub)
+    token.realmRoles = groupRoles(stillLinked)
     token.orgsRefreshedAt = Date.now()
   }
   return token

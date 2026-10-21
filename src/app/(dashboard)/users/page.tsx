@@ -34,6 +34,7 @@ export default async function UsersPage() {
     email: u.email,
     isActive: u.isActive,
     isGroupAdmin: u.isGroupAdmin,
+    isGroupAuditor: u.isGroupAuditor,
     accessStatus: u.accessRequests[0]?.status ?? null,
     opcoAssignments: u.opcoAssignments.map((a) => ({
       role: a.role,

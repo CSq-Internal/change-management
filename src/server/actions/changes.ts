@@ -11,6 +11,7 @@ import { canViewChange } from "@/server/change-access"
 import { SLA_HOURS } from "@/lib/sla"
 import type { NotifyEventType } from "@/lib/notifications"
 import type { ChangeCategory, RiskLevel, ChangeStatus } from "@prisma/client"
+import { UserError } from "@/lib/user-error"
 
 // Emergency changes implemented under expedited authority must obtain retrospective
 // approval within this window (ISO 27001 A.8.32).
@@ -88,14 +89,14 @@ export async function getChange(id: string) {
 // A draft may leave either date empty, but once both are set the end must come after the start.
 function assertWindow(start: Date | null | undefined, end: Date | null | undefined) {
   if (start && end && !(new Date(end) > new Date(start))) {
-    throw new Error("Invalid planned window: the end must be after the start")
+    throw new UserError("Invalid planned window: the end must be after the start")
   }
 }
 
 export async function createChange(opcoSlug: string, data: CreateChangeInput) {
   const session = await getAppSession()
   if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, opcoSlug)) {
-    throw new Error("Forbidden: not a member of this OpCo")
+    throw new UserError("Forbidden: not a member of this OpCo")
   }
   const db = getPrisma()
 
@@ -104,8 +105,8 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
     db.user.findUnique({ where: { keycloakId: session.keycloakId } }),
   ])
 
-  if (!opco) throw new Error(`OpCo not found: ${opcoSlug}`)
-  if (!user) throw new Error("User not found in database")
+  if (!opco) throw new UserError(`OpCo not found: ${opcoSlug}`)
+  if (!user) throw new UserError("User not found in database")
 
   const { approverIds = [] } = data
   const changeData = pickFormFields<ChangeFormFields>(data)
@@ -116,10 +117,10 @@ export async function createChange(opcoSlug: string, data: CreateChangeInput) {
     // submitApproval rejects self-approval (SoD), so naming yourself would satisfy the
     // mandatory-approver gate while leaving nobody able to actually approve.
     if (userId === user.id) {
-      throw new Error("Cannot name yourself as an approver on your own change")
+      throw new UserError("Cannot name yourself as an approver on your own change")
     }
     if (!(await isEligibleApprover(userId, opco.id, data.infrastructureType))) {
-      throw new Error("Assignee is not an eligible approver for this change's scope")
+      throw new UserError("Assignee is not an eligible approver for this change's scope")
     }
   }
 
@@ -145,16 +146,16 @@ export async function updateChange(id: string, data: UpdateChangeInput) {
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== user.id && !isAdmin)
-    throw new Error("Forbidden: only the requester or an admin can edit this change")
-  if (change.status !== "draft") throw new Error("Only draft changes can be edited")
+    throw new UserError("Forbidden: only the requester or an admin can edit this change")
+  if (change.status !== "draft") throw new UserError("Only draft changes can be edited")
 
   const fields = pickFormFields(data)
   assertWindow(fields.plannedStart ?? change.plannedStart, fields.plannedEnd ?? change.plannedEnd)
@@ -165,24 +166,24 @@ export async function submitChange(id: string) {
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id }, include: { opco: true, attachments: true, assignees: true },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== user.id && !isAdmin)
-    throw new Error("Forbidden: only the requester or an admin can submit this change")
-  if (change.status !== "draft") throw new Error("Only draft changes can be submitted")
+    throw new UserError("Forbidden: only the requester or an admin can submit this change")
+  if (change.status !== "draft") throw new UserError("Only draft changes can be submitted")
 
   if (documentsRequiredForRisk(change.riskLevel)) {
     const present = new Set(change.attachments.map((a) => a.kind))
     const missing = REQUIRED_DOC_KINDS.filter((k) => !present.has(k))
     if (missing.length > 0) {
-      throw new Error(`Cannot submit: required document(s) missing: ${missing.join(", ")}`)
+      throw new UserError(`Cannot submit: required document(s) missing: ${missing.join(", ")}`)
     }
   }
   const requiredFields: [string, unknown][] = [
@@ -192,7 +193,7 @@ export async function submitChange(id: string) {
   ]
   const missingFields = requiredFields.filter(([, v]) => v === null || v === undefined || v === "").map(([k]) => k)
   if (missingFields.length > 0) {
-    throw new Error(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
+    throw new UserError(`Cannot submit: required field(s) missing: ${missingFields.join(", ")}`)
   }
   assertWindow(change.plannedStart, change.plannedEnd)
 
@@ -207,7 +208,7 @@ export async function submitChange(id: string) {
     if (await isEligibleApprover(a.id, change.opcoId, change.infrastructureType)) actionableApprovers++
   }
   if (actionableApprovers === 0) {
-    throw new Error("Cannot submit: at least one approver must be named")
+    throw new UserError("Cannot submit: at least one approver must be named")
   }
 
   // The planned window must clear every blackout, whenever it is submitted. Planned dates
@@ -215,7 +216,7 @@ export async function submitChange(id: string) {
   if (!change.isEmergency) {
     const blackout = await blockingBlackout(db, change.opcoId, change.plannedStart!, change.plannedEnd!)
     if (blackout) {
-      throw new Error(`Blocked by blackout: "${blackout.label}". Submit as emergency to override.`)
+      throw new UserError(`Blocked by blackout: "${blackout.label}". Submit as emergency to override.`)
     }
   }
 
@@ -275,16 +276,16 @@ export async function discardChange(id: string) {
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== user.id && !isAdmin)
-    throw new Error("Forbidden: only the requester or an admin can discard this change")
-  if (change.status !== "draft") throw new Error("Only draft changes can be discarded")
+    throw new UserError("Forbidden: only the requester or an admin can discard this change")
+  if (change.status !== "draft") throw new UserError("Only draft changes can be discarded")
 
   const updated = await db.$transaction(async (tx) => {
     const updated = await tx.changeRequest.update({ where: { id }, data: { status: "cancelled" } })
@@ -320,21 +321,21 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({
     where: { id: changeId },
     include: { opco: true, approvals: true },
   })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   if (!isGroupAdmin(session.realmRoles) && !isMemberOfOpCo(session.organizations, change.opco.slug)) {
-    throw new Error("Forbidden: change belongs to another OpCo")
+    throw new UserError("Forbidden: change belongs to another OpCo")
   }
 
   // Verify is only reachable by recording a PIR (see submitPostImplementationReview).
   if (toStatus === "verified") {
-    throw new Error("To verify a change, submit a Post-Implementation Review (PIR)")
+    throw new UserError("To verify a change, submit a Post-Implementation Review (PIR)")
   }
 
   // Emergency expedited: pending → implemented (skipping prior approval) is allowed
@@ -342,10 +343,10 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   const isExpeditedImplement = toStatus === "implemented" && change.status === "pending"
   if (isExpeditedImplement) {
     if (!change.isEmergency) {
-      throw new Error("Invalid transition: only emergency changes can be implemented without approval")
+      throw new UserError("Invalid transition: only emergency changes can be implemented without approval")
     }
   } else if (!VALID_TRANSITIONS[change.status]?.includes(toStatus)) {
-    throw new Error(`Invalid transition: ${change.status} → ${toStatus}`)
+    throw new UserError(`Invalid transition: ${change.status} → ${toStatus}`)
   }
 
   const isAdmin =
@@ -355,7 +356,7 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
   if (toStatus === "draft") {
     // reopen: only the original requester or an admin
     if (change.requesterId !== user.id && !isAdmin) {
-      throw new Error("Forbidden: only the requester or an admin can reopen this change")
+      throw new UserError("Forbidden: only the requester or an admin can reopen this change")
     }
   } else if (!canApprove(session.organizations, change.opco.slug) && !isAdmin) {
     // implemented / closed normally need approver or admin rights. The exception is a named
@@ -372,7 +373,7 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
     const namedImplementer =
       toStatus === "implemented" && change.status === "approved" && !isAuditor &&
       !!(await db.changeAssignee.findFirst({ where: { changeId, userId: user.id, role: "implementer" } }))
-    if (!namedImplementer) throw new Error("Forbidden: not authorized to advance this change")
+    if (!namedImplementer) throw new UserError("Forbidden: not authorized to advance this change")
   }
 
   const data: {
@@ -389,7 +390,7 @@ export async function updateChangeStatus(changeId: string, toStatus: ChangeStatu
       ...new Set((change.approvals ?? []).filter((a) => a.decision === "approve").map((a) => a.approverId)),
     ]
     if (approveVoters.length === 1 && approveVoters[0] === user.id) {
-      throw new Error("Forbidden: the sole approver cannot also implement this change (SoD — ISO 27001 A.5.3)")
+      throw new UserError("Forbidden: the sole approver cannot also implement this change (SoD — ISO 27001 A.5.3)")
     }
     data.implementedById = user.id
     data.implementedAt = new Date()
@@ -423,28 +424,28 @@ export async function rescheduleChange(id: string, newStartIso: string, newEndIs
   const session = await getAppSession()
   const db = getPrisma()
   const user = await db.user.findUnique({ where: { keycloakId: session.keycloakId } })
-  if (!user) throw new Error("User not found")
+  if (!user) throw new UserError("User not found")
 
   const change = await db.changeRequest.findUnique({ where: { id }, include: { opco: true } })
-  if (!change) throw new Error("Change not found")
+  if (!change) throw new UserError("Change not found")
 
   const isAdmin = isGroupAdmin(session.realmRoles) ||
     hasRoleInOpCo(session.organizations, change.opco.slug, "admin")
   if (change.requesterId !== user.id && !isAdmin)
-    throw new Error("Forbidden: only the requester or an admin can reschedule this change")
+    throw new UserError("Forbidden: only the requester or an admin can reschedule this change")
 
   if (!RESCHEDULABLE_STATUSES.includes(change.status))
-    throw new Error("Only unimplemented changes (draft, pending, approved) can be rescheduled")
+    throw new UserError("Only unimplemented changes (draft, pending, approved) can be rescheduled")
 
   const newStart = new Date(newStartIso)
   const newEnd = new Date(newEndIso)
   if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime()) || newEnd <= newStart)
-    throw new Error("Invalid reschedule window")
+    throw new UserError("Invalid reschedule window")
 
   // Blackout is a hard block (overlap is only a soft calendar warning), unless emergency.
   if (!change.isEmergency) {
     const blackout = await blockingBlackout(db, change.opcoId, newStart, newEnd)
-    if (blackout) throw new Error(`Blocked by blackout: "${blackout.label}". Emergencies may override.`)
+    if (blackout) throw new UserError(`Blocked by blackout: "${blackout.label}". Emergencies may override.`)
   }
 
   const oldWindow = change.plannedStart && change.plannedEnd

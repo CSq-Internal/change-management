@@ -10,9 +10,10 @@ import { dayStart, dayEnd } from "@/lib/dates"
 import { listAdminAudit } from "@/server/actions/audit-log"
 import AuditList from "./audit-list"
 import type { AuditRow } from "./types"
+import { errorMessage } from "@/lib/user-error"
 
 const ACTIONS = [
-  "user.onboard", "user.link", "user.deactivate", "user.reactivate", "role.update",
+  "user.onboard", "user.link", "user.deactivate", "user.reactivate", "role.update", "user.group_role",
   "team.create", "team.update", "team.delete", "team.member.add", "team.member.remove", "team.member.role",
   "cab.add", "cab.remove", "opco.create", "opco.rename", "opco.archive", "opco.unarchive",
   "delegation.create", "delegation.revoke", "approver_assignment_added", "approver_assignment_removed",
@@ -44,7 +45,7 @@ export default function AuditClient({ initialRows }: AuditClientProps) {
       })
       setRows(next)
     } catch (err) {
-      toast({ title: "Failed", description: err instanceof Error ? err.message : "Unknown error", variant: "error" })
+      toast({ title: "Failed", description: errorMessage(err, "Unknown error"), variant: "error" })
     } finally {
       setPending(false)
     }

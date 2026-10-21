@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useStore } from "@/lib/store"
-import { canManageAnyOpCo } from "@/lib/permissions"
+import { canManageAnyOpCo, isGroupAdmin } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/toaster"
@@ -15,6 +15,7 @@ import UserList from "./user-list"
 import OnboardWizard from "./onboard-wizard"
 import EditUserDialog from "./edit-user-dialog"
 import ConfirmDialog from "./confirm-dialog"
+import { errorMessage } from "@/lib/user-error"
 
 interface UsersClientProps {
   users: DbUser[]
@@ -54,7 +55,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
     } catch (err) {
       toast({
         title: t(language, "common.failed"),
-        description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+        description: errorMessage(err, t(language, "common.unknownError")),
         variant: "error",
       })
     } finally {
@@ -74,7 +75,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
     } catch (err) {
       toast({
         title: t(language, "common.failed"),
-        description: err instanceof Error ? err.message : t(language, "common.unknownError"),
+        description: errorMessage(err, t(language, "common.unknownError")),
         variant: "error",
       })
     }
@@ -129,6 +130,7 @@ export default function UsersClient({ users, opcos }: UsersClientProps) {
           user={editUser}
           language={language}
           opcos={opcos}
+          canSetGroupRole={session ? isGroupAdmin(session.user.realmRoles) : false}
           onClose={() => setEditUser(null)}
           onSaved={() => {
             setEditUser(null)

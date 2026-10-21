@@ -4,10 +4,8 @@
 // Admin auth uses a realm-scoped service account (client_credentials grant) —
 // NOT a master-realm admin login. The service account client needs the
 // `realm-management` role `manage-users` on the target realm (the only hard
-// requirement). Organization sync (createKeycloakOrg / assignToOrganization) is
-// best-effort: it needs `manage-organizations`, which on Keycloak 26.6 is not
-// seeded by enabling Organizations and can't be hand-grafted — callers catch the
-// failure and continue. The realm name is derived from KEYCLOAK_ISSUER (or
+// requirement). Group roles and OpCo membership live in the CMS database; Keycloak only
+// holds the account. The realm name is derived from KEYCLOAK_ISSUER (or
 // overridden with KEYCLOAK_REALM), so the app is not hardwired to "csquared".
 
 /** Derive the Keycloak base URL + realm from KEYCLOAK_ISSUER (+ optional KEYCLOAK_REALM override). */
@@ -129,66 +127,6 @@ async function findKeycloakUserByEmailWithToken(
   })
 
   return user?.id ?? null
-}
-
-export async function assignToOrganization(
-  keycloakUserId: string,
-  orgAlias: string
-): Promise<void> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-
-  // Look up the org by alias
-  const searchRes = await fetch(
-    `${adminRealmUrl}/organizations?search=${encodeURIComponent(orgAlias)}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  if (!searchRes.ok) {
-    throw new Error(`Org search failed: ${searchRes.status}`)
-  }
-  const orgs = await searchRes.json()
-  const org = Array.isArray(orgs) ? orgs.find((o: { alias: string }) => o.alias === orgAlias) : null
-  if (!org) throw new Error(`Org not found for alias: ${orgAlias}`)
-
-  const addRes = await fetch(
-    `${adminRealmUrl}/organizations/${org.id}/members`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ id: keycloakUserId }),
-    }
-  )
-  if (!addRes.ok) {
-    throw new Error(`Org member add failed: ${addRes.status} ${await addRes.text()}`)
-  }
-}
-
-export async function createKeycloakOrg(slug: string, name: string): Promise<string> {
-  const token = await getAdminToken()
-  const { adminRealmUrl } = kcEndpoints()
-  const res = await fetch(`${adminRealmUrl}/organizations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      name,
-      alias: slug,
-      domains: [{ name: `${slug}.csquared.local`, verified: false }],
-    }),
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to create Keycloak org: ${res.status} ${await res.text()}`)
-  }
-  const location = res.headers.get("Location")
-  if (!location) throw new Error("No Location header in Keycloak create-org response")
-  const id = location.split("/").at(-1)
-  if (!id) throw new Error(`Could not parse org id from Location: ${location}`)
-  return id
 }
 
 /**

@@ -10,7 +10,7 @@ let adminAuditId: string
 beforeAll(async () => {
   await startTestDb()
   const db = getTestDb()
-  const opco = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana', keycloakOrgId: 'org-gh' } })
+  const opco = await db.opCo.create({ data: { slug: 'ghana', name: 'Ghana' } })
   const user = await db.user.create({ data: { keycloakId: 'kc-1', email: 'a@csquared.com' } })
   const change = await db.changeRequest.create({
     data: {
