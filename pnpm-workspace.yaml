@@ -58,6 +58,12 @@ overrides:
   #   undici (via shadcn) — GHSA-9rx9-jgrq-cw5g (cross-user information disclosure).
   #   Scoped to @7: v8 is already present elsewhere and is outside the advisory range.
   'undici@7': '>=7.29.0'
+  #   undici v8 (via jsdom, testcontainers) - GHSA-xjj6-f33q-929c, GHSA-4w7w-5xrc-9h26 and
+  #   the TLS-options advisory. Test tooling only; fixed inside v8.
+  'undici@8': '>=8.12.2'
+  #   zod (via eslint-plugin-react-hooks, which accepts ^3.25 || ^4) - GHSA-mrhx-c7xc-m3w5
+  #   (memory exhaustion on oversized constrained collections). Lint tooling only.
+  zod: '^4.6.6'
   #   socket.io-parser (via react-email's preview server) — GHSA-6mjf-3j95-2hh8
   #   (zero-attachment memory exhaustion). Dev preview only, never shipped.
   'socket.io-parser@4': '>=4.2.7'

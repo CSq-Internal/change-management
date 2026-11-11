@@ -195,6 +195,18 @@ describe('submitApproval — CAB authority + quorum', () => {
     )
   })
 
+  it('audits a vote that does not yet reach quorum (ISO 27001 A.8.15)', async () => {
+    mockDb.changeRequest.findUnique.mockResolvedValueOnce({
+      id: 'cr-1', status: 'pending', opcoId: 'opco-1', requesterId: 'req',
+      opco: { slug: 'ghana' }, infrastructureType: 'Backbone IP Network',
+      riskLevel: 'emergency', title: 'x', approvals: [],
+    })
+    await submitApproval('cr-1', 'approve', 'Please proceed')
+    expect(mockDb.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ changeId: 'cr-1', action: 'vote_recorded', note: 'Please proceed' }),
+    })
+  })
+
   it('records a retrospective approval on an expedited emergency without changing status', async () => {
     mockDb.changeRequest.findUnique.mockResolvedValueOnce({
       id: 'cr-1', status: 'implemented', opcoId: 'opco-1', requesterId: 'req',

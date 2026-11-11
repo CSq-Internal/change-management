@@ -11,6 +11,15 @@ export const REQUIRED_DOC_KINDS: AttachmentKind[] = [
   "solution_document",
 ]
 
+// i18n key for each document kind's display label.
+export const DOC_LABEL_KEY: Record<string, string> = {
+  impact_scope: "requests.impactScope",
+  implementation_plan: "requests.implementationPlan",
+  testing_plan: "requests.testingPlan",
+  backout_plan: "requests.backoutPlan",
+  solution_document: "requests.solutionDocument",
+}
+
 // The required documents are only mandatory for high-risk changes and above
 // (high, emergency). Low/medium-risk changes may be submitted without them.
 export function documentsRequiredForRisk(riskLevel: string): boolean {
