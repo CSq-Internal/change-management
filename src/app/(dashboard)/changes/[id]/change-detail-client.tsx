@@ -11,7 +11,7 @@ import { useStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
 import { submitChange, updateChangeStatus, discardChange } from "@/server/actions/changes"
 import { submitApproval } from "@/server/actions/approvals"
-import { REQUIRED_DOC_KINDS, documentsRequiredForRisk } from "@/lib/attachment-kinds"
+import { REQUIRED_DOC_KINDS, DOC_LABEL_KEY, documentsRequiredForRisk } from "@/lib/attachment-kinds"
 import { StatusPill, RiskPill } from "@/components/change-badges"
 import { QuorumProgress } from "@/components/quorum-progress"
 import PirForm from "./pir-form"
@@ -85,14 +85,6 @@ export type Caps = {
   soleApproverIsMe: boolean
   /** Already voted in the current decision stage — the server would refuse a second. */
   hasVotedThisStage: boolean
-}
-
-const DOC_LABEL_KEY: Record<string, string> = {
-  impact_scope: "requests.impactScope",
-  implementation_plan: "requests.implementationPlan",
-  testing_plan: "requests.testingPlan",
-  backout_plan: "requests.backoutPlan",
-  solution_document: "requests.solutionDocument",
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
