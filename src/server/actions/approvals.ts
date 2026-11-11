@@ -121,6 +121,8 @@ export async function submitApproval(
       return { approval, change, outcome: "rejected" as const }
     }
 
+    // An approve short of quorum changes no status but is still a decision: audit it.
+    await tx.auditLog.create({ data: { changeId, actorId: user.id, action: "vote_recorded", note: comment } })
     return { approval, change, outcome: null }
   })
 
